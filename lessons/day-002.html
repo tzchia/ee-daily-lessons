@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 2｜實作日：上升時間與頻寬——0.35/tr 的由來與動手驗證</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 1 週・第 2 天（週六實作日）</div>
+  <h1>Day 2：上升時間與頻寬——0.35/t<sub>r</sub> 的由來與動手驗證</h1>
+  <div class="meta">2026-07-25（六）｜預估學習時間：90 分鐘（理論 40 分＋實驗 50 分）｜難度：★★☆☆☆</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>今天是實作日：先用 40 分鐘把理論打穿，再親手（或用模擬）驗證它。做完你要能夠：</p>
+  <ol>
+    <li>解釋「方波是無限多個正弦波疊出來的」，並說出諧波振幅的衰減規律</li>
+    <li>從一階 RC 系統的步階響應，<strong>親手推導出</strong> BW ≈ 0.35/t<sub>r</sub>（面試白板題）</li>
+    <li>說出 knee frequency（f<sub>knee</sub> ≈ 0.5/t<sub>r</sub>）是什麼、跟 0.35/t<sub>r</sub> 差在哪</li>
+    <li>用實驗證明：示波器頻寬不夠時，量到的上升時間是「假的」，並會用 RSS 公式反推真值</li>
+    <li>回答天天用得到的問題：「我的訊號需要幾 GHz 的示波器？」</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要（接 Day 1）</h2>
+<p>昨天我們建立了「邊緣佔據空間長度 ℓ = v × t<sub>r</sub>」與 1/6 法則，也埋了一個伏筆：<strong>「快邊緣含有更多高頻成分」</strong>。今天就把這句話說清楚——「多高的頻率？多少成分？」這個問題的答案就是 0.35/t<sub>r</sub>，它是 SI 領域最常被引用、也最常被誤用的一條公式。理解它的由來，你才知道它什麼時候能用、什麼時候會騙你。</p>
+
+<h2>1. 理論（實驗前必讀）</h2>
+
+<h3>1.1 直覺：方波是「正弦波合唱團」</h3>
+
+<div class="card intuition">
+  <span class="label">直覺比喻</span>
+  <p>想像一個合唱團要「唱出」一個方波。傅立葉告訴我們：任何週期訊號都能拆成一堆不同頻率的正弦波。方波這首歌的編制是——<strong>只有奇數聲部</strong>（基頻 f₀、3f₀、5f₀、7f₀⋯），而且聲部越高、音量越小（第 n 個聲部的音量是基頻的 1/n）。</p>
+  <p>低音聲部（基頻）撐起方波的「大形狀」，高音聲部負責把邊緣「削尖」。你把高音聲部一個個請走，方波的角就越來越圓——這正是走線損耗、濾波器對訊號做的事：<strong>它們不是「弄壞」訊號，是把高頻聲部消音了</strong>。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="200" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">時域：諧波一個個加回去</text>
+  <!-- axes -->
+  <line x1="20" y1="170" x2="360" y2="170" stroke="#9ca3af" stroke-width="1"/>
+  <!-- square wave (target, gray dashed) -->
+  <polyline points="20,170 20,100 120,100 120,240 220,240 220,170" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="5 4"/>
+  <!-- fundamental (blue) -->
+  <path d="M20,170 C33,110 45,81 70,81 C95,81 107,110 120,170 C133,230 145,259 170,259 C195,259 207,230 220,170"
+    fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- sum to 5th (red) -->
+  <path d="M20,170 C22,130 24,105 30,96 C36,89 40,102 48,106 C54,109 58,98 66,96 C72,95 76,106 84,108 C90,109 94,97 100,93 C106,90 112,112 120,170
+           C128,228 134,247 140,251 C146,257 150,244 158,240 C164,237 168,248 176,250 C182,251 186,240 194,238 C200,237 208,252 214,258 C217,260 219,210 220,170"
+    fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="70" y="60" text-anchor="middle" font-size="12" fill="#0e7490">只有基頻 f₀</text>
+  <text x="180" y="86" text-anchor="middle" font-size="12" fill="#dc2626">加到第 5 諧波</text>
+  <text x="290" y="110" font-size="12" fill="#6b7280">灰虛線＝目標方波</text>
+  <text x="190" y="290" text-anchor="middle" font-size="13" fill="#374151">諧波加越多 → 邊緣越陡、頂部越平</text>
+
+  <!-- spectrum bars -->
+  <text x="580" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">頻域：方波的頻譜（只有奇次）</text>
+  <line x1="440" y1="250" x2="730" y2="250" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="440" y1="250" x2="440" y2="60" stroke="#9ca3af" stroke-width="1.5"/>
+  <rect x="472" y="90"  width="18" height="160" fill="#0e7490"/>
+  <rect x="532" y="197" width="18" height="53"  fill="#0e7490"/>
+  <rect x="592" y="218" width="18" height="32"  fill="#0e7490"/>
+  <rect x="652" y="227" width="18" height="23"  fill="#0e7490"/>
+  <text x="481" y="268" text-anchor="middle" font-size="13" fill="#374151">f₀</text>
+  <text x="541" y="268" text-anchor="middle" font-size="13" fill="#374151">3f₀</text>
+  <text x="601" y="268" text-anchor="middle" font-size="13" fill="#374151">5f₀</text>
+  <text x="661" y="268" text-anchor="middle" font-size="13" fill="#374151">7f₀</text>
+  <text x="481" y="82"  text-anchor="middle" font-size="12" fill="#6b7280">4/π</text>
+  <text x="541" y="189" text-anchor="middle" font-size="12" fill="#6b7280">×1/3</text>
+  <text x="601" y="210" text-anchor="middle" font-size="12" fill="#6b7280">×1/5</text>
+  <text x="661" y="219" text-anchor="middle" font-size="12" fill="#6b7280">×1/7</text>
+  <text x="585" y="290" text-anchor="middle" font-size="13" fill="#374151">偶次諧波為 0（理想 50% duty 時）</text>
+</svg>
+<figcaption>圖 1：50% duty 的理想方波，只含奇次諧波，第 n 次諧波振幅為基頻的 1/n（基頻振幅為方波振幅的 4/π 倍）。</figcaption>
+</figure>
+
+<p>數學形式（背不用背，看得懂即可）：振幅 ±A 的 50% duty 方波可寫成</p>
+<div class="formula">
+  V(t) = (4A/π) × [ sin(2πf₀t) + (1/3)sin(2π·3f₀t) + (1/5)sin(2π·5f₀t) + ⋯ ]
+</div>
+
+<h3>1.2 那「邊緣」對應到多高的頻率？——knee frequency</h3>
+<p>理想方波（t<sub>r</sub> = 0）的諧波以 1/n 衰減，畫在 log-log 圖上是一條 <strong>−20 dB/decade</strong> 的斜線，綿延到無限高頻。但真實訊號的邊緣是有限的（梯形波），它的頻譜在某個頻率之後會「轉彎」，改以 <strong>−40 dB/decade</strong> 急速下墜——高於這個頻率的成分少到可以忽略。這個轉折點就叫 <strong>knee frequency</strong>：</p>
+
+<div class="formula">
+  f<sub>knee</sub> ≈ 0.5 / t<sub>r</sub>　（Howard Johnson《High-Speed Digital Design》提出的工程估算）
+</div>
+
+<figure>
+<svg viewBox="0 0 760 290" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">梯形波（真實訊號）的頻譜包絡：兩段斜率</text>
+  <!-- axes -->
+  <line x1="70" y1="250" x2="720" y2="250" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="70" y1="250" x2="70" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="400" y="278" text-anchor="middle" font-size="13" fill="#6b7280">頻率（log 刻度）</text>
+  <text x="40" y="150" text-anchor="middle" font-size="13" fill="#6b7280" transform="rotate(-90 40 150)">諧波振幅（dB）</text>
+  <!-- envelope -->
+  <polyline points="90,75 420,140" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <polyline points="420,140 690,245" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <!-- knee marker -->
+  <line x1="420" y1="140" x2="420" y2="250" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <circle cx="420" cy="140" r="5" fill="#b45309"/>
+  <text x="420" y="120" text-anchor="middle" font-size="14" font-weight="bold" fill="#b45309">f_knee ≈ 0.5 / t_r</text>
+  <text x="240" y="90" font-size="13" fill="#0e7490">−20 dB/decade（由 duty/週期決定）</text>
+  <text x="500" y="180" font-size="13" fill="#dc2626">−40 dB/decade（由 t_r 決定）</text>
+  <text x="380" y="230" text-anchor="middle" font-size="12" fill="#6b7280">超過 knee 的成分快速消失 → 邊緣越快，knee 越高，高頻「地盤」越大</text>
+</svg>
+<figcaption>圖 2：真實訊號的頻譜包絡。第一段斜率跟週期有關，轉折點之後由上升時間主宰。t<sub>r</sub> 越短，knee 推得越高——這就是「快邊緣含有更多高頻成分」的精確版本。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>0.35/t<sub>r</sub> 和 0.5/t<sub>r</sub> 不是同一件事，別混用。</strong>0.35/t<sub>r</sub> 講的是「一個頻寬為 BW 的<strong>一階系統</strong>，輸出的上升時間是多少」（系統觀點）；0.5/t<sub>knee</sub> 講的是「一個 t<sub>r</sub> 的<strong>訊號</strong>，重要頻譜成分到多高」（訊號觀點）。面試時把兩者的立場講清楚，是區分「背公式的人」和「懂物理的人」的分水嶺。</p>
+</div>
+
+<h3>1.3 白板推導：0.35/t<sub>r</sub> 到底怎麼來的</h3>
+<p>這是面試會要求你當場推的東西，我們一步步來。考慮最簡單的一階低通系統——RC 電路（很多實際通道、示波器前端、buffer 輸出級都可以近似成它）：</p>
+
+<p><strong>第一步：步階響應。</strong>對 RC 電路輸入一個理想步階（0→V₀），電容電壓為：</p>
+<div class="formula">
+  V(t) = V₀ (1 − e<sup>−t/τ</sup>)，　τ = RC
+</div>
+
+<p><strong>第二步：找 10% 和 90% 的時刻。</strong>工程上定義上升時間為波形從 10% 爬到 90% 的時間：</p>
+<div class="formula">
+  0.1 = 1 − e<sup>−t₁/τ</sup> → t₁ = τ ln(10/9)<br>
+  0.9 = 1 − e<sup>−t₂/τ</sup> → t₂ = τ ln(10)<br>
+  t<sub>r</sub> = t₂ − t₁ = τ ln(9) ≈ <strong>2.2 τ</strong>
+</div>
+
+<p><strong>第三步：這個系統的 −3dB 頻寬。</strong>一階低通的頻寬是大家熟的：</p>
+<div class="formula">
+  BW = 1 / (2πτ)
+</div>
+
+<p><strong>第四步：兩式相乘，τ 消掉。</strong></p>
+<div class="formula">
+  t<sub>r</sub> × BW = ln(9) / (2π) = 2.197 / 6.283 ≈ 0.35<br>
+  ⇒ <strong>BW ≈ 0.35 / t<sub>r</sub></strong>　或　<strong>t<sub>r</sub> ≈ 0.35 / BW</strong>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <!-- left: RC schematic -->
+  <text x="180" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">一階 RC 低通</text>
+  <!-- source -->
+  <circle cx="70" cy="130" r="22" fill="none" stroke="#374151" stroke-width="2"/>
+  <text x="70" y="136" text-anchor="middle" font-size="14" fill="#374151">⎍</text>
+  <text x="70" y="175" text-anchor="middle" font-size="12" fill="#6b7280">步階源</text>
+  <line x1="92" y1="130" x2="130" y2="130" stroke="#374151" stroke-width="2"/>
+  <!-- R -->
+  <rect x="130" y="118" width="70" height="24" fill="none" stroke="#374151" stroke-width="2"/>
+  <text x="165" y="112" text-anchor="middle" font-size="13" fill="#374151">R</text>
+  <line x1="200" y1="130" x2="280" y2="130" stroke="#374151" stroke-width="2"/>
+  <!-- C -->
+  <line x1="240" y1="130" x2="240" y2="165" stroke="#374151" stroke-width="2"/>
+  <line x1="222" y1="165" x2="258" y2="165" stroke="#374151" stroke-width="3"/>
+  <line x1="222" y1="177" x2="258" y2="177" stroke="#374151" stroke-width="3"/>
+  <line x1="240" y1="177" x2="240" y2="210" stroke="#374151" stroke-width="2"/>
+  <text x="270" y="176" font-size="13" fill="#374151">C</text>
+  <!-- ground -->
+  <line x1="222" y1="210" x2="258" y2="210" stroke="#374151" stroke-width="2.5"/>
+  <line x1="228" y1="217" x2="252" y2="217" stroke="#374151" stroke-width="2"/>
+  <line x1="234" y1="224" x2="246" y2="224" stroke="#374151" stroke-width="1.5"/>
+  <circle cx="280" cy="130" r="4" fill="#0e7490"/>
+  <text x="300" y="126" font-size="13" fill="#0e7490">V_out</text>
+  <text x="180" y="262" text-anchor="middle" font-size="13" fill="#374151">τ = RC，BW = 1/(2πτ)</text>
+
+  <!-- right: step response -->
+  <text x="560" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">步階響應與 10–90% 上升時間</text>
+  <line x1="410" y1="250" x2="730" y2="250" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="410" y1="250" x2="410" y2="55" stroke="#9ca3af" stroke-width="1.5"/>
+  <!-- final value -->
+  <line x1="410" y1="70" x2="730" y2="70" stroke="#9ca3af" stroke-dasharray="3 4"/>
+  <text x="726" y="64" text-anchor="end" font-size="12" fill="#6b7280">V₀（終值）</text>
+  <!-- exponential -->
+  <path d="M420,248 C445,120 475,90 530,77 C590,72 650,70 720,70" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <!-- 10% / 90% lines -->
+  <line x1="410" y1="230" x2="620" y2="230" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <line x1="410" y1="88"  x2="620" y2="88"  stroke="#dc2626" stroke-dasharray="4 3"/>
+  <text x="626" y="234" font-size="12" fill="#dc2626">10%</text>
+  <text x="626" y="92"  font-size="12" fill="#dc2626">90%</text>
+  <line x1="428" y1="230" x2="428" y2="268" stroke="#6b7280" stroke-dasharray="3 3"/>
+  <line x1="528" y1="88"  x2="528" y2="268" stroke="#6b7280" stroke-dasharray="3 3"/>
+  <line x1="428" y1="264" x2="528" y2="264" stroke="#374151" stroke-width="2"/>
+  <text x="478" y="284" text-anchor="middle" font-size="14" font-weight="bold" fill="#374151">t_r = ln(9)·τ ≈ 2.2 τ</text>
+  <!-- tau marker at 63% -->
+  <circle cx="465" cy="120" r="4" fill="#b45309"/>
+  <text x="500" y="115" font-size="12" fill="#b45309">t = τ 時到達 63%</text>
+</svg>
+<figcaption>圖 3：0.35/t<sub>r</sub> 的全部家當——一階系統步階響應、10–90% 定義、τ 與頻寬的關係。三行數學，面試白板 2 分鐘內要能寫完。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>t<sub>r</sub> ≈ 2.2τ（一階系統）；BW ≈ 0.35/t<sub>r</sub>；f<sub>knee</sub> ≈ 0.5/t<sub>r</sub>。</strong>並記住適用前提：0.35 這個係數來自「一階（單極點）系統」。高階系統、有峰化（peaking）的系統，係數會不同（許多示波器手冊對平坦響應機種用 0.40～0.45 之間的係數，以原廠文件為準）——所以它是估算工具，不是精確定律。</p>
+</div>
+
+<h3>1.4 量測疊加：為什麼示波器會「說謊」</h3>
+<p>示波器＋探棒本身也是一個低通系統，有自己的上升時間。你量到的波形是「訊號經過示波器這個濾波器之後」的樣子。對於近似高斯響應的系統，各級上升時間以<strong>平方和開根號（RSS）</strong>疊加：</p>
+<div class="formula">
+  t<sub>r,量到</sub> ≈ √( t<sub>r,訊號</sub>² + t<sub>r,示波器</sub>² + t<sub>r,探棒</sub>² )
+</div>
+<p>例如 100 MHz 示波器自身 t<sub>r</sub> ≈ 0.35/100 MHz = 3.5 ns（約）。拿它量一個 t<sub>r</sub> = 3.5 ns 的訊號，會讀到 √(3.5²+3.5²) ≈ 4.9 ns——<strong>誤差 40%</strong>。這就是「示波器頻寬要選訊號頻寬 3～5 倍」這條經驗法則的由來：儀器夠快，RSS 的膨脹才可忽略（5 倍時誤差約 2%）。</p>
+
+<h2>2. 實驗指引（今日主菜）</h2>
+
+<p><strong>器材清單</strong>（公司實驗室的標準配備即可）：</p>
+<ul>
+  <li>任意函數/訊號產生器（能出方波即可）</li>
+  <li>示波器（100 MHz 以上為佳；有「20 MHz 頻寬限制」按鈕更好——實驗 C 要用）</li>
+  <li>麵包板或洞洞板、電阻 1 kΩ、電容 1 nF（誤差不拘，實驗會自己量）</li>
+  <li>被動探棒 ×1（10:1）</li>
+  <li><em>沒有儀器？</em>文末附 LTspice 模擬替代方案，效果八成</li>
+</ul>
+
+<h3>實驗 A：量你的訊號產生器「究竟多快」（15 分鐘）</h3>
+<ol>
+  <li>訊號產生器輸出 1 kHz、1 Vpp 方波，接進示波器（探棒記得補償校正——轉那顆小螺絲讓方波頂部平坦）。</li>
+  <li>用示波器的自動量測功能叫出「Rise Time」，或手動放大邊緣，用游標量 10%→90%。</li>
+  <li>記下 t<sub>r</sub>（一般入門級訊號產生器約 10～20 ns 量級，依機型差異大，以實測為準）。</li>
+  <li>計算：這個邊緣的等效頻寬 0.35/t<sub>r</sub>＝？knee frequency 0.5/t<sub>r</sub>＝？再回想 Day 1——這個邊緣在 FR-4 上佔多長？超過幾公分的線要當傳輸線？</li>
+</ol>
+<p><strong>思考題：</strong>把產生器切到 100 kHz，t<sub>r</sub> 變了嗎？（答案：幾乎不變——邊緣速度由輸出級決定，跟你設定的頻率無關。這是 Day 1「頻率 ≠ 邊緣速度」的親眼見證。）</p>
+
+<h3>實驗 B：親手驗證 t<sub>r</sub> = 2.2τ 與 0.35/t<sub>r</sub>（20 分鐘）</h3>
+<ol>
+  <li>在麵包板上串 R = 1 kΩ，再接 C = 1 nF 到地（就是圖 3 的電路），探棒量電容兩端。理論 τ = 1 µs。</li>
+  <li>輸入 1 kHz 方波（週期 1 ms ≫ τ，讓波形每次都充飽）。</li>
+  <li><strong>量 t<sub>r</sub></strong>：理論值 2.2 × 1 µs = 2.2 µs。實測通常落在理論值 ±20% 內（電容誤差、麵包板寄生、探棒電容都會貢獻偏差——把偏差原因寫下來，這本身就是 FA 思維練習）。</li>
+  <li><strong>量頻寬驗證 0.35/t<sub>r</sub></strong>：把輸入改成正弦波，從 10 kHz 慢慢往上調，找到輸出振幅掉到輸入的 70.7%（−3dB）的頻率。理論 BW = 1/(2π·1µs) ≈ 159 kHz。</li>
+  <li>把你量到的 t<sub>r</sub> 和 BW 相乘——是不是約 0.35？恭喜，你剛剛用 30 塊錢的零件驗證了 SI 第一公式。</li>
+</ol>
+
+<h3>實驗 C：讓示波器「說謊」給你看（15 分鐘）</h3>
+<ol>
+  <li>回到實驗 A 的接法，直接量產生器的方波邊緣，記下 t<sub>r</sub>（此為基準值）。</li>
+  <li>按下示波器的 <strong>20 MHz 頻寬限制</strong>（BW Limit）按鈕——這等於故意把示波器變成一個 t<sub>r</sub> ≈ 0.35/20 MHz ≈ 17.5 ns（約）的慢系統。</li>
+  <li>再量一次 t<sub>r</sub>。邊緣明顯變鈍、讀值變大了。</li>
+  <li>用 RSS 公式驗證：√(基準值² + 17.5²) 是否接近你的新讀值？再反過來練習：假裝你只知道新讀值，反解出真實 t<sub>r</sub>。</li>
+</ol>
+<p><strong>這個實驗的職場意義：</strong>在 NB 案子上量 MIPI、量 buck 切換節點時，若探棒或示波器頻寬不足，你回報的 t<sub>r</sub>/overshoot 數據是系統性偏差的——debug 會議上拿出來的波形，第一個要交代的就是量測鏈的頻寬。</p>
+
+<h3>沒有儀器：LTspice 替代方案（免費，20 分鐘）</h3>
+<ol>
+  <li>畫圖 3 的電路：電壓源 PULSE(0 1 0 1n 1n 0.5m 1m)、R=1k、C=1n。</li>
+  <li>.tran 3m 跑暫態，用游標量 V(out) 的 10%→90% 時間，驗證 ≈ 2.2 µs。</li>
+  <li>把來源改成 SINE 並用 .ac dec 100 1k 10meg 掃頻，找 −3dB 點驗證 ≈ 159 kHz。</li>
+  <li>加碼：把 C 改成 10 pF、R 改成 50 Ω（模擬高速通道量級），重跑一次，感受 τ 縮小三個量級後波形的變化。</li>
+</ol>
+
+<h2>3. 實務案例：把今天的公式接回你的工作</h2>
+<ul>
+  <li><strong>NB 主機板 EMI（接 Day 1 的伏筆）：</strong>換了更快的 buffer，t<sub>r</sub> 從 3 ns 變 1 ns → f<sub>knee</sub> 從約 170 MHz 推高到約 500 MHz——輻射的「彈藥庫」直接往 EMI 認證最敏感的頻段擴張。對策之一是串聯電阻與線上電容刻意放慢邊緣，本質上就是自己造一個 RC，把 knee 拉回來。</li>
+  <li><strong>鏡頭模組 MIPI 量測：</strong>D-PHY HS 邊緣在 100 ps 量級 → 訊號頻寬 0.35/100 ps ≈ 3.5 GHz 量級。用 3～5 倍法則，示波器＋探棒的系統頻寬要到 10 GHz 量級才能忠實看邊緣——這解釋了為什麼 MIPI 一致性測試都得用高頻寬示波器＋差動探棒，而不是桌上那台 200 MHz 通用機。</li>
+  <li><strong>datasheet 找 t<sub>r</sub>：</strong>IC 規格書通常在 AC/Switching Characteristics 段落給 t<sub>r</sub>/t<sub>f</sub>（注意定義是 10–90% 還是 20–80%，兩者差約 1.6 倍換算）；若沒給，可從 IBIS model 或輸出級驅動能力估。<strong>拿到任何新料件，先翻 t<sub>r</sub>，再決定 layout 規則</strong>——這是把今天的課變成日常習慣的方式。</li>
+</ul>
+
+<h2>4. 動手練習</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：一個訊號 t_r = 500 ps，它的等效頻寬和 knee frequency 各是多少？需要幾 GHz 的示波器？</summary>
+<p><strong>解：</strong>BW ≈ 0.35/500 ps = 700 MHz；f<sub>knee</sub> ≈ 0.5/500 ps = 1 GHz。示波器用 3～5 倍法則：至少 2～3.5 GHz 等級（含探棒的系統頻寬）。若只用 1 GHz 示波器，RSS 膨脹：示波器 t<sub>r</sub> ≈ 350 ps，量到 √(500²+350²) ≈ 610 ps，高估 22%。</p>
+</details>
+
+<details>
+<summary>練習 2：10:1 被動探棒的輸入電容約 10 pF（量級），點在一個輸出阻抗 50 Ω 的節點上。探棒本身讓這個節點多慢？對 100 ps 的 MIPI 邊緣意味著什麼？</summary>
+<p><strong>解：</strong>τ = 50 Ω × 10 pF = 0.5 ns，探棒造成的 t<sub>r</sub> ≈ 2.2 × 0.5 = 1.1 ns。對 100 ps 邊緣而言，探棒比訊號慢了一個量級——你量到的根本是探棒的響應，不是訊號；而且探棒電容還會實際拖慢、反射這個節點（負載效應），影響電路本身的行為。結論：高速訊號不能用一般被動探棒亂點，這是週 6 量測週的主題預告。</p>
+</details>
+
+<details>
+<summary>練習 3：用 200 MHz 示波器量到 t_r = 2.5 ns，示波器自身 t_r 約多少？訊號真實 t_r 約多少？</summary>
+<p><strong>解：</strong>示波器 t<sub>r</sub> ≈ 0.35/200 MHz = 1.75 ns。反解 RSS：t<sub>r,真</sub> = √(2.5² − 1.75²) = √(6.25 − 3.06) ≈ 1.79 ns。注意量到的 2.5 ns 已經被膨脹了近 40%——而且反解只在「示波器近似高斯響應」時可信，平坦響應機種誤差更大，所以工程上寧可換高頻寬示波器，也不要依賴反解。</p>
+</details>
+
+<details>
+<summary>練習 4（觀念題）：為什麼 50% duty 方波沒有偶次諧波？如果 duty 變成 30% 呢？</summary>
+<p><strong>解：</strong>50% duty 方波有「半波對稱」：後半週期是前半週期的鏡射反相（平移半週期後正負相反）。這種對稱使偶次諧波的傅立葉係數積分恰好抵消為 0。duty ≠ 50% 時對稱破壞，偶次諧波（2f₀、4f₀⋯）就會出現。實務對應：EMI 頻譜上若看到強烈的偶次諧波，可以懷疑訊號 duty 失衡或上升/下降邊緣不對稱——這是從頻譜反推時域行為的 FA 技巧。</p>
+</details>
+
+<details>
+<summary>練習 5（綜合 Day 1＋Day 2）：t_r = 1 ns 的訊號，其 knee frequency 對應的波長在 FR-4 中是多少？和「邊緣空間長度」什麼關係？</summary>
+<p><strong>解：</strong>f<sub>knee</sub> = 0.5/1 ns = 500 MHz。FR-4 中波長 λ = v/f = 15 cm/ns ÷ 0.5 GHz = 30 cm。而邊緣空間長度 ℓ = 15 cm/ns × 1 ns = 15 cm = λ/2。所以「邊緣長度」其實就是 knee frequency 的半波長——Day 1 的空間觀點和今天的頻率觀點，是同一件事的兩種語言。</p>
+</details>
+
+<h2>5. 面試怎麼考</h2>
+<p>先用英文口頭回答，再展開對照。</p>
+
+<details>
+<summary>Q1: "Where does the rule of thumb BW = 0.35 / rise time come from? When would you not trust it?"</summary>
+<p><strong>參考答案骨架：</strong>It comes from a first-order low-pass system. The step response is 1 minus e to the minus t over tau, so the 10-to-90 rise time works out to ln(9) times tau, about 2.2 tau. The minus-3-dB bandwidth of the same system is 1 over 2-pi-tau. Multiply them and tau cancels: rise time times bandwidth equals ln(9) over 2-pi, roughly 0.35.</p>
+<p><strong>加分點（何時不能信）：</strong>The 0.35 factor assumes a single-pole, Gaussian-like response. Scopes with maximally-flat responses use a larger factor, around 0.4 to 0.45 per the vendor's documentation, and systems with peaking or multiple poles deviate further. Also, it says nothing about phase or group delay — so I treat it as a sizing estimate, not a measurement correction.</p>
+</details>
+
+<details>
+<summary>Q2: "You need to measure a signal with a 1 ns edge. How do you choose the oscilloscope and what error do you expect?"</summary>
+<p><strong>參考答案骨架：</strong>The signal bandwidth is about 0.35 over 1 ns, so 350 MHz, and the spectral content extends to the knee frequency around 500 MHz. Rule of thumb is 3 to 5 times the signal bandwidth for the whole chain including the probe — so I'd want roughly 1 to 2 GHz of system bandwidth. Rise times add roughly root-sum-square: with a 1 GHz scope whose own rise time is about 0.35 ns, I'd read about sqrt(1² + 0.35²) ≈ 1.06 ns — a 6% inflation, acceptable. With a 350 MHz scope I'd read about 1.4 ns — 40% off, not acceptable.</p>
+<p><strong>考點：</strong>能不能把 0.35/t<sub>r</sub>、RSS、3–5 倍法則三件事串成一個決策流程，並主動講出探棒也算在鏈路內。</p>
+</details>
+
+<h2>6. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：一階系統的 10–90% 上升時間與 τ 的關係？推導關鍵？</p>
+  <p class="a">A1：t_r = ln(9)·τ ≈ 2.2τ。由 V(t)=V₀(1−e^(−t/τ)) 解 10% 與 90% 兩時刻相減。</p>
+  <p class="q">Q2：BW ≈ 0.35/t_r 的 0.35 是怎麼來的？適用前提？</p>
+  <p class="a">A2：ln(9)/(2π) ≈ 0.35（t_r=2.2τ 與 BW=1/2πτ 相乘）。前提：一階/近高斯響應系統；平坦響應機種係數約 0.4～0.45。</p>
+  <p class="q">Q3：knee frequency 是什麼？公式？與 0.35/t_r 差別？</p>
+  <p class="a">A3：f_knee ≈ 0.5/t_r，梯形波頻譜由 −20 轉 −40 dB/dec 的轉折點，描述「訊號」頻譜範圍；0.35/t_r 描述「系統」頻寬與輸出 t_r 的關係。</p>
+  <p class="q">Q4：方波的諧波結構？（50% duty）</p>
+  <p class="a">A4：只有奇次諧波，第 n 次振幅為基頻的 1/n（基頻為方波振幅的 4/π 倍）；duty ≠ 50% 時偶次諧波出現。</p>
+  <p class="q">Q5：量測鏈的上升時間怎麼疊加？示波器頻寬怎麼選？</p>
+  <p class="a">A5：近高斯系統用 RSS：t_r量 ≈ √(t_r訊號² + t_r示波器² + t_r探棒²)。系統頻寬選訊號頻寬的 3～5 倍（5 倍時膨脹約 2%）。</p>
+</div>
+
+<h2>7. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 3（週日）：第 1 週複習與 20 題自我測驗</strong></p>
+  <p>明天不教新東西，用 20 題測驗（附詳解）把 Day 1–2 的地基夯實：傳播速度、1/6 法則、0.35/t<sub>r</sub> 推導、knee frequency、RSS 量測疊加⋯⋯全部混在一起考。建議先把這兩天的 Anki 卡刷一輪再應戰。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 2 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 1/6）｜週六實作日</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,10 +1,10 @@
 {
-  "current_day": 1,
+  "current_day": 2,
   "current_week": 1,
   "phase": 1,
-  "last_lesson_date": "2026-07-24",
-  "last_topic": "Day 1：訊號的本質——為什麼數位訊號其實是類比的",
-  "next_day": 2,
-  "next_topic": "Day 2：上升時間與頻寬——0.35/tr 的由來與應用",
-  "notes": "Day1 已涵蓋：數位訊號的類比本質、訊號傳播速度（FR-4 約 15 cm/ns）、上升時間 vs 時脈頻率、臨界長度 1/6 法則、SI/PI/EMI 關係圖。Day2 應深入：一階系統步階響應完整推導、knee frequency、由 datasheet 找 tr、頻譜觀點（方波諧波）。"
+  "last_lesson_date": "2026-07-25",
+  "last_topic": "Day 2：上升時間與頻寬——0.35/tr 的由來與動手驗證（週六實作日）",
+  "next_day": 3,
+  "next_topic": "Day 3：第 1 週複習與 20 題自我測驗（週日複習日）",
+  "notes": "Day2（週六實作日）已涵蓋：方波傅立葉分解（奇次諧波 1/n 衰減、4/π 基頻）、knee frequency f_knee≈0.5/tr（-20→-40 dB/dec 轉折）、一階 RC 步階響應完整推導 tr=2.2τ、BW≈0.35/tr（含適用前提：一階/近高斯系統）、量測鏈 RSS 疊加公式、示波器頻寬 3~5 倍法則、三個動手實驗（量產生器 tr、RC 驗證 2.2τ 與 0.35、BW Limit 讓示波器說謊）＋LTspice 替代方案。Day3 為週日測驗日：出 20 題附詳解，範圍 Day1-2（傳播速度 15cm/ns、1/6 法則、邊緣空間長度、SI/PI/EMI 關係、0.35/tr 推導、knee frequency、諧波結構、RSS、探棒負載效應）。Day4 起進入週 2 傳輸線理論（Z0 推導）。"
 }

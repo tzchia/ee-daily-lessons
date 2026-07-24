@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EE 深造計畫｜每日課程</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+.lesson-list{list-style:none;padding:0}
+.lesson-list li{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  margin:10px 0;transition:box-shadow .15s}
+.lesson-list li:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.lesson-list a{display:block;padding:14px 18px;text-decoration:none;color:var(--ink)}
+.lesson-list .day{font-weight:700;color:var(--accent);margin-right:10px}
+.lesson-list .date{float:right;color:var(--muted);font-size:14px}
+.phase-tag{font-size:13px;color:var(--muted);margin:24px 0 4px;font-weight:700;letter-spacing:.05em}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="lesson">
+  <div class="kicker">半年 EE 深造計畫｜目標：Apple / Google Camera HW EE</div>
+  <h1>每日課程目錄</h1>
+  <div class="meta">26 週・約 180 天｜SI/PI → EMI/ESD → Camera → FA/類比 → Python → 面試衝刺</div>
+</header>
+
+<div class="card goal">
+  <span class="label">使用方式</span>
+  <p>每天早上自動新增一課。順序讀，讀完做練習題，睡前用 Anki 卡片複習。週六實作、週日測驗。</p>
+</div>
+
+<div class="phase-tag">PHASE 1｜訊號完整性 SI 基礎（週 1–6）</div>
+<ul class="lesson-list">
+  <!-- LESSONS:BEGIN -->
+  <li><a href="lessons/day-001.html"><span class="day">Day 1</span>訊號的本質——為什麼數位訊號其實是類比的<span class="date">2026-07-24</span></a></li>
+  <!-- LESSONS:END -->
+</ul>
+
+<footer><span>tzchia/ee-daily-lessons</span><span>自動出課由 Hermes 排程維護</span></footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,54 @@
+:root{
+  --bg:#faf9f6; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+  --accent:#0e7490; --accent-lite:#e0f2f7; --warn:#b45309; --warn-bg:#fef3c7;
+  --ok:#15803d; --ok-bg:#dcfce7; --code-bg:#f3f4f6; --border:#e5e7eb;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  line-height:1.85;font-size:17px}
+.wrap{max-width:860px;margin:0 auto;padding:24px 20px 80px}
+header.lesson{background:linear-gradient(135deg,#0e7490,#155e75);color:#fff;
+  border-radius:16px;padding:28px 28px 22px;margin-bottom:28px}
+header.lesson .kicker{font-size:14px;opacity:.85;letter-spacing:.1em}
+header.lesson h1{margin:.3em 0 .2em;font-size:26px;line-height:1.4}
+header.lesson .meta{font-size:14px;opacity:.9}
+h2{font-size:22px;margin:2.2em 0 .6em;padding-bottom:.3em;border-bottom:3px solid var(--accent-lite);color:#0f4c5c}
+h3{font-size:18px;margin:1.8em 0 .5em;color:#155e75}
+p{margin:.7em 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:16px 0}
+.goal{background:var(--accent-lite);border-left:5px solid var(--accent)}
+.intuition{background:#fdf6ec;border-left:5px solid #d97706}
+.pitfall{background:var(--warn-bg);border-left:5px solid var(--warn)}
+.takeaway{background:var(--ok-bg);border-left:5px solid var(--ok)}
+.label{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.08em;
+  color:#fff;background:var(--accent);border-radius:6px;padding:2px 10px;margin-bottom:8px}
+.intuition .label{background:#d97706}.pitfall .label{background:var(--warn)}.takeaway .label{background:var(--ok)}
+code{background:var(--code-bg);border-radius:4px;padding:2px 6px;font-size:.92em;
+  font-family:"JetBrains Mono",Consolas,monospace}
+pre{background:#111827;color:#e5e7eb;border-radius:10px;padding:16px 18px;overflow-x:auto;
+  font-size:14px;line-height:1.7}
+pre code{background:none;color:inherit;padding:0}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:15px}
+th,td{border:1px solid var(--border);padding:9px 12px;text-align:left}
+th{background:var(--accent-lite);color:#0f4c5c}
+tr:nth-child(even) td{background:#fbfbfa}
+figure{margin:20px 0;text-align:center}
+figure svg{max-width:100%;height:auto;background:#fff;border:1px solid var(--border);border-radius:10px}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+details{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:14px 18px;margin:12px 0}
+details summary{cursor:pointer;font-weight:700;color:var(--accent)}
+details[open] summary{margin-bottom:10px}
+.formula{background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px;
+  padding:14px 18px;margin:14px 0;text-align:center;font-size:1.08em;overflow-x:auto}
+.anki{background:#eef2ff;border-left:5px solid #4f46e5;border-radius:12px;padding:18px 22px;margin:16px 0}
+.anki .q{font-weight:700}
+.anki .a{color:#374151;margin-bottom:1em}
+.en{font-style:normal;color:#0f4c5c}
+footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--border);
+  color:var(--muted);font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+a{color:var(--accent)}
+.progress-note{font-size:14px;color:var(--muted)}
+@media (max-width:600px){body{font-size:16px}.wrap{padding:16px 14px 60px}
+  header.lesson{padding:20px 18px}}

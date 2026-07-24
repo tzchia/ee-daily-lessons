@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 1｜訊號的本質——為什麼數位訊號其實是類比的</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 1 週・第 1 天</div>
+  <h1>Day 1：訊號的本質——為什麼數位訊號其實是類比的</h1>
+  <div class="meta">2026-07-24（五）｜預估學習時間：90 分鐘｜難度：★☆☆☆☆（打地基）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天的課，你要能夠：</p>
+  <ol>
+    <li>解釋「數位訊號本質上是類比訊號」這句話的物理意義</li>
+    <li>說出訊號在 PCB 上的傳播速度，並算出一個邊緣（edge）在板子上「占多長」</li>
+    <li>判斷一條走線什麼時候可以當成「一根導線」、什麼時候必須當成「傳輸線」（1/6 法則）</li>
+    <li>分清楚 SI、PI、EMI 三者在管什麼、彼此什麼關係</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼從這裡開始？</h2>
+<p>你有 5 年 NB 主機板和鏡頭模組經驗，一定量過 MIPI 波形、看過眼圖、debug 過訊號打不過的板子。但外商面試（尤其 Apple 和 Google）有個特色：<strong>他們不問你「做過什麼」，他們問你「為什麼」</strong>。</p>
+<p>例如你說「這條 MIPI 走線我們有做阻抗控制」，面試官下一句就是：</p>
+<ul>
+  <li>Why does this trace need impedance control, but the I2C trace next to it doesn't?（為什麼這條要控阻抗，旁邊那條 I2C 不用？）</li>
+  <li>At what point does a trace start to "care" about impedance?（走線從什麼時候開始「在乎」阻抗？）</li>
+</ul>
+<p>這兩題的答案，就是今天的內容。Phase 1 的六週會把你「量過但講不出物理」的東西，全部補上理論地基。</p>
+
+<h2>1. 直覺：數位訊號是一個「善意的謊言」</h2>
+
+<div class="card intuition">
+  <span class="label">直覺比喻</span>
+  <p>數位教科書告訴你：訊號只有 0 和 1，像電燈開關，啪一聲就切換。這是一個<strong>為了讓邏輯設計變簡單而說的善意謊言</strong>。</p>
+  <p>真實世界裡，電壓是連續的物理量，它從 0V 爬到 1.8V 需要時間——就像你不可能「瞬間」從一樓到二樓，你得爬樓梯，只是爬得很快。這段爬樓梯的時間，就叫<strong>上升時間（rise time, t<sub>r</sub>）</strong>。</p>
+  <p>SI（訊號完整性）這門學問，研究的就是「爬樓梯的過程中會發生什麼意外」——訊號在爬的途中被反射、被鄰居干擾、被損耗磨掉稜角，最後到接收端時已經面目全非。</p>
+</div>
+
+<h3>1.1 理想方波 vs 真實訊號</h3>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <!-- left: ideal -->
+  <text x="170" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">理想方波（教科書）</text>
+  <line x1="40" y1="240" x2="330" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="40" y1="240" x2="40" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="30" y="75" text-anchor="end" font-size="13" fill="#6b7280">1</text>
+  <text x="30" y="245" text-anchor="end" font-size="13" fill="#6b7280">0</text>
+  <polyline points="50,235 110,235 110,70 190,70 190,235 260,235 260,70 320,70"
+    fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="185" y="270" text-anchor="middle" font-size="13" fill="#6b7280">垂直邊緣：切換時間 = 0（物理上不可能）</text>
+
+  <!-- right: real -->
+  <text x="590" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">真實訊號（示波器上看到的）</text>
+  <line x1="440" y1="240" x2="730" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="440" y1="240" x2="440" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+  <path d="M450,235 L490,235 C510,235 505,64 530,66 C540,66 548,60 556,70 C566,80 560,62 575,68 L600,70
+           C620,72 615,238 640,234 C652,232 658,242 668,236 L700,236"
+    fill="none" stroke="#dc2626" stroke-width="3"/>
+  <!-- rise time annotation -->
+  <line x1="497" y1="200" x2="497" y2="255" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <line x1="527" y1="90" x2="527" y2="255" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <line x1="497" y1="252" x2="527" y2="252" stroke="#374151" stroke-width="2"/>
+  <text x="512" y="272" text-anchor="middle" font-size="13" fill="#374151">t_r</text>
+  <text x="590" y="52" text-anchor="middle" font-size="12" fill="#b45309">過衝 (overshoot) 與振鈴 (ringing)</text>
+</svg>
+<figcaption>圖 1：左邊是邏輯設計的抽象，右邊才是電路板上的真相——有限的上升時間、過衝、振鈴。</figcaption>
+</figure>
+
+<p>右邊那些「毛毛的」東西不是雜訊那麼簡單，每一個特徵都有明確的物理成因，之後幾週會一一拆解：</p>
+<table>
+  <tr><th>波形特徵</th><th>物理成因</th><th>哪一課教</th></tr>
+  <tr><td>上升時間有限</td><td>驅動端輸出級的充放電能力、通道頻寬</td><td>Day 2</td></tr>
+  <tr><td>過衝 / 振鈴</td><td>阻抗不匹配造成的反射、寄生電感電容</td><td>週 2–3</td></tr>
+  <tr><td>邊緣被「磨圓」</td><td>走線的高頻損耗（skin effect、介質損）</td><td>週 5</td></tr>
+  <tr><td>不該動的線在動</td><td>鄰近走線的串擾（crosstalk）</td><td>週 4</td></tr>
+</table>
+
+<h2>2. 訊號跑多快？——PCB 上的光速</h2>
+
+<h3>2.1 訊號傳的是「場」，不是「電子」</h3>
+<p>先破除一個常見迷思：<strong>訊號的速度不是電子移動的速度</strong>。銅線裡電子的漂移速度其實慢得可笑（毫米/秒等級），但訊號是以「電磁場」的形式，在走線與參考平面之間的<strong>介質</strong>裡傳播的——速度接近光速。</p>
+
+<div class="card intuition">
+  <span class="label">直覺比喻</span>
+  <p>想像一根塞滿乒乓球的水管。你在這頭推一顆球進去，另一頭「幾乎立刻」掉出一顆球——不是你推的那顆跑過去了，而是「推力」瞬間傳過去了。訊號就是那個推力（電磁場），電子只是乒乓球。</p>
+</div>
+
+<h3>2.2 速度公式</h3>
+<p>電磁波在介質中的速度，由介質的<strong>介電常數（Dk，或寫作 ε<sub>r</sub>）</strong>決定：</p>
+
+<div class="formula">
+  v = c / √Dk　，其中 c ≈ 3×10⁸ m/s（真空光速）
+</div>
+
+<p>PCB 最常用的板材 FR-4，Dk 約 4（實際依板材與頻率在 3.5～4.5 之間浮動）。代入：</p>
+
+<div class="formula">
+  v ≈ 3×10⁸ / √4 = 1.5×10⁸ m/s = <strong>15 cm/ns</strong>（約 6 inch/ns）
+</div>
+
+<div class="card takeaway">
+  <span class="label">必背數字</span>
+  <p><strong>FR-4 上訊號速度 ≈ 15 cm/ns，即約 1 ns 走 15 公分、1 cm 花 67 ps。</strong>這個數字面試會直接考，日常估算也天天用。（註：微帶線走外層，場一半在空氣中，實際會快一點，約 17～18 cm/ns；帶狀線走內層，就是 15 cm/ns 左右。先記 15 這個保守值。）</p>
+</div>
+
+<h3>2.3 關鍵觀念：一個邊緣在板子上「占多長」</h3>
+<p>這是今天最重要的觀念轉換——<strong>把時間換算成長度</strong>。</p>
+<p>訊號的邊緣（從 0 爬到 1 的過程）需要 t<sub>r</sub> 的時間，而訊號同時又以 15 cm/ns 在板上跑。所以在任一瞬間，這個「正在爬升的邊緣」會攤開在走線上，占據一段實體長度：</p>
+
+<div class="formula">
+  邊緣空間長度 ℓ = v × t<sub>r</sub>
+</div>
+
+<p>算幾個實際例子（都用 15 cm/ns）：</p>
+<table>
+  <tr><th>訊號</th><th>典型上升時間</th><th>邊緣空間長度</th></tr>
+  <tr><td>老式 I2C（100 kHz，慢邊緣）</td><td>~100 ns（量級）</td><td>15 公尺——比整台 NB 大幾百倍</td></tr>
+  <tr><td>一般 GPIO / 控制訊號</td><td>~2 ns</td><td>30 cm</td></tr>
+  <tr><td>MIPI D-PHY HS 模式</td><td>~0.1 ns（100 ps 量級）</td><td>1.5 cm</td></tr>
+  <tr><td>PCIe Gen4/5</td><td>~10 ps 量級</td><td>1.5 mm</td></tr>
+</table>
+
+<figure>
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">同一瞬間，「邊緣」攤開在走線上的樣子</text>
+  <!-- trace -->
+  <rect x="60" y="150" width="640" height="14" fill="#d97706" opacity="0.25"/>
+  <rect x="60" y="150" width="640" height="14" fill="none" stroke="#d97706"/>
+  <text x="60" y="185" font-size="13" fill="#6b7280">驅動端 (driver)</text>
+  <text x="700" y="185" text-anchor="end" font-size="13" fill="#6b7280">接收端 (receiver)</text>
+  <!-- voltage profile drawn above the trace -->
+  <polyline points="60,60 300,60 420,140 700,140" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="150" y="50" font-size="13" fill="#0e7490">已經是 High 的區段</text>
+  <text x="545" y="130" font-size="13" fill="#0e7490">還是 Low 的區段</text>
+  <!-- edge extent -->
+  <line x1="300" y1="60" x2="300" y2="210" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <line x1="420" y1="140" x2="420" y2="210" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <line x1="300" y1="205" x2="420" y2="205" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="360" y="228" text-anchor="middle" font-size="14" fill="#dc2626" font-weight="bold">邊緣占據的長度 ℓ = v × t_r</text>
+  <!-- arrow of propagation -->
+  <line x1="470" y1="90" x2="560" y2="90" stroke="#374151" stroke-width="2"/>
+  <polygon points="560,90 548,84 548,96" fill="#374151"/>
+  <text x="515" y="80" text-anchor="middle" font-size="13" fill="#374151">傳播方向 15 cm/ns</text>
+</svg>
+<figcaption>圖 2：把示波器上的「時間軸」翻譯成板子上的「空間軸」。邊緣不是一個點，是一段會移動的斜坡。</figcaption>
+</figure>
+
+<h2>3. 什麼時候要把走線當「傳輸線」？——1/6 法則</h2>
+
+<h3>3.1 兩種世界觀</h3>
+<p>電路有兩種分析方式：</p>
+<ul>
+  <li><strong>集總（lumped）</strong>：整條線視為同一個節點，線上每一點電壓相同。國中學的電路學都是這個世界。</li>
+  <li><strong>分布（distributed）</strong>：線太長，訊號從這頭到那頭要花可觀的時間，線上不同位置電壓<strong>不一樣</strong>——這時走線不再是「導線」，而是一個有特性阻抗、會反射的<strong>傳輸線</strong>。</li>
+</ul>
+<p>判斷標準就是比較兩個長度：<strong>走線長度 L</strong> vs <strong>邊緣空間長度 ℓ</strong>。</p>
+
+<div class="formula">
+  工程經驗法則：當 <strong>L &gt; ℓ / 6</strong>（走線超過邊緣長度的 1/6）時，必須當傳輸線處理
+</div>
+
+<p>為什麼是 1/6？這是工程折衷值（有人用 1/4、有人用 1/10，越保守數字越小）：當走線短於邊緣的 1/6，反射來回跑的時間遠小於上升時間，反射會被邊緣自己「淹沒」，看不出振鈴；一旦超過，反射開始跟邊緣分離，波形就會出現明顯的階梯或振鈴。</p>
+
+<h3>3.2 動手算：回答開頭的面試題</h3>
+<p>現在可以回答「為什麼 MIPI 要控阻抗，I2C 不用」了：</p>
+<ul>
+  <li><strong>I2C（t<sub>r</sub> ≈ 100 ns 量級）</strong>：ℓ ≈ 15 m，除以 6 是 2.5 m。NB 板上的 I2C 走線了不起 20 cm，遠小於 2.5 m → 集總世界，整條線就是一個節點，<strong>不需要</strong>阻抗控制。</li>
+  <li><strong>MIPI D-PHY HS（t<sub>r</sub> ≈ 100 ps）</strong>：ℓ ≈ 1.5 cm，除以 6 是 <strong>2.5 mm</strong>。鏡頭模組到 SoC 的走線動輒 10～20 cm，超標幾十倍 → 徹頭徹尾的傳輸線，阻抗不連續就會反射、就會吃掉眼圖。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「時脈頻率低，所以不用擔心 SI」——錯！</strong>決定要不要當傳輸線的是<strong>上升時間</strong>，不是時脈頻率。一個 1 MHz 的訊號，如果驅動它的 buffer 很「快」（t<sub>r</sub> = 1 ns），它的邊緣一樣只有 15 cm 長，一樣會反射、會振鈴、會輻射 EMI。你在 NB 案子上可能遇過：低速控制訊號換了一顆更快的 buffer 之後，EMI 突然爆掉——就是這個原因。頻率決定「事件多常發生」，上升時間決定「每次事件多兇」。</p>
+</div>
+
+<h2>4. SI、PI、EMI——三兄弟的地盤</h2>
+<p>最後建立全景地圖，這三個詞會貫穿整個 Phase 1–2：</p>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">SI / PI / EMI 的關係</text>
+  <!-- SI box -->
+  <rect x="40" y="60" width="210" height="150" rx="12" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="145" y="90" text-anchor="middle" font-size="17" font-weight="bold" fill="#0f4c5c">SI 訊號完整性</text>
+  <text x="145" y="118" text-anchor="middle" font-size="13" fill="#374151">訊號從 A 到 B</text>
+  <text x="145" y="140" text-anchor="middle" font-size="13" fill="#374151">形狀還對不對？</text>
+  <text x="145" y="168" text-anchor="middle" font-size="12" fill="#6b7280">反射・串擾・損耗</text>
+  <text x="145" y="188" text-anchor="middle" font-size="12" fill="#6b7280">時序・眼圖</text>
+  <!-- PI box -->
+  <rect x="275" y="60" width="210" height="150" rx="12" fill="#fdf6ec" stroke="#d97706" stroke-width="2"/>
+  <text x="380" y="90" text-anchor="middle" font-size="17" font-weight="bold" fill="#92400e">PI 電源完整性</text>
+  <text x="380" y="118" text-anchor="middle" font-size="13" fill="#374151">晶片要電的瞬間</text>
+  <text x="380" y="140" text-anchor="middle" font-size="13" fill="#374151">電源撐不撐得住？</text>
+  <text x="380" y="168" text-anchor="middle" font-size="12" fill="#6b7280">PDN 阻抗・去耦電容</text>
+  <text x="380" y="188" text-anchor="middle" font-size="12" fill="#6b7280">電壓漣波・IR drop</text>
+  <!-- EMI box -->
+  <rect x="510" y="60" width="210" height="150" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="615" y="90" text-anchor="middle" font-size="17" font-weight="bold" fill="#991b1b">EMI 電磁干擾</text>
+  <text x="615" y="118" text-anchor="middle" font-size="13" fill="#374151">能量跑出系統外</text>
+  <text x="615" y="140" text-anchor="middle" font-size="13" fill="#374151">吵到別人了嗎？</text>
+  <text x="615" y="168" text-anchor="middle" font-size="12" fill="#6b7280">輻射・傳導</text>
+  <text x="615" y="188" text-anchor="middle" font-size="12" fill="#6b7280">認證（FCC/CE）</text>
+  <!-- bottom common cause -->
+  <rect x="150" y="240" width="460" height="42" rx="10" fill="#f3f4f6" stroke="#6b7280"/>
+  <text x="380" y="267" text-anchor="middle" font-size="14" fill="#374151" font-weight="bold">共同根源：快速切換的邊緣（dI/dt、dV/dt）+ 回流路徑</text>
+  <line x1="145" y1="210" x2="290" y2="240" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="380" y1="210" x2="380" y2="240" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="615" y1="210" x2="470" y2="240" stroke="#6b7280" stroke-width="1.5"/>
+</svg>
+<figcaption>圖 3：三個領域看似獨立，根源都是「快速切換的邊緣」和「電流回流路徑」。同一個 via 擺錯位置，可能同時製造 SI、PI、EMI 三種問題。</figcaption>
+</figure>
+
+<p>用你熟悉的場景舉例三者怎麼糾纏：鏡頭模組的 VCM 驅動器切換時抽大電流（PI 問題）→ 電源塌陷透過共用電源耦合到 sensor 類比域（PI 變 SI/影像雜訊）→ 同時 flex 上的大 dI/dt 迴路對外輻射（EMI 問題）。之後週 15 會專門講這個 case。</p>
+
+<h2>5. 動手練習</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：一條 8 cm 的走線，訊號 t_r = 1 ns，要當傳輸線嗎？</summary>
+<p><strong>解：</strong>邊緣空間長度 ℓ = 15 cm/ns × 1 ns = 15 cm。臨界長度 = 15/6 = 2.5 cm。走線 8 cm &gt; 2.5 cm → <strong>要，必須當傳輸線處理</strong>（需要阻抗控制與適當端接）。</p>
+</details>
+
+<details>
+<summary>練習 2：同一條 8 cm 走線，換成 t_r = 10 ns 的慢訊號呢？</summary>
+<p><strong>解：</strong>ℓ = 15 × 10 = 150 cm，臨界長度 = 25 cm。8 cm &lt; 25 cm → <strong>不用</strong>，集總世界，當一般導線即可。同一條線，快慢訊號待遇完全不同——再次證明關鍵是 t<sub>r</sub> 不是頻率。</p>
+</details>
+
+<details>
+<summary>練習 3：你的 MIPI 走線從 sensor 到 SoC 共 12 cm，訊號從出發到抵達要多久？這個時間叫什麼？</summary>
+<p><strong>解：</strong>12 cm ÷ 15 cm/ns = 0.8 ns = 800 ps。這叫<strong>傳播延遲（propagation delay, t_pd）</strong>。順帶記住換算：FR-4 上約 <strong>67 ps/cm</strong>（或 6.7 ps/mm）。做 MIPI lane 等長匹配時，你在 layout 上留的每 1 mm 蛇形線，就是在補約 6.7 ps 的 skew。</p>
+</details>
+
+<details>
+<summary>練習 4（觀念題）：為什麼換了一顆「更快」的 buffer，功能一樣、頻率沒變，EMI 卻變差了？</summary>
+<p><strong>解：</strong>更快的 buffer = 更短的 t<sub>r</sub> = 邊緣空間長度變短 = 原本「夠短」的走線現在變成傳輸線 → 反射、振鈴出現；同時更短的 t<sub>r</sub> 代表訊號頻譜的高頻成分更多（Day 2 會用 0.35/t<sub>r</sub> 解釋），輻射效率更高。<strong>對策方向</strong>：選 buffer 不要盲目挑最快的，夠用就好；或用串聯電阻刻意放慢邊緣。</p>
+</details>
+
+<h2>6. 面試怎麼考</h2>
+<p>今天的觀念在外商面試的實際出題方式（附參考答案骨架，請試著先用英文口頭回答再看）：</p>
+
+<details>
+<summary>Q1: "Why do we treat some PCB traces as transmission lines but not others?"</summary>
+<p><strong>參考答案骨架：</strong>It depends on the signal's rise time, not its clock frequency. The edge occupies a physical length on the trace — roughly rise time times propagation speed, about 15 cm per nanosecond on FR-4. When the trace is longer than about one-sixth of that edge length, reflections no longer hide inside the edge, so we must treat it as a transmission line with controlled impedance and proper termination.</p>
+<p><strong>加分點：</strong>主動舉自己的例子——"For example, on my camera module design, the MIPI D-PHY lanes had roughly 100-picosecond edges, so anything beyond a few millimeters needed impedance control, while the I2C lines on the same flex did not."</p>
+</details>
+
+<details>
+<summary>Q2: "How long does a signal take to travel 10 cm on a PCB?"</summary>
+<p><strong>參考答案骨架：</strong>On FR-4 the propagation speed is about 15 cm per nanosecond — c divided by the square root of Dk, which is around 4. So 10 cm takes roughly 670 picoseconds. Outer-layer microstrip is slightly faster since half the field is in air.</p>
+<p><strong>考點：</strong>測你有沒有「工程數感」。答不出 15 cm/ns 這個量級，SI 面試基本直接出局。</p>
+</details>
+
+<h2>7. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：FR-4 上訊號傳播速度？由什麼決定？</p>
+  <p class="a">A1：v = c/√Dk ≈ 15 cm/ns（Dk≈4）；即 67 ps/cm。微帶線稍快（場一半在空氣）。</p>
+  <p class="q">Q2：走線何時必須當傳輸線？</p>
+  <p class="a">A2：走線長度 &gt; 邊緣空間長度的 1/6，其中邊緣空間長度 ℓ = v × t_r。</p>
+  <p class="q">Q3：決定 SI 問題嚴重度的是時脈頻率還是上升時間？為什麼？</p>
+  <p class="a">A3：上升時間。t_r 決定邊緣空間長度與頻譜高頻成分；頻率只決定事件發生頻率。</p>
+  <p class="q">Q4：SI / PI / EMI 各管什麼？共同根源？</p>
+  <p class="a">A4：SI＝訊號形狀對不對；PI＝供電瞬間撐不撐得住；EMI＝能量有沒有吵到系統外。共同根源：快速切換邊緣（dI/dt、dV/dt）＋回流路徑。</p>
+  <p class="q">Q5：訊號能量實際在哪裡傳播？</p>
+  <p class="a">A5：在走線與參考平面之間的介質中，以電磁場形式傳播；不是電子的漂移（電子漂移僅 mm/s 量級）。</p>
+</div>
+
+<h2>8. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 2：上升時間與頻寬——0.35/t<sub>r</sub> 的由來</strong></p>
+  <p>今天一直說「快邊緣含有高頻成分」，明天就把它說清楚：方波拆成正弦波（傅立葉直覺版）、一階系統步階響應推導出 BW ≈ 0.35/t<sub>r</sub>、怎麼從 datasheet 找出訊號真正的頻寬、以及「示波器頻寬要選訊號的幾倍」這個天天用得到的實務問題。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 1 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 1/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 3｜第 1 週複習與 20 題自我測驗</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 1 週・第 3 天（週日複習日）</div>
+  <h1>Day 3：第 1 週複習與 20 題自我測驗</h1>
+  <div class="meta">2026-07-26（日）｜預估時間：90 分鐘（作答 50 分＋對詳解 40 分）｜範圍：Day 1–2</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標與規則</span>
+  <p>今天不教新東西，用 20 題把 Day 1–2 的地基夯實。規則：</p>
+  <ol>
+    <li><strong>先刷一輪 Day 1–2 的 Anki 卡</strong>（10 分鐘），再開始作答</li>
+    <li>拿紙筆，<strong>先寫下自己的答案再展開詳解</strong>——「看得懂詳解」和「自己寫得出來」是兩回事，面試考的是後者</li>
+    <li>計算題全部手算，練「工程數感」（面試白板上沒有計算機）</li>
+    <li>每題 1 分，答對的標準是「詳解裡的粗體重點你都有講到」；最後對照文末的評分表決定要不要回頭重讀</li>
+  </ol>
+</div>
+
+<h2>0. 考前 3 分鐘速查表（作答時請蓋住）</h2>
+<table>
+  <tr><th>公式 / 數字</th><th>意義</th><th>出處</th></tr>
+  <tr><td>v = c/√Dk ≈ <strong>15 cm/ns</strong>（FR-4）</td><td>訊號傳播速度；換算 67 ps/cm</td><td>Day 1</td></tr>
+  <tr><td>ℓ = v × t<sub>r</sub></td><td>邊緣佔據的空間長度</td><td>Day 1</td></tr>
+  <tr><td>L &gt; ℓ/6 → 傳輸線</td><td>1/6 法則（何時要控阻抗）</td><td>Day 1</td></tr>
+  <tr><td>t<sub>r</sub> = ln(9)·τ ≈ <strong>2.2τ</strong></td><td>一階系統步階響應的 10–90% 上升時間</td><td>Day 2</td></tr>
+  <tr><td>BW ≈ <strong>0.35/t<sub>r</sub></strong></td><td>一階「系統」頻寬 ↔ 輸出上升時間</td><td>Day 2</td></tr>
+  <tr><td>f<sub>knee</sub> ≈ <strong>0.5/t<sub>r</sub></strong></td><td>「訊號」頻譜的跳崖點（−20→−40 dB/dec）</td><td>Day 2</td></tr>
+  <tr><td>t<sub>r,量</sub> ≈ √(Σ t<sub>r,i</sub>²)</td><td>量測鏈 RSS 疊加；示波器選訊號頻寬 3～5 倍</td><td>Day 2</td></tr>
+</table>
+
+<h2>Part A｜觀念題（Q1–Q7）</h2>
+
+<p><strong>Q1.</strong> 「數位訊號本質上是類比的」——請用兩句話解釋這句話的物理意義，並回答：訊號的能量實際上在<strong>哪裡</strong>、以<strong>什麼形式</strong>傳播？電子本身跑多快？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>電壓是連續的物理量，從 0 爬到 1 需要有限的<strong>上升時間 t<sub>r</sub></strong>，爬升過程中會發生反射、串擾、損耗——SI 研究的就是這段「爬樓梯的意外」。訊號能量以<strong>電磁場</strong>形式，在<strong>走線與參考平面之間的介質中</strong>傳播（速度接近光速）；電子只是「乒乓球」，漂移速度僅 <strong>mm/s 量級</strong>，慢得可笑。答出「場在介質中傳播、不是電子在跑」才算全對。</p>
+</details>
+
+<p><strong>Q2.</strong> 寫出 PCB 上訊號傳播速度的公式，並算出 FR-4（Dk ≈ 4）上的速度。微帶線（外層）和帶狀線（內層）誰快？為什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>v = c/√Dk = 3×10⁸ / √4 = 1.5×10⁸ m/s = <strong>15 cm/ns</strong>（≈ 67 ps/cm）。<strong>微帶線較快</strong>（約 17～18 cm/ns）：因為它走外層，電磁場有一半在空氣（Dk=1）中，等效 Dk 較低；帶狀線整個場都包在介質裡，就是 15 cm/ns 左右。面試答不出 15 cm/ns 這個量級，SI 職缺基本出局。</p>
+</details>
+
+<p><strong>Q3.</strong> 判斷一條走線要不要當傳輸線，關鍵參數是「時脈頻率」還是「上升時間」？請說明理由，並舉一個工作上會踩到的實例。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>是<strong>上升時間</strong>。t<sub>r</sub> 決定邊緣的空間長度 ℓ = v×t<sub>r</sub>（以及頻譜高頻成分的多寡）；頻率只決定「事件多常發生」，t<sub>r</sub> 決定「每次事件多兇」。實例：1 MHz 的低速控制訊號，換了一顆 t<sub>r</sub> = 1 ns 的快 buffer，邊緣只有 15 cm 長——原本「夠短」的走線瞬間變傳輸線，振鈴、EMI 全部出現，功能和頻率卻完全沒變。</p>
+</details>
+
+<p><strong>Q4.</strong> 1/6 法則說「走線超過邊緣空間長度的 1/6 就要當傳輸線」。這個 1/6 的<strong>物理理由</strong>是什麼？為什麼有人用 1/4、有人用 1/10？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>比較的是「<strong>反射來回一趟的時間</strong>」和「<strong>上升時間</strong>」。走線夠短時，反射跑回來的時候邊緣還在爬升，反射被邊緣自己<strong>淹沒</strong>，波形上看不出振鈴；線一長，反射和邊緣分離，階梯與振鈴就現形。1/6 是工程折衷值，不是物理常數——越保守（線越短就開始控阻抗）數字取越小（1/10），越激進取 1/4。面試時能講出「這是 rule of thumb、背後比的是反射往返時間 vs t<sub>r</sub>」即為滿分。</p>
+</details>
+
+<p><strong>Q5.</strong> 一句話說出 SI、PI、EMI 各自「管什麼」，以及三者的共同根源。再用鏡頭模組舉一個「三者糾纏」的例子。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>SI＝訊號從 A 到 B <strong>形狀還對不對</strong>；PI＝晶片要電的瞬間<strong>電源撐不撐得住</strong>；EMI＝能量跑出系統外<strong>吵到別人了沒</strong>。共同根源：<strong>快速切換的邊緣（dI/dt、dV/dt）＋電流回流路徑</strong>。鏡頭模組例：VCM 驅動器切換抽大電流（PI）→ 電源塌陷經共用電源耦合進 sensor 類比域變成影像雜訊（PI 轉 SI）→ flex 上大 dI/dt 迴路同時對外輻射（EMI）。</p>
+</details>
+
+<p><strong>Q6.</strong> 0.35/t<sub>r</sub> 和 0.5/t<sub>r</sub> 都是「t<sub>r</sub> 換頻率」的公式，但立場完全不同。請分別說出它們各自回答什麼問題、站在什麼觀點。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong><strong>0.35/t<sub>r</sub> 是「系統」觀點</strong>：一個頻寬 BW 的一階系統，輸出的上升時間是多少（BW × t<sub>r</sub> ≈ 0.35）——用來選示波器、估通道。<strong>0.5/t<sub>r</sub> 是「訊號」觀點</strong>：一個上升時間 t<sub>r</sub> 的訊號，它的頻譜「重要成分」延伸到多高（knee frequency，之後成分以 −40 dB/dec 急墜）——用來估 EMI 頻段、判斷訊號的高頻地盤。把兩者立場講清楚，是「背公式」和「懂物理」的分水嶺。</p>
+</details>
+
+<p><strong>Q7.</strong> 理想 50% duty 方波的頻譜長什麼樣（哪些諧波、振幅怎麼衰減）？如果 EMI 掃頻時看到強烈的<strong>偶次</strong>諧波，你會懷疑什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>50% duty 方波<strong>只有奇次諧波</strong>（f₀、3f₀、5f₀⋯），第 n 次振幅是基頻的 <strong>1/n</strong>（基頻為方波振幅的 4/π 倍），log-log 圖上是 −20 dB/dec 斜線。強烈偶次諧波出現，代表「半波對稱」被破壞——懷疑 <strong>duty cycle 失衡</strong>或<strong>上升/下降邊緣不對稱</strong>。這是從頻譜反推時域行為的 FA 技巧，Apple FA 職缺面試很愛這種「從量測結果倒推根因」的題型。</p>
+</details>
+
+<h2>Part B｜計算題（Q8–Q14）</h2>
+
+<p><strong>Q8.</strong> 一條 10 cm 走線，訊號 t<sub>r</sub> = 2 ns。(a) 邊緣空間長度？(b) 臨界長度？(c) 要不要當傳輸線？(d) 若 t<sub>r</sub> 變成 200 ps 呢？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) ℓ = 15 cm/ns × 2 ns = <strong>30 cm</strong>。(b) 臨界長度 = 30/6 = <strong>5 cm</strong>。(c) 10 cm &gt; 5 cm → <strong>要</strong>當傳輸線。(d) t<sub>r</sub> = 200 ps → ℓ = 3 cm、臨界 5 mm，10 cm 超標 20 倍——徹頭徹尾的傳輸線，阻抗控制與端接都跑不掉。</p>
+</details>
+
+<p><strong>Q9.</strong> 鏡頭模組 sensor 到 SoC 的 MIPI 走線 12 cm。(a) 傳播延遲多少？(b) lane 間等長匹配時，layout 每留 1 mm 蛇形線補多少 skew？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 12 cm ÷ 15 cm/ns = <strong>0.8 ns = 800 ps</strong>。(b) 67 ps/cm → <strong>約 6.7 ps/mm</strong>。這兩個換算是 camera EE 的日常武器：clock/data lane 匹配規格給的是 ps，layout 工程師畫的是 mm，你要當中間的翻譯。</p>
+</details>
+
+<p><strong>Q10.</strong> 白板推導題：對一階 RC 電路輸入理想步階，從 V(t) = V₀(1 − e<sup>−t/τ</sup>) 出發，推導 t<sub>r</sub> ≈ 2.2τ。（要求寫出 10% 與 90% 兩個時刻）</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>10% 時刻：0.1 = 1 − e<sup>−t₁/τ</sup> → e<sup>−t₁/τ</sup> = 0.9 → t₁ = τ ln(10/9)。90% 時刻：0.9 = 1 − e<sup>−t₂/τ</sup> → t₂ = τ ln(10)。相減：t<sub>r</sub> = τ[ln(10) − ln(10/9)] = <strong>τ ln(9) ≈ 2.2τ</strong>。這題面試白板要在 2 分鐘內寫完；卡住的話回 Day 2 圖 3 再練。</p>
+</details>
+
+<p><strong>Q11.</strong> 接上題：同一個一階系統的 −3dB 頻寬是 BW = 1/(2πτ)。請把 0.35 生出來。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>t<sub>r</sub> × BW = ln(9)·τ × 1/(2πτ) = <strong>ln(9)/(2π) = 2.197/6.283 ≈ 0.35</strong>，τ 消掉——所以不管 R、C 是多少，一階系統永遠有 BW ≈ 0.35/t<sub>r</sub>。<strong>適用前提</strong>也要能講：一階（單極點）/近高斯響應；平坦響應的示波器係數約 0.4～0.45（以原廠文件為準），高階或有 peaking 的系統偏差更大。</p>
+</details>
+
+<p><strong>Q12.</strong> 一個訊號 t<sub>r</sub> = 500 ps。(a) 等效頻寬？(b) knee frequency？(c) 要忠實量測它，示波器＋探棒的系統頻寬要多少？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) BW ≈ 0.35/500 ps = <strong>700 MHz</strong>。(b) f<sub>knee</sub> ≈ 0.5/500 ps = <strong>1 GHz</strong>。(c) 3～5 倍法則：系統頻寬（含探棒！）約 <strong>2～3.5 GHz</strong>。加分：若只用 1 GHz 示波器（自身 t<sub>r</sub> ≈ 350 ps），RSS 會量到 √(500²+350²) ≈ 610 ps，高估 22%。</p>
+</details>
+
+<p><strong>Q13.</strong> 你用 350 MHz 示波器量一個邊緣，讀值 1.6 ns。(a) 示波器自身 t<sub>r</sub> 約多少？(b) 訊號真實 t<sub>r</sub> 約多少？(c) 這個反解什麼時候不可信？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) t<sub>r,示波器</sub> ≈ 0.35/350 MHz = <strong>1 ns</strong>。(b) 反解 RSS：t<sub>r,真</sub> = √(1.6² − 1²) = √1.56 ≈ <strong>1.25 ns</strong>——讀值已被膨脹近 30%。(c) RSS 只在<strong>各級近似高斯響應</strong>時成立；平坦響應（maximally flat）機種、有 peaking 的探棒都會讓反解失準。工程上寧可換高頻寬示波器，反解只拿來估計誤差量級、不拿來「修正」報告數據。</p>
+</details>
+
+<p><strong>Q14.</strong> 10:1 被動探棒輸入電容約 10 pF（量級），點在輸出阻抗 25 Ω 的節點上。(a) 探棒讓這個節點多了一個多慢的時間常數？(b) 對應的 t<sub>r</sub>？(c) 拿它量 1 ns 的邊緣，RSS 之後讀值膨脹多少？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) τ = 25 Ω × 10 pF = <strong>0.25 ns</strong>。(b) t<sub>r</sub> ≈ 2.2 × 0.25 = <strong>0.55 ns</strong>。(c) √(1² + 0.55²) = √1.30 ≈ <strong>1.14 ns，膨脹約 14%</strong>。而且注意：這不只是「量不準」——探棒電容是真實掛在電路上的負載，會實際拖慢節點、改變電路行為（負載效應）。高速節點不能用一般被動探棒亂點，週 6 量測週會教正確工具。</p>
+</details>
+
+<h2>Part C｜波形判讀題（Q15–Q16）</h2>
+
+<p><strong>Q15.</strong> 下圖是某訊號的頻譜包絡（log-log）。請從圖上讀出 knee frequency，反推這個訊號的上升時間，並說出兩段斜率各由什麼決定。</p>
+
+<figure>
+<svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q15：頻譜包絡判讀</text>
+  <line x1="70" y1="240" x2="720" y2="240" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="70" y1="240" x2="70" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="400" y="270" text-anchor="middle" font-size="13" fill="#6b7280">頻率（log 刻度）</text>
+  <text x="40" y="145" text-anchor="middle" font-size="13" fill="#6b7280" transform="rotate(-90 40 145)">諧波振幅（dB）</text>
+  <!-- freq ticks -->
+  <line x1="180" y1="240" x2="180" y2="246" stroke="#6b7280"/><text x="180" y="262" text-anchor="middle" font-size="12" fill="#6b7280">10 MHz</text>
+  <line x1="330" y1="240" x2="330" y2="246" stroke="#6b7280"/><text x="330" y="262" text-anchor="middle" font-size="12" fill="#6b7280">100 MHz</text>
+  <line x1="480" y1="240" x2="480" y2="246" stroke="#6b7280"/><text x="480" y="262" text-anchor="middle" font-size="12" fill="#6b7280">1 GHz</text>
+  <line x1="630" y1="240" x2="630" y2="246" stroke="#6b7280"/><text x="630" y="262" text-anchor="middle" font-size="12" fill="#6b7280">10 GHz</text>
+  <!-- envelope: knee at 250 MHz ~ x=390 -->
+  <polyline points="90,70 390,128" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <polyline points="390,128 660,235" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <line x1="390" y1="128" x2="390" y2="240" stroke="#6b7280" stroke-dasharray="4 3"/>
+  <circle cx="390" cy="128" r="5" fill="#b45309"/>
+  <text x="390" y="110" text-anchor="middle" font-size="13" font-weight="bold" fill="#b45309">轉折點 ≈ 250 MHz</text>
+  <text x="215" y="80" font-size="13" fill="#0e7490">斜率 ①</text>
+  <text x="530" y="175" font-size="13" fill="#dc2626">斜率 ②</text>
+</svg>
+<figcaption>圖 1：某週期訊號的頻譜包絡，轉折點約在 250 MHz。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>f<sub>knee</sub> ≈ 250 MHz → t<sub>r</sub> ≈ 0.5/f<sub>knee</sub> = 0.5/250 MHz = <strong>2 ns</strong>。斜率①（−20 dB/dec）由訊號的<strong>週期與 duty</strong> 決定（1/n 諧波衰減）；斜率②（−40 dB/dec）由<strong>上升時間</strong>決定——邊緣越快，轉折點越往右推，高頻「地盤」越大。加分連結：t<sub>r</sub> = 2 ns 的邊緣在 FR-4 上佔 30 cm，臨界長度 5 cm——這張頻譜圖和 layout 規則其實是同一件事的兩種語言。</p>
+</details>
+
+<p><strong>Q16.</strong> 下圖是某 RC 節點的步階響應（示波器截圖示意，每格 2 µs）。請讀出 10–90% 上升時間，反推 τ 與這個節點的 −3dB 頻寬。</p>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q16：步階響應判讀（水平每格 2 µs）</text>
+  <!-- grid -->
+  <g stroke="#e5e7eb" stroke-width="1">
+    <line x1="70" y1="60" x2="70" y2="250"/><line x1="150" y1="60" x2="150" y2="250"/>
+    <line x1="230" y1="60" x2="230" y2="250"/><line x1="310" y1="60" x2="310" y2="250"/>
+    <line x1="390" y1="60" x2="390" y2="250"/><line x1="470" y1="60" x2="470" y2="250"/>
+    <line x1="550" y1="60" x2="550" y2="250"/><line x1="630" y1="60" x2="630" y2="250"/><line x1="710" y1="60" x2="710" y2="250"/>
+    <line x1="70" y1="60" x2="710" y2="60"/><line x1="70" y1="107" x2="710" y2="107"/>
+    <line x1="70" y1="155" x2="710" y2="155"/><line x1="70" y1="202" x2="710" y2="202"/><line x1="70" y1="250" x2="710" y2="250"/>
+  </g>
+  <!-- final value & 10/90 lines -->
+  <line x1="70" y1="70" x2="710" y2="70" stroke="#9ca3af" stroke-dasharray="3 4"/>
+  <text x="706" y="64" text-anchor="end" font-size="12" fill="#6b7280">終值 V₀</text>
+  <line x1="70" y1="232" x2="710" y2="232" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <line x1="70" y1="88" x2="710" y2="88" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <text x="714" y="236" font-size="12" fill="#dc2626">10%</text>
+  <text x="714" y="92" font-size="12" fill="#dc2626">90%</text>
+  <!-- exponential curve: starts x=150, tau=2us=80px; 10% at t=0.105tau -> x~158; 90% at 2.3tau -> x~334 -->
+  <path d="M70,250 L150,250 C190,140 230,100 290,82 C350,72 430,70 710,70" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <!-- markers: 10% ~x=158, 90% ~x=334 -->
+  <line x1="158" y1="232" x2="158" y2="268" stroke="#6b7280" stroke-dasharray="3 3"/>
+  <line x1="334" y1="88" x2="334" y2="268" stroke="#6b7280" stroke-dasharray="3 3"/>
+  <line x1="158" y1="264" x2="334" y2="264" stroke="#374151" stroke-width="2"/>
+  <text x="246" y="286" text-anchor="middle" font-size="14" font-weight="bold" fill="#374151">10% → 90%：約 2.2 格</text>
+</svg>
+<figcaption>圖 2：步階響應，水平刻度每格 2 µs，10%→90% 橫跨約 2.2 格。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>t<sub>r</sub> ≈ 2.2 格 × 2 µs/格 ≈ <strong>4.4 µs</strong>。反推 τ = t<sub>r</sub>/2.2 = <strong>2 µs</strong>。頻寬 BW = 1/(2πτ) = 1/(2π×2µs) ≈ <strong>80 kHz</strong>（也可直接 0.35/4.4µs ≈ 80 kHz，兩條路殊途同歸——這正是 0.35 公式的意義）。加分：先確認量測鏈夠快——對 µs 級邊緣，任何示波器都綽綽有餘，RSS 膨脹可忽略。</p>
+</details>
+
+<h2>Part D｜情境應用題（Q17–Q18）</h2>
+
+<p><strong>Q17.</strong> NB 案子上一顆低速控制訊號的 buffer 停產，代料 t<sub>r</sub> 從 3 ns 變 1 ns，功能驗證全過，但 EMI 掃描在幾百 MHz 頻段爆掉。(a) 用本週學的兩個公式解釋原因。(b) 提出兩個對策方向。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 頻域：f<sub>knee</sub> 從 0.5/3ns ≈ 170 MHz 推高到 0.5/1ns = <strong>500 MHz</strong>——輻射彈藥庫直接擴張到 EMI 認證敏感頻段。空間域：ℓ 從 45 cm 縮到 15 cm，臨界長度從 7.5 cm 縮到 <strong>2.5 cm</strong>——原本安全的走線集體變成傳輸線，振鈴（也是輻射源）出現。(b) 對策：①<strong>串聯電阻</strong>（必要時加線上小電容）刻意放慢邊緣，本質是自造一個 RC 把 knee 拉回來；②選料原則改為「t<sub>r</sub> 夠用就好，不盲目挑快」，並把 t<sub>r</sub> 納入代料審查的檢查項。答出「頻率沒變、變的是 t<sub>r</sub>」是這題的靈魂。</p>
+</details>
+
+<p><strong>Q18.</strong> 主管要你用桌上那台 200 MHz 通用示波器＋10:1 被動探棒「看一下 MIPI D-PHY 的 HS 波形有沒有問題」（邊緣約 100 ps 量級）。你要怎麼回應？請用數字說話。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>拒絕直接照做，並給出量化理由：訊號頻寬 0.35/100 ps ≈ <strong>3.5 GHz 量級</strong>，用 3～5 倍法則，系統頻寬要 <strong>10 GHz 量級</strong>＋高頻寬差動探棒。200 MHz 示波器自身 t<sub>r</sub> ≈ 1.75 ns，比訊號慢一個量級以上——量到的是<strong>示波器自己的響應</strong>，不是訊號；且被動探棒約 10 pF 的輸入電容掛上去，會實際負載並破壞這個節點（可能讓原本會動的 link 直接掛掉）。<strong>正確回應</strong>：說明量測鏈頻寬不足會給出系統性偏差的數據，建議借/租高頻寬示波器與差動探棒，或先用協定層 error counter、BER 等間接指標評估。這種「先交代量測鏈可信度」的習慣，是 debug 會議上的專業分水嶺。</p>
+</details>
+
+<h2>Part E｜延伸題：Perfect Timing II（Q19–Q20）</h2>
+<div class="card intuition">
+  <span class="label">白話版：為什麼多這兩題</span>
+  <p>本週課綱對應參考書《Perfect Timing II》（Cypress, 2002）的 Ch.2「Clock Buffer Basics」與 Ch.3「Timing Budget」。時脈（clock）是全系統<strong>跑最快、負載最重</strong>的訊號，是 SI 觀念的最佳練兵場，也是 NB 主機板的日常。這兩題的背景知識都寫在題目裡，考的是你能不能<strong>用 Day 1–2 的觀念去消化新資訊</strong>——面試也常這樣考：丟一段 spec，看你怎麼推理。</p>
+</div>
+
+<p><strong>Q19.</strong> Perfect Timing II Ch.2 提到：早期用通用邏輯元件（如 74F244）當 clock buffer，傳播延遲長達 3～5 ns、輸出間 skew 也大，在 20 MHz 以下的年代還夠用；書中並指出——cycle time 50 ns 的年代，skew 即使佔週期 20% 也無妨；但當 cycle time 降到 15 ns 以下，高速系統通常<strong>只允許約 10% 的 timing budget 給 clock skew</strong>（2002 年高性能 buffer 的典型 output skew 約 200 ps、part-to-part skew 約 500 ps）。請解釋：(a) 為什麼系統越快，skew 越致命？(b) 這些 2002 年的數字，放到今天要怎麼看？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) skew 是「同一顆時脈到達不同晶片的時間差」，它<strong>直接從每個週期的可用時間裡扣掉</strong>——週期 50 ns 時扣 10 ns 沒感覺，週期 5 ns 時扣 1 ns 就是 20% 的工作時間蒸發。系統變快，「工作時間」線性縮短，但 skew（buffer 差異＋走線長度差）不會自動跟著縮，於是佔比越來越高、margin 被吃光就 fail（Perfect Timing II Ch.2）。(b) 2002 年的數據以現代標準需上修：如今 DDR、SerDes 的週期在百 ps～ns 量級，clock buffer 的 skew 規格已進到十 ps 量級；但「skew 只能佔 timing budget 一小部分」這個<strong>比例思維</strong>完全不過時。加分連結 Day 1：走線每差 1 mm 就差約 6.7 ps 的 extrinsic skew——這就是等長匹配存在的理由。</p>
+</details>
+
+<p><strong>Q20.</strong> Perfect Timing II Ch.3 的 timing budget 模型：一個同步系統中，資料要在一個時脈週期內完成 Register A → 邏輯 → Register B 的旅程，需要的時間元素有 t<sub>CLK-Q</sub>（時脈到輸出有效）、t<sub>FLIGHT</sub>（板上走線飛行時間）、t<sub>LOGIC</sub>（邏輯運算）、t<sub>SETUP</sub>（B 端建立時間），還要預留 t<sub>SKEW</sub> 與 t<sub>JITTER</sub>。現有一個 100 MHz 系統：t<sub>CLK-Q</sub> = 2 ns、t<sub>LOGIC</sub> = 4 ns、t<sub>SETUP</sub> = 1 ns、兩段走線共 15 cm、clock skew 0.5 ns、cycle-to-cycle jitter 0.5 ns。請算出 timing margin，並指出哪一項是你用 Day 1 的知識算出來的。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>週期 = 1/100 MHz = <strong>10 ns</strong>。飛行時間：15 cm × 67 ps/cm = <strong>1 ns</strong>（← 這項就是 Day 1 的 15 cm/ns 換算）。總和 = 2 + 1 + 4 + 1 + 0.5 + 0.5 = <strong>9 ns</strong> → margin = 10 − 9 = <strong>1 ns（10%）</strong>。觀念重點（Perfect Timing II Ch.3）：時脈不是免費的——skew 和 jitter 雖然「不做功」，卻實實在在吃掉預算；而 t<sub>FLIGHT</sub> 讓 layout 的每一公分都變成 timing 問題。這個模型是週 14 算 MIPI link budget、面試 timing 題的原型，先把骨架記住。</p>
+</details>
+
+<h2>評分與行動</h2>
+<div class="card takeaway">
+  <span class="label">評分表</span>
+  <ul>
+    <li><strong>17–20 分</strong>：地基穩固，明天放心進傳輸線理論。把答錯的題目做成 Anki 卡。</li>
+    <li><strong>13–16 分</strong>：過關，但把錯的題目對應的 Day 1/Day 2 章節重讀一次（速查表右欄有出處）。</li>
+    <li><strong>9–12 分</strong>：Day 1–2 各花 30 分鐘重讀，特別是你錯最多的那個 Part，明晚再重考一次本卷。</li>
+    <li><strong>&lt; 9 分</strong>：別急著前進——週 2 的傳輸線理論全部蓋在這兩天的地基上。今天把 Day 1–2 完整重讀，Anki 卡全部刷過再說。</li>
+  </ul>
+  <p>另提醒：Day 2 的三個儀器實驗（量產生器 t<sub>r</sub>、RC 驗證 2.2τ 與 0.35、BW Limit 讓示波器說謊）如果還沒做，<strong>下週找一天午休帶去公司做</strong>，總共約 50 分鐘。</p>
+</div>
+
+<h2>今日 Anki 卡片（第 1 週總結卡）</h2>
+<div class="anki">
+  <p class="q">Q1：第 1 週的一句話總綱？</p>
+  <p class="a">A1：SI 的一切由上升時間 t_r 主宰——它決定邊緣空間長度（ℓ=v·t_r，配 1/6 法則判傳輸線）、頻譜範圍（f_knee≈0.5/t_r）與量測需求（BW≈0.35/t_r，示波器選 3～5 倍）。</p>
+  <p class="q">Q2：三個「必背數字」：FR-4 速度、一階系統 t_r 與 τ、示波器倍率法則？</p>
+  <p class="a">A2：15 cm/ns（67 ps/cm）；t_r ≈ 2.2τ；系統頻寬取訊號頻寬 3～5 倍（5 倍時 RSS 膨脹約 2%）。</p>
+  <p class="q">Q3：從頻譜看到強偶次諧波，FA 上懷疑什麼？</p>
+  <p class="a">A3：duty cycle 失衡或上升/下降邊緣不對稱（半波對稱被破壞，偶次諧波不再抵消）。</p>
+  <p class="q">Q4：為什麼系統越快 clock skew 越致命？（Perfect Timing II Ch.2/3）</p>
+  <p class="a">A4：skew 直接從每個週期的可用時間扣除；週期縮短但 skew 不自動縮，佔 timing budget 比例越來越高（高速系統通常僅容許約 10%）。走線每 1 mm ≈ 6.7 ps extrinsic skew，故需等長匹配。</p>
+  <p class="q">Q5：timing budget 的基本元素？</p>
+  <p class="a">A5：t_CLK-Q + t_FLIGHT + t_LOGIC + t_SETUP + t_SKEW + t_JITTER ≤ 時脈週期；margin = 週期 − 總和（Perfect Timing II Ch.3）。</p>
+</div>
+
+<h2>明日預告</h2>
+<div class="card">
+  <p><strong>Day 4（週一）：傳輸線理論 I——特性阻抗 Z₀ 到底是什麼</strong></p>
+  <p>第 1 週我們一直說「走線變成傳輸線之後會反射」，但一直沒回答：反射是跟「誰」比較出來的？答案是特性阻抗 Z₀——一個「明明整條線是銅、卻表現得像 50 Ω 電阻」的神奇量。明天從 L、C 的分布參數把 Z₀ = √(L/C) 推出來，並解釋為什麼業界偏愛 50 Ω、MIPI 差動要 100 Ω（量級）。這是週 2 端接策略的敲門磚。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 3 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 1/6）｜週日複習日</span>
+</footer>
+
+</div>
+</body>
+</html>

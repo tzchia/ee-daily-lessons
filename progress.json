@@ -1,10 +1,10 @@
 {
-  "current_day": 2,
+  "current_day": 3,
   "current_week": 1,
   "phase": 1,
-  "last_lesson_date": "2026-07-25",
-  "last_topic": "Day 2：上升時間與頻寬——0.35/tr 的由來與動手驗證（週六實作日）",
-  "next_day": 3,
-  "next_topic": "Day 3：第 1 週複習與 20 題自我測驗（週日複習日）",
-  "notes": "【節奏調整 2026-07-25】實作日從週六改為週五（學員只有平日在公司有儀器），週六改出新觀念課（純閱讀不需儀器），週日維持 20 題測驗。Day2（2026-07-25 週六，舊制實作日）已涵蓋：方波傅立葉分解（奇次諧波 1/n 衰減、4/π 基頻）、knee frequency f_knee≈0.5/tr（-20→-40 dB/dec 轉折）、一階 RC 步階響應完整推導 tr=2.2τ、BW≈0.35/tr（含適用前提：一階/近高斯系統）、量測鏈 RSS 疊加公式、示波器頻寬 3~5 倍法則、三個動手實驗（量產生器 tr、RC 驗證 2.2τ 與 0.35、BW Limit 讓示波器說謊）＋LTspice 替代方案——這些實驗學員將於下週平日在公司補做，週五實作日可先提醒。Day3（週日）為測驗日：出 20 題附詳解，範圍 Day1-2（傳播速度 15cm/ns、1/6 法則、邊緣空間長度、SI/PI/EMI 關係、0.35/tr 推導、knee frequency、諧波結構、RSS、探棒負載效應）。Day4 起進入週 2 傳輸線理論（Z0 推導）。"
+  "last_lesson_date": "2026-07-26",
+  "last_topic": "Day 3：第 1 週複習與 20 題自我測驗（週日複習日）",
+  "next_day": 4,
+  "next_topic": "Day 4：傳輸線理論 I——特性阻抗 Z0 是什麼（√(L/C) 推導、為何 50Ω、MIPI 差動 100Ω）",
+  "notes": "Day3（2026-07-26 週日測驗日）已出 20 題附詳解，範圍 Day1-2：Part A 觀念（場傳播/15cm/ns/1/6法則/SI-PI-EMI/0.35 vs 0.5 立場/諧波結構）、Part B 計算（邊緣長度、67ps/cm 換算、2.2τ 與 0.35 白板推導、RSS 反解、探棒負載）、Part C 波形判讀（頻譜包絡讀 knee、步階響應讀 tr/τ/BW）、Part D 情境（buffer 代料 EMI 爆掉、200MHz 示波器量 MIPI 的拒絕理由）、Part E 延伸引用 Perfect Timing II Ch.2（74F244 tPD 3-5ns、skew 佔 timing budget ~10%、2002 年 output skew ~200ps/part-to-part ~500ps 已註明需上修）與 Ch.3（timing budget 模型 tCLK-Q+tFLIGHT+tLOGIC+tSETUP+tSKEW+tJITTER，含 100MHz 例題 margin=1ns）。已引用 PT2 章節：Ch2、Ch3（週2 出課應改讀 Ch7 Clock Termination、Ch6 PCB Layout）。Day2 的三個儀器實驗學員尚未做，已在 Day3 提醒下週平日帶去公司；週五（7/31）實作日可安排補做＋新實驗。Day4（週一）進入週 2：Z0=√(L/C) 分布參數推導、單位長度 L/C 直覺、為何 50Ω、MIPI 差動 100Ω 量級、瞬時阻抗觀念——需先讀 PT2 Ch7/Ch6。Day3 明日預告已埋「反射跟誰比較——Z0」的鉤子。"
 }

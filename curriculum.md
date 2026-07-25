@@ -55,7 +55,17 @@
 - 英文：每日通勤 30 分（The Amp Hour / Moore's Lobby 跟讀），每課附「面試怎麼考」英文題
 - Anki：每課附當日卡片，睡前 10 分複習
 - 履歷投遞：第 12 週左右履歷就緒即投（面試流程 2–3 個月，邊面邊補強）
-- 時機科學：每課附「⏰ 今日時機建議」小卡，取材自 Daniel Pink《什麼時候是好時候》（When: The Scientific Secrets of Perfect Timing，大塊文化 2018）——把當日課程內容對應到最適合的執行時段與書中概念（尖峰/低谷/回升日節律、52/17 工作休息法、微休息、10–20 分小睡、fresh start effect、事前驗屍 pre-mortem、中間點危機、結尾的力量、同步效應）
+- 參考書《Perfect Timing II》（Cypress Semiconductor, 2002—Design Guide for Clock Generation and Distribution）：全文已拆章存於 reference/chapters/ch01~ch16（不入 git）。出課時若當日主題與下表章節相關，agent 必須先讀對應章節檔，將書中的實例、數據、圖表觀念帶入課程（引用時標註「Perfect Timing II Ch.X」）：
+  - 週1（訊號本質/傳輸線判斷）→ Ch2 Clock Buffer Basics、Ch3 Timing Budget
+  - 週2（Z0/端接策略）→ Ch7 Clock Termination（串聯/並聯/戴維寧實測波形）、Ch6 PCB Layout
+  - 週3（反射實戰/TDR）→ Ch6 PCB Layout（via、return path）、Ch7
+  - 週4（串擾/差動）→ Ch6（crosstalk、guard trace）、Ch14 Skew Control（trace matching）
+  - 週5（損耗/眼圖/jitter）→ Ch4 Clock Jitter（RJ/DJ、cycle-to-cycle/period/long-term、高斯統計）、Ch13 Cascading PLLs（jitter 累積、phase noise）
+  - 週6（SI 量測）→ Ch11 Probing High-Speed Clocks、Ch16 Motherboard Clock Validation（NB 主機板直接對口）、Ch10 IBIS/SPICE
+  - 週7–8（PDN/去耦）→ Ch5 Power Supply Filtering、Ch8 Bypass Capacitors（ESL/ESR、擺放）
+  - 週9（EMI）→ Ch9 EMI（spread spectrum、down/center spread、諧波）
+  - 週19（電源/sequence）→ Ch5、Ch12 Clock Generators
+  - 面試衝刺期 → Ch3 Timing Budget（TTB）、Ch16 當 case study 素材
 
 ## 課程產出規則（給每日出課 agent）
 1. 全程繁體中文，絕不可出現簡體字；技術名詞可保留英文
@@ -63,4 +73,4 @@
 3. 固定章節：今日目標 → 前情提要 → 觀念講解（含 SVG 圖解）→ 數學推導 → 實務案例（連結 NB 主機板/鏡頭模組場景）→ 動手練習與詳解（details 收合）→ 面試怎麼考（英文題+參考答案）→ 今日 Anki 卡片 → 明日預告
 4. 絕不捏造規格數據；不確定的數字標註「約」或「量級」
 5. 週五實作日與週日複習日格式可調整（實驗指引 / 20 題測驗）；實作日必排平日，因學員僅平日在公司有儀器可用
-6. 每課含一張「⏰ 今日時機建議」小卡（放在今日目標之後或明日預告之前）：引用 Daniel Pink《什麼時候是好時候》的一個概念，具體對應到當日內容的最佳執行方式。例：數學推導/新觀念安排在早晨尖峰時段（分析性工作）；Anki 睡前複習（結尾效應+睡眠鞏固）；每 52 分鐘休息 17 分鐘；實作日量測前先做 pre-mortem（預想哪裡會量錯）；週日測驗選早上頭腦清醒時做；課程中間點（約第 13 週）提醒中間點危機並用「當成第二次開始」對策。概念輪替使用不重複轟炸，且只引用書中真實概念，不可捏造書的內容
+6. 出課前查「貫穿全程」的《Perfect Timing II》章節對照表：當日主題有對應章節時，先讀 reference/chapters/ 下的章節檔再寫課，把書中實例/數據/量測波形觀念織入（標註「Perfect Timing II Ch.X」）；引用忠於原文，不可捏造書中沒有的數據；書是 2002 年出版，數據過時處（如頻率量級、製程）要註明「以現代標準需上修」

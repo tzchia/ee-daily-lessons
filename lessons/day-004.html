@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 4｜傳輸線理論 I——特性阻抗 Z₀ 到底是什麼</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 4 天</div>
+  <h1>Day 4：傳輸線理論 I——特性阻抗 Z₀ 到底是什麼</h1>
+  <div class="meta">2026-07-27（一）｜預估學習時間：90 分鐘｜難度：★★☆☆☆（進入傳輸線世界）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天的課，你要能夠：</p>
+  <ol>
+    <li>解釋「一條銅走線為什麼會表現得像一顆 50 Ω 電阻」——瞬時阻抗的物理圖像</li>
+    <li>從單位長度電感 L′ 與電容 C′ 推導出 <strong>Z₀ = √(L′/C′)</strong>，並在白板上 2 分鐘內寫完</li>
+    <li>說出改變走線幾何（線寬、介質厚度、Dk）時 Z₀ 往哪邊動、為什麼</li>
+    <li>回答面試經典題：「為什麼是 50 Ω？」「為什麼萬用電表量 50 Ω 走線量不到 50 Ω？」</li>
+    <li>知道 MIPI 差動 100 Ω 這個規格的位階（今天先建立量級，差動細節週 4 教）</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：反射是跟「誰」比較出來的？</h2>
+<p>第 1 週我們建立了判斷準則：走線長度超過邊緣空間長度的 1/6，就得當傳輸線處理，否則會有反射、振鈴。但有一個關鍵問題一直懸著——<strong>反射的成因是「阻抗不匹配」，那到底是誰跟誰不匹配？</strong></p>
+<p>答案的一半是驅動端與負載端的阻抗，另一半就是今天的主角：<strong>走線本身的特性阻抗 Z₀（characteristic impedance）</strong>。這是整個 SI 領域最核心、也最反直覺的觀念——一條用銅做的走線，直流電阻可能只有零點幾 Ω，卻會讓訊號覺得自己在推一顆 50 Ω 的電阻。今天把這件事徹底講清楚，週 2 後面的反射係數與端接策略就會順理成章。</p>
+
+<h2>1. 直覺：訊號前緣是「邊走邊付費的旅行者」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（看懂這段，今天就成功一半）</span>
+  <p>想像訊號的前緣（那個正在爬升的邊）是一個旅行者，沿著走線往前走。走線的每一小段都是「還沒充電的空地」——旅行者每往前走 1 公分，就得<strong>掏電荷出來，把這 1 公分的走線對地電容充到目標電壓</strong>，才能繼續前進。</p>
+  <p>「每公分要付多少電荷」是固定的（由走線幾何決定），「每秒走幾公分」也是固定的（由介質決定，Day 1 的 15 cm/ns）。所以旅行者每秒掏出的電荷量——也就是<strong>電流</strong>——是固定的。電壓固定、電流固定，兩者的比值 V/I 就是一個固定的「阻抗」。這個比值就是 <strong>Z₀</strong>。</p>
+  <p>注意：這不是電荷「穿過銅線流到地」的損耗（那是電阻），而是「沿路充電」的開銷。所以 Z₀ 跟走線多長<strong>完全無關</strong>——旅行者不管走 1 cm 還是 1 m，每一步的「過路費費率」都一樣。這也是為什麼它叫「特性」阻抗：它是這條線的體質，不是尺寸。</p>
+</div>
+
+<h3>1.1 走線其實是一座「LC 梯子」</h3>
+<p>為什麼走線會有「每公分的過路費」？因為任何一條走線配上它的參考平面，天生就自帶兩種寄生元素：</p>
+<ul>
+  <li><strong>單位長度電容 C′</strong>：走線（上板）與參考平面（下板）隔著介質，就是一個平行板電容——每公分貢獻一點點電容</li>
+  <li><strong>單位長度電感 L′</strong>：電流流過任何導體都會建立磁場，抗拒電流變化——每公分貢獻一點點電感</li>
+</ul>
+<p>把一條走線切成無限多小段，每一小段都是「一顆小電感串聯 + 一顆小電容對地」，整條線就是一座無限級的 LC 梯子：</p>
+
+<figure>
+<svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">走線的分布參數模型：無限級的 LC 梯子</text>
+  <!-- real trace on top -->
+  <rect x="80" y="50" width="600" height="10" fill="#d97706" opacity="0.3" stroke="#d97706"/>
+  <text x="70" y="60" text-anchor="end" font-size="13" fill="#6b7280">走線</text>
+  <line x1="80" y1="95" x2="680" y2="95" stroke="#374151" stroke-width="3"/>
+  <text x="70" y="99" text-anchor="end" font-size="13" fill="#6b7280">參考平面</text>
+  <!-- dashed slice lines -->
+  <line x1="230" y1="45" x2="230" y2="100" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="380" y1="45" x2="380" y2="100" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="530" y1="45" x2="530" y2="100" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="155" y="82" text-anchor="middle" font-size="12" fill="#6b7280">Δx</text>
+  <!-- arrow down -->
+  <line x1="380" y1="108" x2="380" y2="132" stroke="#374151" stroke-width="2"/>
+  <polygon points="380,140 374,128 386,128" fill="#374151"/>
+  <!-- ladder model -->
+  <line x1="80" y1="170" x2="120" y2="170" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- inductor 1 -->
+  <path d="M120,170 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="168" y1="170" x2="240" y2="170" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- cap 1 -->
+  <line x1="205" y1="170" x2="205" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="193" y1="192" x2="217" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="193" y1="200" x2="217" y2="200" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="205" y1="200" x2="205" y2="222" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- inductor 2 -->
+  <path d="M240,170 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="288" y1="170" x2="360" y2="170" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="325" y1="170" x2="325" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="313" y1="192" x2="337" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="313" y1="200" x2="337" y2="200" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="325" y1="200" x2="325" y2="222" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- inductor 3 -->
+  <path d="M360,170 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="408" y1="170" x2="480" y2="170" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="445" y1="170" x2="445" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="433" y1="192" x2="457" y2="192" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="433" y1="200" x2="457" y2="200" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="445" y1="200" x2="445" y2="222" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- inductor 4 -->
+  <path d="M480,170 q8,-14 16,0 q8,-14 16,0 q8,-14 16,0" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="528" y1="170" x2="580" y2="170" stroke="#0e7490" stroke-width="2.5"/>
+  <text x="600" y="175" font-size="15" fill="#6b7280">⋯ 無限延伸</text>
+  <!-- ground line -->
+  <line x1="80" y1="222" x2="580" y2="222" stroke="#374151" stroke-width="2.5"/>
+  <!-- labels -->
+  <text x="144" y="145" text-anchor="middle" font-size="13" fill="#0e7490">L′·Δx</text>
+  <text x="230" y="215" text-anchor="start" font-size="13" fill="#0e7490">C′·Δx</text>
+  <text x="380" y="248" text-anchor="middle" font-size="13" fill="#6b7280">每一小段 Δx：串聯一點電感（L′·Δx）＋對地一點電容（C′·Δx）</text>
+</svg>
+<figcaption>圖 1：把走線無限細切，每段都是 LC——這就是「分布參數」的意思。集總世界看整條線是一個節點；分布世界看它是一座 LC 梯子，訊號要一級一級爬過去。</figcaption>
+</figure>
+
+<div class="card intuition">
+  <span class="label">白話翻譯這張圖</span>
+  <p>「分布參數」四個字聽起來很學術，其實只是說：<strong>電感和電容不是集中在某一顆零件裡，而是像奶油一樣均勻抹在整條走線上</strong>。所以我們不講「這條線有多少 pF」，而講「這條線<strong>每公分</strong>有多少 pF」——這就是 C′（讀作 C prime）的意思。L′ 同理。</p>
+</div>
+
+<h2>2. 瞬時阻抗：訊號前緣「當下」看到的 V/I</h2>
+
+<p>現在讓一個步階（電壓 V 的前緣）從左端出發。關鍵畫面是這個瞬間快照：</p>
+
+<figure>
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">前緣經過的瞬間：每一步都在幫下一段線充電</text>
+  <!-- trace -->
+  <line x1="60" y1="120" x2="700" y2="120" stroke="#d97706" stroke-width="6" opacity="0.5"/>
+  <line x1="60" y1="200" x2="700" y2="200" stroke="#374151" stroke-width="3"/>
+  <text x="700" y="218" text-anchor="end" font-size="12" fill="#6b7280">參考平面（回流路徑）</text>
+  <!-- charged region -->
+  <rect x="60" y="120" width="320" height="80" fill="#0e7490" opacity="0.12"/>
+  <text x="215" y="105" text-anchor="middle" font-size="13" fill="#0e7490" font-weight="bold">已充電區（電壓 = V）</text>
+  <!-- plus/minus charges -->
+  <text x="110" y="138" font-size="13" fill="#0e7490">＋ ＋ ＋ ＋ ＋ ＋ ＋</text>
+  <text x="110" y="196" font-size="13" fill="#0e7490">－ － － － － － －</text>
+  <!-- E field arrows -->
+  <line x1="150" y1="145" x2="150" y2="182" stroke="#0e7490" stroke-width="1.5"/>
+  <polygon points="150,188 145,178 155,178" fill="#0e7490"/>
+  <line x1="250" y1="145" x2="250" y2="182" stroke="#0e7490" stroke-width="1.5"/>
+  <polygon points="250,188 245,178 255,178" fill="#0e7490"/>
+  <!-- wavefront -->
+  <line x1="380" y1="95" x2="380" y2="215" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6 4"/>
+  <text x="380" y="86" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="bold">前緣（正在充電的位置）</text>
+  <!-- propagation arrow -->
+  <line x1="395" y1="70" x2="470" y2="70" stroke="#dc2626" stroke-width="2"/>
+  <polygon points="478,70 466,64 466,76" fill="#dc2626"/>
+  <text x="440" y="60" text-anchor="middle" font-size="12" fill="#dc2626">v ≈ 15 cm/ns</text>
+  <!-- uncharged region -->
+  <text x="545" y="105" text-anchor="middle" font-size="13" fill="#6b7280">未充電區（電壓 = 0，還不知道訊號來了）</text>
+  <!-- current loop -->
+  <path d="M90,128 L370,128" stroke="#b45309" stroke-width="2" fill="none"/>
+  <polygon points="372,128 360,122 360,134" fill="#b45309"/>
+  <path d="M370,192 L90,192" stroke="#b45309" stroke-width="2" fill="none"/>
+  <polygon points="88,192 100,186 100,198" fill="#b45309"/>
+  <text x="215" y="165" text-anchor="middle" font-size="13" fill="#b45309" font-weight="bold">充電電流 I（去程走訊號線、回程走平面）</text>
+  <!-- caption formula -->
+  <text x="380" y="250" text-anchor="middle" font-size="14" fill="#374151" font-weight="bold">前緣看到的阻抗 = V ÷ I = Z₀ ——與線長無關、與後面接什麼「暫時」無關</text>
+</svg>
+<figcaption>圖 2：前緣後方已充飽電，前方還是 0 V。前緣每前進一步就要對「下一段 C′」充電，這股持續的充電電流 I 讓驅動端覺得自己在推一顆電阻——即使線的末端根本還沒收到訊號。</figcaption>
+</figure>
+
+<p>三個重要推論，全部是面試考點：</p>
+<ol>
+  <li><strong>Z₀ 與線長無關</strong>：它是「每一步的費率」，不是「全程總費用」。1 cm 和 1 m 的 50 Ω 走線，對前緣來說都是 50 Ω。</li>
+  <li><strong>在反射回來之前，驅動端根本不知道線末端接了什麼</strong>。前緣出發後的頭幾百 ps，驅動端只看得到 Z₀。這就是 Perfect Timing II Ch.7 分析反射時「先算訊號進入傳輸線的分壓」的理論基礎（第 5 節詳談）。</li>
+  <li><strong>Z₀ 是「訊號的阻抗」不是「銅的電阻」</strong>：能量並沒有被消耗掉（理想線無損耗），只是暫存在沿線的電場與磁場裡。所以 Z₀ 不會發熱，電阻才會。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「拿萬用電表量 50 Ω 走線，應該量到 50 Ω」——錯！</strong>萬用電表用直流量測，量到的是銅的 DC 電阻（一般走線僅毫 Ω～零點幾 Ω 量級）。Z₀ 是<strong>暫態（前緣爬升期間）</strong>訊號看到的阻抗；等到穩態、整條線充飽電、沒有電流在充電了，這個「阻抗」就隱形了。要量 Z₀ 得用 TDR（時域反射儀，週 3 教）。面試官很愛用這題檢查你是背名詞還是懂物理。</p>
+</div>
+
+<h2>3. 數學推導：把 Z₀ = √(L′/C′) 生出來</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（公式看不懂可以先跳過，懂這段就好）</span>
+  <p>結論：<strong>Z₀ 只由兩個「每公分體質」決定——每公分的電感 L′ 和每公分的電容 C′，公式是 Z₀ = √(L′/C′)</strong>。直覺記法：<strong>電容越大，阻抗越低</strong>（每步要餵的電荷多 → 電流大 → V/I 小）；<strong>電感越大，阻抗越高</strong>（電感抗拒電流建立 → 同樣電壓下電流小 → V/I 大）。一個在分母、一個在分子，開根號是因為兩者是「一路交替出現」的梯子結構。</p>
+</div>
+
+<h3>3.1 推導（白板版，請練到 3 分鐘內寫完）</h3>
+<p>設前緣以速度 v 前進，線上電壓為 V。看前緣走過 dt 時間內發生的事：</p>
+<p><strong>步驟 1——算充電電流。</strong>dt 內前緣新走過的長度是 dx = v·dt，這段新走線的電容是 C′·v·dt，要充到電壓 V，需要電荷 dQ = C′·v·dt·V。所以驅動端持續輸出的電流：</p>
+<div class="formula">
+  I = dQ/dt = C′·v·V
+</div>
+<p><em>白話翻譯：每秒要充電的「線長」是 v，每公分要餵 C′·V 的電荷，相乘就是每秒掏出的電荷＝電流。</em></p>
+<p><strong>步驟 2——算阻抗。</strong>前緣看到的阻抗就是電壓除以電流：</p>
+<div class="formula">
+  Z₀ = V / I = V / (C′·v·V) = 1 / (v·C′)
+</div>
+<p><strong>步驟 3——把 v 換掉。</strong>訊號在 LC 梯子上的傳播速度是（這條公式今天先接受，它與 Day 1 的 v = c/√Dk 是同一件事的兩種寫法）：</p>
+<div class="formula">
+  v = 1 / √(L′·C′)
+</div>
+<p><em>白話翻譯：每一級梯子（充電容、建磁場）都要花一點時間，L′、C′ 越大每級越慢，訊號整體就走得越慢。</em></p>
+<p>代入步驟 2：</p>
+<div class="formula">
+  Z₀ = √(L′·C′) / C′ = <strong>√(L′ / C′)</strong>
+</div>
+<p><em>白話翻譯：Z₀ 是「磁場開銷」與「電場開銷」的比例開根號。單位檢查：√(H/F) = √(Ω·s · s/Ω · Ω²/s²)… 直接記結論：√(nH/pF) 出來的單位剛好是 kΩ 的 1/√1000 倍——用下面的實際數字驗算最快。</em></p>
+
+<h3>3.2 一組必背的量級數字</h3>
+<p>FR-4 上典型 50 Ω 走線的單位長度參數（約，隨幾何浮動）：</p>
+<table>
+  <tr><th>參數</th><th>典型值（約）</th><th>驗算</th></tr>
+  <tr><td>C′（每公分電容）</td><td>約 1.3 pF/cm</td><td rowspan="2">Z₀ = √(3.3n/1.3p) ≈ √2538 ≈ 50 Ω ✓<br>v = 1/√(3.3n×1.3p) ≈ 15 cm/ns ✓</td></tr>
+  <tr><td>L′（每公分電感）</td><td>約 3.3 nH/cm</td></tr>
+</table>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>Z₀ = √(L′/C′)、v = 1/√(L′C′)；FR-4 50 Ω 走線約 3.3 nH/cm、1.3 pF/cm。</strong>這兩顆數字是你估算 via 電容、connector 寄生「嚴不嚴重」的天平砝碼——例如聽到「這顆 via 約 0.5 pF」，你立刻知道它相當於約 4 mm 走線的電容量，但集中在一點，所以是阻抗坑（週 3 細講）。</p>
+</div>
+
+<h2>4. 什麼決定 Z₀？——幾何是方向盤</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Z₀ = √(L′/C′) 告訴我們：想調 Z₀，就去調 L′ 或 C′，而它們完全由「走線的剖面幾何」決定。記兩個方向盤就夠：<strong>線變寬或離參考平面變近 → 電容變大 → Z₀ 變低</strong>；反過來，<strong>線變細或介質變厚 → Z₀ 變高</strong>。板廠調阻抗，本質上就是在調這幾個尺寸。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">兩種最常見的控阻抗結構（剖面圖）</text>
+  <!-- Microstrip -->
+  <text x="200" y="58" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f4c5c">微帶線 Microstrip（外層）</text>
+  <text x="200" y="78" text-anchor="middle" font-size="12" fill="#6b7280">場一半在空氣 → 較快（約 17～18 cm/ns）</text>
+  <!-- air label -->
+  <text x="200" y="102" text-anchor="middle" font-size="12" fill="#9ca3af">空氣（Dk = 1）</text>
+  <!-- trace -->
+  <rect x="165" y="112" width="70" height="16" fill="#d97706" stroke="#b45309"/>
+  <text x="200" y="106" text-anchor="middle" font-size="12" fill="#b45309"></text>
+  <!-- W dimension -->
+  <line x1="165" y1="140" x2="235" y2="140" stroke="#374151" stroke-width="1.5"/>
+  <text x="200" y="155" text-anchor="middle" font-size="12" fill="#374151">線寬 W</text>
+  <!-- dielectric -->
+  <rect x="60" y="128" width="280" height="60" fill="#e0f2f7" stroke="#93c5fd"/>
+  <text x="115" y="165" font-size="12" fill="#374151">介質 FR-4（Dk ≈ 4）</text>
+  <!-- H dimension -->
+  <line x1="255" y1="128" x2="255" y2="188" stroke="#374151" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <text x="268" y="162" font-size="12" fill="#374151">高度 H</text>
+  <!-- ground -->
+  <rect x="60" y="188" width="280" height="14" fill="#374151"/>
+  <text x="200" y="220" text-anchor="middle" font-size="12" fill="#6b7280">參考平面（GND）</text>
+  <!-- Stripline -->
+  <text x="565" y="58" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f4c5c">帶狀線 Stripline（內層）</text>
+  <text x="565" y="78" text-anchor="middle" font-size="12" fill="#6b7280">場全在介質 → 15 cm/ns、屏蔽較好</text>
+  <!-- top ground -->
+  <rect x="425" y="92" width="280" height="14" fill="#374151"/>
+  <!-- dielectric -->
+  <rect x="425" y="106" width="280" height="82" fill="#e0f2f7" stroke="#93c5fd"/>
+  <!-- trace -->
+  <rect x="530" y="138" width="70" height="14" fill="#d97706" stroke="#b45309"/>
+  <!-- bottom ground -->
+  <rect x="425" y="188" width="280" height="14" fill="#374151"/>
+  <text x="565" y="220" text-anchor="middle" font-size="12" fill="#6b7280">上下都有參考平面</text>
+  <text x="470" y="130" font-size="12" fill="#374151">介質</text>
+  <!-- rules table -->
+  <text x="380" y="252" text-anchor="middle" font-size="14" fill="#374151" font-weight="bold">W↑ 或 H↓（線寬變寬、離平面變近）→ C′↑ → Z₀↓　｜　Dk↑ → C′↑ → Z₀↓（且變慢）</text>
+  <text x="380" y="278" text-anchor="middle" font-size="13" fill="#6b7280">同樣 50 Ω，微帶線與帶狀線需要的 W/H 組合不同——所以換層走線要重新算線寬</text>
+</svg>
+<figcaption>圖 3：控阻抗的兩大基本款。你在 NB 主機板 stackup 表上看到「L1 microstrip 4.2 mil / L3 stripline 3.5 mil」之類不同層不同線寬，就是為了讓每層都湊到同一個 Z₀。（精確公式下一課教，今天先掌握方向。）</figcaption>
+</figure>
+
+<h3>4.1 Perfect Timing II 教的兩個工程現實</h3>
+<ul>
+  <li><strong>Dk 不是常數。</strong>Perfect Timing II Ch.6 的介電常數表指出：FR-4（Tetra Functional）在 1 MHz 時 Dk 約 4.2–4.6，到 300 MHz 降為約 4.0–4.3——<strong>Dk 隨頻率下降</strong>，而且不同板廠用的環氧配方不同，「務必向板廠確認實際 Dk 值」。這代表你算的 Z₀ 天生就有不確定度，控阻抗永遠是「範圍」不是「一個數」。（2002 年的表沒涵蓋現代低損耗板材如 Megtron 系列，那些 Dk 約 3.x 量級且更平坦，以現代高速板需另查。）</li>
+  <li><strong>介質越薄，公差越難控。</strong>Ch.6 提醒：層間距 10 mil 時 1 mil 的製造變異就是 10% 誤差，20 mil 時只有 5%——<strong>疊構越薄，Z₀ 對製造公差越敏感</strong>。這就是為什麼板廠報 ±10% 阻抗公差是常態，±5% 要加錢。另外 Ch.6 也提醒：電源平面「充分旁路後」才能當參考平面用，而且一條走線不要一下參考 GND、一下參考電源平面——換參考面就是阻抗不連續，會產生反射。</li>
+</ul>
+
+<h2>5. 為什麼偏偏是 50 Ω？</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>50 Ω 不是物理定律，是一場<strong>歷史妥協</strong>。早期同軸電纜的研究發現（常見說法，數值為約值）：空氣介質同軸線<strong>功率承載能力</strong>最好的阻抗約 30 Ω，<strong>損耗最低</strong>的阻抗約 77 Ω——兩個目標打架，工程師取了中間值約 50 Ω 當標準。此後量測儀器（示波器輸入、訊號產生器輸出、S 參數系統）全部圍繞 50 Ω 建立，PCB 世界為了跟儀器和元件生態系接軌，也就沿用 50 Ω 單端當預設值。（有線電視系統選了接近最低損耗的 75 Ω，所以視訊同軸是 75 Ω——證明這真的只是取捨不是定律。）</p>
+</div>
+<p>對 PCB 而言 50 Ω 還有實務甜蜜點：Z₀ 太高 → 線要很細或介質很厚，串擾也變差（Perfect Timing II Ch.6 的量測曲線顯示：同樣間距下，<strong>victim 走線阻抗越高，串擾耦合越強</strong>——70 Ω 明顯比 50 Ω 差）；Z₀ 太低 → 線要很寬、驅動電流大、耗電且占面積。50 Ω 附近剛好各方面都過得去。</p>
+
+<h3>5.1 那 MIPI 的 100 Ω 是怎麼回事？</h3>
+<p>你天天接觸的 MIPI D-PHY 規格寫的是<strong>差動阻抗 100 Ω</strong>。今天先建立正確的位階概念：差動走線是<strong>一對</strong>互補訊號線，兩條線各自對地大約是 50 Ω 量級，一對之間的「差動阻抗」大約是單線的兩倍——100 Ω 量級（嚴格說是 2 倍的「奇模阻抗」，兩線靠近會互相耦合使數字略低於 2×50，週 4 差動專題再精算）。所以「單端 50 Ω／差動 100 Ω」其實是同一個生態系的兩面。Perfect Timing II Ch.7 講 LVDS 端接時，接收端那顆跨在 P/N 之間的端接電阻取 <strong>R_T = 2×Z₀</strong>，就是這個邏輯——單線 50 Ω，跨接就是 100 Ω。這也是你板子上 MIPI/LVDS 接收端 100 Ω 電阻的由來。</p>
+
+<h2>6. 走進 Perfect Timing II：不匹配時會發生什麼（下一課的預告片）</h2>
+<p>有了 Z₀，就能理解 Perfect Timing II Ch.7 開頭那個經典分析。一顆輸出阻抗 R_D = 17 Ω 的 clock buffer 驅動 50 Ω 走線、末端接高阻抗輸入（近似 1 MΩ）：</p>
+<ul>
+  <li><strong>出發瞬間</strong>：驅動端只看得到 Z₀（第 2 節的推論！），所以進入走線的電壓是分壓 S = V × 50/(50+17) = <strong>3/4 V</strong>（Perfect Timing II Ch.7）</li>
+  <li><strong>抵達末端</strong>：高阻抗負載幾乎全反射，負載端瞬間看到 3/4 V + 3/4 V = <strong>1.5 V（1.5 倍過衝！）</strong>，同時 3/4 V 反射回頭</li>
+  <li><strong>回到源端</strong>：遇到 17 Ω 對 50 Ω 的不匹配，再反射 (17−50)/(17+50) × 3/4 V = <strong>−0.375 V</strong>——負的！波形於是上下振盪、逐步收斂，這就是振鈴（underdamped）。書中實測條件：19.8 Ω 驅動、6 吋長、51.7 Ω stripline，波形每格 1 ns 清楚看到往返時間等於 2 倍走線延遲</li>
+  <li>反過來若驅動端是 150 Ω 的弱 buffer，首波只有 1/4 V，負載端每次往返只爬一階——<strong>階梯狀（overdamped）</strong>慢慢逼近 V（Perfect Timing II Ch.7）</li>
+</ul>
+<p>Ch.7 還給了一條與 Day 1 完美互相印證的準則：時脈訊號原則上<strong>一律端接</strong>；若真的不端接，「走線延遲必須比上升時間快至少 6 倍」——這正是我們 Day 1 的 1/6 法則，出自 2002 年的 clock 設計指南，20 多年後仍是每天在用的判斷式。明天（Day 5）先把微帶線/帶狀線的幾何算清楚，後天就正式進反射係數 ρ = (Z_L−Z₀)/(Z_L+Z₀) 的完整推導與端接策略。</p>
+
+<h2>7. 實務案例：把今天的觀念接回你的工作</h2>
+<ul>
+  <li><strong>NB 主機板的 impedance coupon</strong>：板邊那條陪產的測試條，板廠出貨前用 TDR 打，驗證這批板的 50 Ω/100 Ω 有沒有落在 ±10%。現在你知道它在驗什麼了——驗的是 W、H、Dk 的製造結果換算出來的 √(L′/C′)。收到 SI 量測異常的板子，調 coupon 報告看阻抗偏哪邊，是 FA 的第一步。</li>
+  <li><strong>鏡頭模組 flex 上的 MIPI 100 Ω</strong>：flex 的介質（polyimide，Dk 約 3.2–3.5 量級）又薄（幾十 µm 量級），要湊 100 Ω 差動，線寬常常細到製程極限，而且第 4.1 節說過——<strong>介質越薄公差越敏感</strong>，這就是 flex 阻抗控制天生比硬板難、模組廠 TDR 抽驗特別重要的原因。再加上 flex 會彎折：彎折處若壓到金屬機構件，等於突然多了一個參考面、C′ 暴增、Z₀ 局部掉下去——一個看不見的阻抗坑。這是 camera 模組 debug 的高頻考題，週 13 MIPI 專題會回來深挖。</li>
+  <li><strong>「換板材救 EMI」的副作用</strong>：有人把 Dk 4.4 的料換成 Dk 3.8 的低損料，忘了重算線寬——Dk 降 → C′ 降 → Z₀ 升，原本 50 Ω 的疊構直接飄到 5x Ω，反射變大反而惡化。<strong>任何動到疊構/板材的變更，阻抗都要重算</strong>。</li>
+</ul>
+
+<h2>8. 動手練習</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：某走線 L′ = 3.0 nH/cm、C′ = 1.2 pF/cm。求 Z₀ 與傳播速度 v，並判斷這大概是哪種板材幾何。</summary>
+<p><strong>解：</strong>Z₀ = √(L′/C′) = √(3.0×10⁻⁹ / 1.2×10⁻¹²) = √2500 = <strong>50 Ω</strong>。v = 1/√(L′C′) = 1/√(3.0×10⁻⁹ × 1.2×10⁻¹²) = 1/√(3.6×10⁻²¹) = 1/(6×10⁻¹¹) ≈ 1.67×10¹⁰ cm/s = <strong>16.7 cm/ns</strong>。比 15 cm/ns 快一點 → 等效 Dk 較低 → 應是<strong>外層微帶線</strong>（場一半在空氣）。一題同時複習 Day 1 與今天，面試就愛這種串連。</p>
+</details>
+
+<details>
+<summary>練習 2：把上一題的走線「線寬加倍」（其他不變）。定性回答：C′、L′、Z₀、v 各往哪邊動？</summary>
+<p><strong>解：</strong>線變寬 → 平行板面積變大 → <strong>C′ 上升</strong>；同時電流分布更寬、磁場更分散 → <strong>L′ 下降</strong>。兩個效果同向壓低 Z₀ = √(L′/C′) → <strong>Z₀ 明顯下降</strong>。v = 1/√(L′C′)：L′ 降、C′ 升互相抵消，<strong>v 幾乎不變</strong>（速度由介質 Dk 決定，不由幾何決定——這是很多人答錯的點！）。</p>
+</details>
+
+<details>
+<summary>練習 3：已知 FR-4 帶狀線 v = 15 cm/ns、Z₀ = 50 Ω。不查表，反推 L′ 與 C′。</summary>
+<p><strong>解：</strong>由 Z₀ = 1/(v·C′) → C′ = 1/(v·Z₀) = 1/(15 cm/ns × 50 Ω) = 1/(1.5×10¹⁰ cm/s × 50) ≈ 1.33×10⁻¹² F/cm ≈ <strong>1.3 pF/cm</strong>。由 Z₀ = √(L′/C′) → L′ = Z₀²·C′ = 2500 × 1.33 pF/cm ≈ <strong>3.3 nH/cm</strong>。這兩條反推公式（C′ = 1/vZ₀、L′ = Z₀²C′ = Z₀/v）值得記，做 via/connector 寄生估算天天用。</p>
+</details>
+
+<details>
+<summary>練習 4（Perfect Timing II Ch.7 實戰）：clock buffer 輸出阻抗 17 Ω，驅動 50 Ω 走線，末端高阻抗輸入。驅動端輸出 3.3 V 步階。(a) 進入走線的首波電壓？(b) 負載端第一時間看到幾伏？(c) 這對一顆 V_IH(max) 額定 3.6 V 的接收端意味著什麼？</summary>
+<p><strong>解：</strong>(a) 首波 = 3.3 × 50/(50+17) = 3.3 × 0.746 ≈ <strong>2.46 V</strong>（驅動端此刻只看得到 Z₀，跟末端接什麼無關）。(b) 高阻抗末端近乎全反射，入射+反射 ≈ 2 × 2.46 ≈ <strong>4.9 V</strong>——1.5 倍過衝（Perfect Timing II Ch.7 的 1.5 V 例子等比放大）。(c) 4.9 V 遠超 3.6 V 額定，過衝會打穿接收端的保護二極體、長期造成可靠度劣化，甚至讓 clock 產生假觸發（false trigger）。對策：端接（週 2 後半的主題）。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念題）：為什麼「特性阻抗」不會像電阻一樣發熱？能量到底去了哪裡？</summary>
+<p><strong>解：</strong>電阻消耗能量（轉成熱）；Z₀ 是<strong>能量暫存的速率比值</strong>——驅動端送出的能量以電場（存在 C′ 裡）和磁場（存在 L′ 裡）的形式<strong>沿線儲存並跟著波前進</strong>，一焦耳都沒變成熱（理想無損線）。這些能量最後的下場：被末端負載吸收（匹配時），或反射回來被源端吸收，或在來回振盪中慢慢被實際存在的損耗（銅損、介質損，週 5 教）磨掉。「Z₀ 吸收的功率其實是被搬走暫存，不是被燒掉」——把這句講清楚，就是面試裡「懂場論」和「背公式」的分水嶺。</p>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+<p>今天的觀念在外商面試的實際出題方式（先用英文口頭回答再看參考答案）：</p>
+
+<details>
+<summary>Q1: "What is characteristic impedance? If I measure a 50-ohm trace with a multimeter, what will I read, and why?"</summary>
+<p><strong>參考答案骨架：</strong>Characteristic impedance is the ratio of voltage to current that a signal edge sees as it propagates down the trace — it comes from charging the distributed capacitance and inductance per unit length, Z0 equals the square root of L over C per unit length. It's a transient property, not a DC resistance. A multimeter does a DC measurement: once the line is fully charged there's no more charging current, so you'd just read the copper's DC resistance — milliohms, not 50 ohms. To actually see 50 ohms you need a TDR, which launches a fast edge and watches the reflections.</p>
+<p><strong>加分點：</strong>補一句物理圖像——"During the edge, the driver can't even know what's at the far end yet; for one round-trip time, the line itself looks like a 50-ohm resistor."</p>
+</details>
+
+<details>
+<summary>Q2: "Your MIPI lanes are spec'd at 100 ohms differential. Where does that number come from, and what happens if the flex manufacturer misses it by 20%?"</summary>
+<p><strong>參考答案骨架：</strong>Each line of the pair is roughly 50 ohms single-ended, and the differential impedance of the pair is about twice the odd-mode impedance, so around 100 ohms — consistent with the 50-ohm ecosystem and with the 100-ohm termination resistor at the receiver. If the flex comes in 20% off, say 80 ohms differential, there's a mismatch against the 100-ohm receiver termination, so part of the signal reflects, which shows up as degraded eye height and margin failures in the D-PHY eye mask. On thin flex the dielectric is only tens of microns, so a small process variation is a large percentage error — that's why we TDR-audit impedance coupons on incoming flex lots.</p>
+<p><strong>考點：</strong>把「規格數字 → 物理來源 → 失效模式 → 工廠管控」串成一條線，正是 Apple camera EE 的日常語言。</p>
+</details>
+
+<h2>10. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：特性阻抗 Z₀ 的公式與物理意義？</p>
+  <p class="a">A1：Z₀ = √(L′/C′)（L′、C′ 為單位長度電感/電容）。是訊號前緣沿線充電時看到的暫態 V/I 比值；與線長無關，不是 DC 電阻、不發熱。</p>
+  <p class="q">Q2：FR-4 上 50 Ω 走線的 L′、C′ 量級？兩條反推公式？</p>
+  <p class="a">A2：約 3.3 nH/cm、1.3 pF/cm。C′ = 1/(v·Z₀)，L′ = Z₀/v（= Z₀²·C′）。</p>
+  <p class="q">Q3：線寬加倍，Z₀ 和傳播速度 v 各怎麼變？</p>
+  <p class="a">A3：C′↑ 且 L′↓ → Z₀ 明顯下降；v = 1/√(L′C′) 幾乎不變（速度由 Dk 決定，不由幾何決定）。</p>
+  <p class="q">Q4：為什麼業界用 50 Ω？MIPI 差動 100 Ω 從哪來？</p>
+  <p class="a">A4：歷史折衷（同軸功率最佳約 30 Ω vs 損耗最低約 77 Ω 的中間值），儀器生態系圍繞它建立；且 50 Ω 在串擾/線寬/功耗間是甜蜜點。差動 100 Ω ≈ 2× 單線奇模阻抗（每線約 50 Ω 量級），LVDS 端接 R_T = 2Z₀ 同理（Perfect Timing II Ch.7）。</p>
+  <p class="q">Q5：17 Ω driver 驅動 50 Ω 走線、末端高阻抗——首波分壓多少？負載端看到什麼？</p>
+  <p class="a">A5：首波 = V×50/67 = 3/4 V（出發瞬間只看得到 Z₀）；末端近全反射 → 負載瞬間看到 1.5 V（1.5 倍過衝），回程在源端再反射 −0.375 V → 振鈴（Perfect Timing II Ch.7）。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 5：微帶線與帶狀線——幾何怎麼決定 Z₀、阻抗控制的實務面</strong></p>
+  <p>今天知道了「W↑ 或 H↓ 則 Z₀↓」的方向，明天給你方向盤的刻度：微帶線/帶狀線的 Z₀ 估算式、W/H 比的手感數字、stackup 表怎麼讀、跟板廠溝通阻抗規格時哪些欄位是你該盯的、以及為什麼同一張板不同層的 50 Ω 線寬不一樣。學完你就能看懂（並挑戰）SI 工程師丟給你的疊構表。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 4 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

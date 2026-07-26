@@ -1,10 +1,10 @@
 {
-  "current_day": 3,
-  "current_week": 1,
+  "current_day": 4,
+  "current_week": 2,
   "phase": 1,
-  "last_lesson_date": "2026-07-26",
-  "last_topic": "Day 3：第 1 週複習與 20 題自我測驗（週日複習日）",
-  "next_day": 4,
-  "next_topic": "Day 4：傳輸線理論 I——特性阻抗 Z0 是什麼（√(L/C) 推導、為何 50Ω、MIPI 差動 100Ω）",
-  "notes": "Day3（2026-07-26 週日測驗日）已出 20 題附詳解，範圍 Day1-2：Part A 觀念（場傳播/15cm/ns/1/6法則/SI-PI-EMI/0.35 vs 0.5 立場/諧波結構）、Part B 計算（邊緣長度、67ps/cm 換算、2.2τ 與 0.35 白板推導、RSS 反解、探棒負載）、Part C 波形判讀（頻譜包絡讀 knee、步階響應讀 tr/τ/BW）、Part D 情境（buffer 代料 EMI 爆掉、200MHz 示波器量 MIPI 的拒絕理由）、Part E 延伸引用 Perfect Timing II Ch.2（74F244 tPD 3-5ns、skew 佔 timing budget ~10%、2002 年 output skew ~200ps/part-to-part ~500ps 已註明需上修）與 Ch.3（timing budget 模型 tCLK-Q+tFLIGHT+tLOGIC+tSETUP+tSKEW+tJITTER，含 100MHz 例題 margin=1ns）。已引用 PT2 章節：Ch2、Ch3（週2 出課應改讀 Ch7 Clock Termination、Ch6 PCB Layout）。Day2 的三個儀器實驗學員尚未做，已在 Day3 提醒下週平日帶去公司；週五（7/31）實作日可安排補做＋新實驗。Day4（週一）進入週 2：Z0=√(L/C) 分布參數推導、單位長度 L/C 直覺、為何 50Ω、MIPI 差動 100Ω 量級、瞬時阻抗觀念——需先讀 PT2 Ch7/Ch6。Day3 明日預告已埋「反射跟誰比較——Z0」的鉤子。"
+  "last_lesson_date": "2026-07-27",
+  "last_topic": "Day 4：傳輸線理論 I——特性阻抗 Z0 是什麼（√(L'/C') 推導、瞬時阻抗、為何 50Ω、MIPI 差動 100Ω）",
+  "next_day": 5,
+  "next_topic": "Day 5：微帶線與帶狀線——幾何如何決定 Z0（估算式、W/H 手感、stackup 表判讀、與板廠溝通阻抗規格、不同層 50Ω 線寬不同的原因）",
+  "notes": "Day4（2026-07-27 週一，進入週 2）已教：分布參數 LC 梯子模型、瞬時阻抗物理圖像（前緣沿路充電、與線長無關、反射回來前 driver 只看得到 Z0、萬用電表量不到 Z0 要用 TDR）、白板推導 I=C'vV → Z0=1/(vC')=√(L'/C')、v=1/√(L'C')、必背量級 FR-4 50Ω 走線約 3.3nH/cm＋1.3pF/cm、反推式 C'=1/(vZ0)/L'=Z0/v、幾何方向盤（W↑或H↓→Z0↓；Dk↑→Z0↓且變慢；線寬變 v 幾乎不變）、50Ω 歷史折衷（約30Ω 功率 vs 約77Ω 損耗、75Ω CATV）、MIPI 差動 100Ω≈2×奇模（細節留週4）、LVDS RT=2Z0。已織入 Perfect Timing II Ch.7（17Ω driver→3/4V 分壓→1.5V 過衝→−0.375V 回彈振鈴；150Ω 弱 driver 階梯波；不端接需 trace delay 快 tr 六倍=1/6法則；LVDS 端接）與 Ch.6（Dk 隨頻率降且需向板廠確認、10mil 層距 1mil 變異=10% 公差、串擾 vs 走線阻抗 70Ω>50Ω、參考面切換=阻抗不連續）。實務案例：impedance coupon TDR、flex 100Ω 難控（薄介質公差敏感、彎折壓機構=阻抗坑）、換低 Dk 板材忘重算線寬。已引用 PT2 章節累計：Ch2、Ch3、Ch6、Ch7（週2 後續反射係數/端接課應重讀 Ch7 詳細波形數據；Day5 幾何課可再用 Ch6 層公差段）。Day2 的三個儀器實驗學員尚未補做，週五 7/31 實作日安排補做＋端接實驗（可用 PT2 Ch7 的串聯端接 31.9Ω 實例設計實驗）。Day5 明日預告已埋「疊構表刻度、不同層 50Ω 線寬不同」鉤子。"
 }

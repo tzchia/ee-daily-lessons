@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 7｜DC-DC Buck 降壓轉換器——工作原理與波形手繪（面試必考）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 7｜DC-DC Buck 降壓轉換器——工作原理與波形手繪（面試必考）</h1>
+  <div class="meta">預估學習時間：150 分鐘｜難度：★★★☆☆（電源面試白板必考題本尊）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這個專題，你要能夠：</p>
+  <ol>
+    <li>徒手畫出 buck 基本拓撲（high-side MOS、low-side MOS／二極體、電感、輸出電容），並用「能量」觀點白話講出它怎麼降壓</li>
+    <li><strong>在白板上一次畫對三條對齊的波形：V<sub>SW</sub>、電感電流 I<sub>L</sub>、輸出漣波 V<sub>OUT</sub></strong>——這是 Apple／Google 電源面試的標準白板題</li>
+    <li>用伏秒平衡（volt-second balance）推導 D = V<sub>OUT</sub>/V<sub>IN</sub>，並解釋每一步的物理意義</li>
+    <li>會選電感（ripple current 約 20～40% 法則、飽和電流）與輸出電容（漣波估算）</li>
+    <li>講清楚 CCM vs DCM、同步 vs 非同步整流、PFM vs PWM 的差別與使用時機</li>
+    <li>列出 buck 的三大損耗來源，解釋為什麼效率曲線長那個樣子</li>
+    <li>說出 layout 兩大鐵律（hot loop 最小化、SW node 面積控制），並解釋 buck 切換雜訊干擾 camera 影像的完整路徑</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼這個專題重要？</h2>
+<p>上一個專題（LDO）的結尾說過：<strong>buck 管搬運、LDO 管淨化</strong>。你板子上每一顆 SoC、每一路大電流電源，背後都是 buck。而 buck 是硬體面試的「白板題之王」，出題方式非常固定：</p>
+<ul>
+  <li>Draw a buck converter and explain how it works.（畫一個 buck，解釋它怎麼運作）</li>
+  <li>Sketch the switch-node voltage, inductor current, and output ripple. Label everything.（畫出 SW 節點電壓、電感電流、輸出漣波，全部標註清楚）</li>
+  <li>How do you choose the inductor? What happens at light load?（電感怎麼選？輕載時發生什麼事？）</li>
+</ul>
+<p>這一題答得漂亮，面試官會立刻把你歸類為「懂電源的人」；答得含糊，後面所有電源相關的問題都會被追殺。好消息是：<strong>這題完全可以練到滿分</strong>，因為波形就那三條，推導就那一條式子。這個專題會像教畫畫一樣，一筆一筆教你畫。</p>
+
+<h2>1. Buck 是什麼？——「用水壺分段裝水」的降壓機器</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>先回想 LDO 怎麼降壓：像水龍頭轉小，多餘的水壓<strong>全部磨成熱</strong>丟掉，粗暴但乾淨。Buck 完全不同——它的哲學是「<strong>不要浪費，用時間換電壓</strong>」。</p>
+  <p>想像水塔水壓很高（V<sub>IN</sub> = 12V），但你只想要平穩的低水壓（V<sub>OUT</sub> = 1V）。Buck 的做法是：</p>
+  <ul>
+    <li><strong>開關（high-side MOS）</strong>：像一個快速開合的閘門，每秒開關上百萬次。開的時間只占一小段（例如 1/12 的時間），所以「平均起來」只放進 1/12 的能量。</li>
+    <li><strong>電感（L）</strong>：像一個<strong>裝水的水壺</strong>。閘門開的時候，水壺一邊出水給下游、一邊把多的能量存起來（電感儲能）；閘門關的時候，水壺把存的能量倒出來繼續供水（電感釋能）。下游的人完全感覺不到閘門在開開關關——<strong>水壺把「斷斷續續的猛灌」變成「連續的細流」</strong>。</li>
+    <li><strong>輸出電容（C<sub>OUT</sub>）</strong>：像水壺下面再接一個<strong>大水桶</strong>，把水壺出水殘留的小波動再抹平一次。</li>
+    <li><strong>low-side MOS（或二極體）</strong>：閘門關上時，水壺的水總得有個迴路流——它就是那條「回水管」，讓電感電流在閘門關閉期間有路可走。</li>
+  </ul>
+  <p>因為能量幾乎沒有被「磨成熱」，只是被「分段搬運」，所以 buck 效率可以做到 85～95%，遠勝 LDO 在大壓差下的表現。</p>
+</div>
+
+<h3>1.1 基本拓撲：四個主角</h3>
+<p>Buck 只有四個核心元件，位置關係請直接背下來（白板第一筆就是畫這個）：</p>
+<table>
+  <tr><th>元件</th><th>角色</th><th>白話</th></tr>
+  <tr><td>Q1：high-side MOS</td><td>主開關，接 V<sub>IN</sub> 與 SW 節點之間</td><td>閘門：決定「什麼時候放能量進來」</td></tr>
+  <tr><td>Q2：low-side MOS（同步）或 D：二極體（非同步）</td><td>續流開關，接 SW 節點與 GND 之間</td><td>回水管：Q1 關閉時給電感電流一條路</td></tr>
+  <tr><td>L：功率電感</td><td>接 SW 節點與 V<sub>OUT</sub> 之間</td><td>水壺：儲能／釋能，把脈衝變成連續電流</td></tr>
+  <tr><td>C<sub>OUT</sub>：輸出電容</td><td>接 V<sub>OUT</sub> 與 GND 之間</td><td>水桶：吸收電感電流的三角波漣波</td></tr>
+</table>
+<p>Q1 與 Q2 的中點叫 <strong>SW 節點（switch node，也叫 LX 或 phase node）</strong>——整個 buck 最吵的一個點，等一下 layout 章節會回來鞭它。</p>
+
+<h3>1.2 兩個相位的電流路徑</h3>
+<p>Buck 的一個切換週期 T 分成兩段：<strong>ON 相（Q1 導通，時間 D×T）</strong>與 <strong>OFF 相（Q2 導通，時間 (1−D)×T）</strong>。D 就是 duty cycle（占空比）。看圖：</p>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Buck 拓撲與兩相電流路徑</text>
+
+  <!-- ===== LEFT: ON phase ===== -->
+  <text x="190" y="52" text-anchor="middle" font-size="15" font-weight="bold" fill="#b91c1c">ON 相（Q1 導通，D·T）</text>
+  <!-- VIN -->
+  <text x="42" y="92" text-anchor="end" font-size="13" fill="#374151">V_IN</text>
+  <circle cx="52" cy="88" r="3.5" fill="#374151"/>
+  <line x1="52" y1="88" x2="120" y2="88" stroke="#374151" stroke-width="2"/>
+  <!-- Q1 high-side (closed switch) -->
+  <rect x="120" y="72" width="46" height="32" rx="6" fill="#fee2e2" stroke="#b91c1c" stroke-width="2"/>
+  <text x="143" y="93" text-anchor="middle" font-size="12" font-weight="bold" fill="#b91c1c">Q1 ON</text>
+  <line x1="166" y1="88" x2="216" y2="88" stroke="#374151" stroke-width="2"/>
+  <!-- SW node -->
+  <circle cx="216" cy="88" r="4.5" fill="#d97706"/>
+  <text x="216" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#d97706">SW</text>
+  <!-- Q2 low-side (open) -->
+  <line x1="216" y1="88" x2="216" y2="128" stroke="#9ca3af" stroke-width="2"/>
+  <rect x="193" y="128" width="46" height="32" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="216" y="149" text-anchor="middle" font-size="12" fill="#6b7280">Q2 OFF</text>
+  <line x1="216" y1="160" x2="216" y2="192" stroke="#9ca3af" stroke-width="2"/>
+  <!-- Inductor -->
+  <line x1="216" y1="88" x2="238" y2="88" stroke="#374151" stroke-width="2"/>
+  <path d="M238,88 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0" fill="none" stroke="#374151" stroke-width="2"/>
+  <text x="270" y="72" text-anchor="middle" font-size="13" fill="#374151">L</text>
+  <line x1="302" y1="88" x2="345" y2="88" stroke="#374151" stroke-width="2"/>
+  <!-- VOUT node -->
+  <circle cx="322" cy="88" r="3.5" fill="#374151"/>
+  <text x="322" y="72" text-anchor="middle" font-size="12" fill="#15803d" font-weight="bold">V_OUT</text>
+  <!-- Cout -->
+  <line x1="322" y1="88" x2="322" y2="128" stroke="#374151" stroke-width="2"/>
+  <line x1="308" y1="128" x2="336" y2="128" stroke="#374151" stroke-width="2.5"/>
+  <line x1="308" y1="138" x2="336" y2="138" stroke="#374151" stroke-width="2.5"/>
+  <text x="348" y="137" font-size="12" fill="#374151">C_OUT</text>
+  <line x1="322" y1="138" x2="322" y2="192" stroke="#374151" stroke-width="2"/>
+  <!-- Load -->
+  <rect x="345" y="76" width="14" height="26" fill="none" stroke="#374151" stroke-width="2" transform="rotate(90 352 89)"/>
+  <line x1="345" y1="88" x2="345" y2="88" stroke="#374151" stroke-width="2"/>
+  <rect x="338" y="96" width="0" height="0" fill="none"/>
+  <!-- simpler: load resistor vertical -->
+  <line x1="345" y1="88" x2="360" y2="88" stroke="#374151" stroke-width="2"/>
+  <rect x="352" y="98" width="16" height="60" fill="none" stroke="#374151" stroke-width="2"/>
+  <line x1="360" y1="88" x2="360" y2="98" stroke="#374151" stroke-width="2"/>
+  <text x="376" y="132" font-size="12" fill="#374151">負載</text>
+  <line x1="360" y1="158" x2="360" y2="192" stroke="#374151" stroke-width="2"/>
+  <!-- GND rail -->
+  <line x1="52" y1="192" x2="380" y2="192" stroke="#374151" stroke-width="2"/>
+  <line x1="52" y1="88" x2="52" y2="192" stroke="#374151" stroke-width="2"/>
+  <text x="60" y="208" font-size="12" fill="#6b7280">GND</text>
+  <!-- ON current path (red arrows) -->
+  <path d="M60,96 L118,96" stroke="#dc2626" stroke-width="3" fill="none" opacity="0.75"/>
+  <path d="M168,96 L300,96" stroke="#dc2626" stroke-width="3" fill="none" opacity="0.75"/>
+  <polygon points="300,96 288,90 288,102" fill="#dc2626" opacity="0.75"/>
+  <path d="M360,166 L360,184 L70,184 L70,104" stroke="#dc2626" stroke-width="3" fill="none" opacity="0.55"/>
+  <polygon points="70,104 64,116 76,116" fill="#dc2626" opacity="0.55"/>
+  <text x="150" y="235" font-size="12.5" fill="#b91c1c">電流：V_IN→Q1→L→負載→GND 回來</text>
+  <text x="150" y="253" font-size="12.5" fill="#b91c1c">電感電流上升（儲能 ↑）</text>
+
+  <!-- ===== RIGHT: OFF phase ===== -->
+  <text x="575" y="52" text-anchor="middle" font-size="15" font-weight="bold" fill="#1d4ed8">OFF 相（Q2 導通，(1−D)·T）</text>
+  <text x="428" y="92" text-anchor="end" font-size="13" fill="#374151">V_IN</text>
+  <circle cx="438" cy="88" r="3.5" fill="#374151"/>
+  <line x1="438" y1="88" x2="506" y2="88" stroke="#9ca3af" stroke-width="2"/>
+  <!-- Q1 open -->
+  <rect x="506" y="72" width="46" height="32" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="529" y="93" text-anchor="middle" font-size="12" fill="#6b7280">Q1 OFF</text>
+  <line x1="552" y1="88" x2="602" y2="88" stroke="#374151" stroke-width="2"/>
+  <!-- SW node -->
+  <circle cx="602" cy="88" r="4.5" fill="#d97706"/>
+  <text x="602" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#d97706">SW</text>
+  <!-- Q2 closed -->
+  <line x1="602" y1="88" x2="602" y2="128" stroke="#374151" stroke-width="2"/>
+  <rect x="579" y="128" width="46" height="32" rx="6" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="602" y="149" text-anchor="middle" font-size="12" font-weight="bold" fill="#1d4ed8">Q2 ON</text>
+  <line x1="602" y1="160" x2="602" y2="192" stroke="#374151" stroke-width="2"/>
+  <!-- Inductor -->
+  <line x1="602" y1="88" x2="624" y2="88" stroke="#374151" stroke-width="2"/>
+  <path d="M624,88 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0 a8,8 0 0 1 16,0" fill="none" stroke="#374151" stroke-width="2"/>
+  <text x="656" y="72" text-anchor="middle" font-size="13" fill="#374151">L</text>
+  <line x1="688" y1="88" x2="731" y2="88" stroke="#374151" stroke-width="2"/>
+  <circle cx="708" cy="88" r="3.5" fill="#374151"/>
+  <text x="708" y="72" text-anchor="middle" font-size="12" fill="#15803d" font-weight="bold">V_OUT</text>
+  <line x1="708" y1="88" x2="708" y2="128" stroke="#374151" stroke-width="2"/>
+  <line x1="694" y1="128" x2="722" y2="128" stroke="#374151" stroke-width="2.5"/>
+  <line x1="694" y1="138" x2="722" y2="138" stroke="#374151" stroke-width="2.5"/>
+  <line x1="708" y1="138" x2="708" y2="192" stroke="#374151" stroke-width="2"/>
+  <line x1="731" y1="88" x2="731" y2="98" stroke="#374151" stroke-width="2"/>
+  <rect x="723" y="98" width="16" height="60" fill="none" stroke="#374151" stroke-width="2"/>
+  <line x1="731" y1="158" x2="731" y2="192" stroke="#374151" stroke-width="2"/>
+  <line x1="438" y1="192" x2="745" y2="192" stroke="#374151" stroke-width="2"/>
+  <line x1="438" y1="88" x2="438" y2="192" stroke="#9ca3af" stroke-width="2"/>
+  <!-- OFF current path (blue arrows): GND -> Q2 -> L -> load -> GND -->
+  <path d="M612,182 L612,162" stroke="#2563eb" stroke-width="3" fill="none" opacity="0.75"/>
+  <path d="M612,126 L612,98 L686,96" stroke="#2563eb" stroke-width="3" fill="none" opacity="0.75"/>
+  <polygon points="686,96 674,90 674,102" fill="#2563eb" opacity="0.75"/>
+  <path d="M731,166 L731,184 L620,184" stroke="#2563eb" stroke-width="3" fill="none" opacity="0.55"/>
+  <polygon points="620,184 632,178 632,190" fill="#2563eb" opacity="0.55"/>
+  <text x="530" y="235" font-size="12.5" fill="#1d4ed8">電流：GND→Q2→L→負載→GND（續流）</text>
+  <text x="530" y="253" font-size="12.5" fill="#1d4ed8">電感電流下降（釋能 ↓），方向不變！</text>
+
+  <!-- bottom key point -->
+  <rect x="90" y="285" width="580" height="95" rx="10" fill="#fdf6ec" stroke="#d97706"/>
+  <text x="380" y="312" text-anchor="middle" font-size="13.5" fill="#92400e" font-weight="bold">關鍵觀察：兩相中電感電流「方向相同、路徑不同」</text>
+  <text x="380" y="336" text-anchor="middle" font-size="12.5" fill="#374151">ON 相電流走「V_IN→Q1→L」這條路；OFF 相改走「GND→Q2→L」。</text>
+  <text x="380" y="358" text-anchor="middle" font-size="12.5" fill="#374151">電感電流永遠往負載方向流，只是大小在「爬升／下滑」之間來回——這就是三角波的由來。</text>
+</svg>
+<figcaption>圖 1：buck 拓撲與兩相電流路徑。紅色＝ON 相（儲能），藍色＝OFF 相（釋能）。SW 節點是全板最吵的節點。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">核心觀念</span>
+  <p><strong>電感電流不能瞬間改變（I<sub>L</sub> 連續），但電感電壓可以瞬間跳變。</strong>Q1 切斷的瞬間，電感堅持「我的電流要繼續流」，於是 SW 節點電壓被電感拉到哪裡有路走就去哪裡——往下拉到 GND（經過 Q2 或二極體）。整個 buck 的行為，全部從這一句話長出來。（對照：電容是反過來——電壓不能瞬變、電流可以。）</p>
+</div>
+
+<h2>2. 白板波形手繪——面試標準答案，一筆一筆教</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>面試官說 "sketch the waveforms" 時，他要看的是三條<strong>上下對齊</strong>的波形：SW 節點電壓（方波）、電感電流（三角波）、輸出電壓（幾乎平的小漣波）。畫法有固定套路，就像畫簡筆人像「先畫圓再畫五官」。下面按順序走一遍，練到閉著眼睛都能畫。</p>
+</div>
+
+<h3>2.1 畫圖步驟（照這個順序，不會亂）</h3>
+<ol>
+  <li><strong>先畫三條水平時間軸</strong>，上下對齊，由上到下標 V<sub>SW</sub>、I<sub>L</sub>、V<sub>OUT</sub>。在最上面標出一個週期 T，切成 D·T（ON）與 (1−D)·T（OFF）兩段，畫幾條貫穿三張圖的垂直虛線——<strong>對齊虛線是拿分關鍵</strong>，很多人敗在三條波形時間對不上。</li>
+  <li><strong>V<sub>SW</sub>（方波）</strong>：ON 相時 Q1 導通，SW 被接到 V<sub>IN</sub> → 畫高電位（≈V<sub>IN</sub>）；OFF 相時 Q2 導通，SW 被接到 GND → 畫 0V（≈0，嚴格說是 −I<sub>L</sub>×R<sub>DS(on)</sub>，講得出來是加分）。就是一個 0 到 V<sub>IN</sub> 的方波，高電位寬度 = D·T。</li>
+  <li><strong>I<sub>L</sub>（三角波）</strong>：ON 相電感兩端電壓是 V<sub>IN</sub>−V<sub>OUT</sub>（正），由 V = L·di/dt 知電流以斜率 (V<sub>IN</sub>−V<sub>OUT</sub>)/L <strong>直線上升</strong>；OFF 相電感電壓是 −V<sub>OUT</sub>（負），電流以斜率 −V<sub>OUT</sub>/L <strong>直線下降</strong>。畫一個騎在平均值 I<sub>OUT</sub> 上的三角波，標出峰對峰值 ΔI<sub>L</sub>。<strong>轉折點必須正好落在虛線上</strong>（跟 V<sub>SW</sub> 的邊緣對齊）。</li>
+  <li><strong>V<sub>OUT</sub>（小漣波）</strong>：三角波電流的「交流部分」流進 C<sub>OUT</sub> 充放電。電容電壓是電流的積分，三角波積分是「拋物線段拼起來的波浪」——畫一條幾乎水平的線，加上非常小的波浪即可，幅度記得誇張化標註 ΔV<sub>OUT</sub>（實際只有 mV 等級）。<strong>魔鬼細節：V<sub>OUT</sub> 的波峰／波谷不在 I<sub>L</sub> 的波峰／波谷，而是在 I<sub>L</sub> 穿過平均值的地方</strong>（電流高於平均→電容正在充電→電壓還在爬；電流等於平均的瞬間才是電壓轉折）。講出這一點，面試官眼睛會亮。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">CCM 穩態波形（面試白板標準答案）</text>
+
+  <!-- vertical alignment dashed lines: period boundaries at x=110(t0),230(DT),410(T),530(T+DT),710(2T) -->
+  <g stroke="#9ca3af" stroke-dasharray="4 4" stroke-width="1">
+    <line x1="110" y1="46" x2="110" y2="520"/>
+    <line x1="230" y1="46" x2="230" y2="520"/>
+    <line x1="410" y1="46" x2="410" y2="520"/>
+    <line x1="530" y1="46" x2="530" y2="520"/>
+    <line x1="710" y1="46" x2="710" y2="520"/>
+  </g>
+
+  <!-- period annotation -->
+  <line x1="110" y1="52" x2="230" y2="52" stroke="#b91c1c" stroke-width="2.5"/>
+  <text x="170" y="44" text-anchor="middle" font-size="12.5" fill="#b91c1c" font-weight="bold">D·T (ON)</text>
+  <line x1="230" y1="52" x2="410" y2="52" stroke="#1d4ed8" stroke-width="2.5"/>
+  <text x="320" y="44" text-anchor="middle" font-size="12.5" fill="#1d4ed8" font-weight="bold">(1−D)·T (OFF)</text>
+
+  <!-- ===== Panel 1: VSW ===== -->
+  <text x="52" y="105" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">V_SW</text>
+  <line x1="90" y1="160" x2="730" y2="160" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="90" y1="160" x2="90" y2="70" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="84" y="84" text-anchor="end" font-size="12" fill="#6b7280">V_IN</text>
+  <line x1="86" y1="80" x2="94" y2="80" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="84" y="164" text-anchor="end" font-size="12" fill="#6b7280">0</text>
+  <polyline points="110,80 230,80 230,158 410,158 410,80 530,80 530,158 710,158 710,80 730,80"
+    fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="600" y="120" font-size="12" fill="#6b7280">方波：高=V_IN，低≈0</text>
+  <text x="600" y="138" font-size="12" fill="#6b7280">平均值=D·V_IN=V_OUT</text>
+
+  <!-- ===== Panel 2: IL ===== -->
+  <text x="52" y="245" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">I_L</text>
+  <line x1="90" y1="330" x2="730" y2="330" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="90" y1="330" x2="90" y2="196" stroke="#9ca3af" stroke-width="1.5"/>
+  <!-- average line -->
+  <line x1="90" y1="258" x2="730" y2="258" stroke="#15803d" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="726" y="250" text-anchor="end" font-size="12" fill="#15803d" font-weight="bold">平均值 = I_OUT</text>
+  <!-- triangle wave: valley at t0, peak at DT -->
+  <polyline points="110,290 230,226 410,290 530,226 710,290 730,279"
+    fill="none" stroke="#dc2626" stroke-width="3"/>
+  <!-- delta IL annotation -->
+  <line x1="440" y1="226" x2="440" y2="290" stroke="#374151" stroke-width="1.5"/>
+  <polygon points="440,226 436,236 444,236" fill="#374151"/>
+  <polygon points="440,290 436,280 444,280" fill="#374151"/>
+  <text x="450" y="262" font-size="12.5" fill="#374151" font-weight="bold">ΔI_L</text>
+  <!-- slope labels -->
+  <text x="150" y="215" font-size="12" fill="#b91c1c">斜率 = (V_IN−V_OUT)/L ↑</text>
+  <text x="300" y="318" font-size="12" fill="#1d4ed8">斜率 = −V_OUT/L ↓</text>
+
+  <!-- ===== Panel 3: VOUT ripple ===== -->
+  <text x="52" y="415" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">V_OUT</text>
+  <line x1="90" y1="500" x2="730" y2="500" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="90" y1="500" x2="90" y2="366" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="90" y1="432" x2="730" y2="432" stroke="#15803d" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="726" y="424" text-anchor="end" font-size="12" fill="#15803d" font-weight="bold">平均值 = V_OUT (DC)</text>
+  <!-- ripple: parabolic-ish wave; valley near midpoint of ON slope... peak where IL crosses average going down -->
+  <path d="M110,442 Q170,448 170,432 Q170,416 320,416 Q430,416 430,432 Q430,448 470,442
+           Q510,436 510,432 Q510,416 620,416 Q730,416 730,428"
+    fill="none" stroke="#7c3aed" stroke-width="3"/>
+  <!-- delta Vout annotation -->
+  <line x1="655" y1="416" x2="655" y2="448" stroke="#374151" stroke-width="1.5"/>
+  <polygon points="655,416 651,424 659,424" fill="#374151"/>
+  <polygon points="655,448 651,440 659,440" fill="#374151"/>
+  <text x="664" y="436" font-size="12.5" fill="#374151" font-weight="bold">ΔV_OUT（誇張化，實際僅 mV 級）</text>
+  <text x="150" y="480" font-size="12" fill="#7c3aed">漣波轉折點在 I_L 穿越平均值處（不在 I_L 峰值處）</text>
+
+  <!-- time axis label -->
+  <text x="410" y="536" text-anchor="middle" font-size="13" fill="#6b7280">時間 →（三張圖共用時間軸，垂直虛線務必對齊）</text>
+</svg>
+<figcaption>圖 2：CCM 穩態三條標準波形。V<sub>SW</sub> 是 0～V<sub>IN</sub> 方波、I<sub>L</sub> 是騎在 I<sub>OUT</sub> 上的三角波、V<sub>OUT</sub> 是 mV 級小漣波。這張圖就是白板題滿分答案，請練到 60 秒內徒手重現。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區（白板扣分點）</span>
+  <ul>
+    <li><strong>三條波形沒對齊</strong>——I<sub>L</sub> 的轉折點必須和 V<sub>SW</sub> 的邊緣在同一條垂直線上。這是最多人被扣分的地方。</li>
+    <li><strong>把 I<sub>L</sub> 畫成從 0 開始的三角波</strong>——CCM 下三角波騎在 I<sub>OUT</sub> 上，谷底不碰 0。畫到 0 就變成 DCM 邊界了。</li>
+    <li><strong>把 V<sub>OUT</sub> 漣波畫成跟 V<sub>SW</sub> 一樣的方波</strong>——這等於承認你不知道 LC 濾波器在做什麼。</li>
+    <li><strong>忘記標軸與數值</strong>——V<sub>IN</sub>、0、I<sub>OUT</sub>、ΔI<sub>L</sub>、D·T 全部要標。面試官看的是你「標了什麼」，不是線畫得直不直。</li>
+  </ul>
+</div>
+
+<h2>3. 數學推導：伏秒平衡與 D = V<sub>OUT</sub>/V<sub>IN</sub></h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>「伏秒平衡」聽起來很高深，其實就一句話：<strong>穩態下，水壺每個週期裝進去多少水，就得倒出來多少水，不然水壺遲早滿出來或見底。</strong>電感的「水位」就是電流；讓水位上升的推力是「電壓 × 時間」（伏 × 秒）。穩態下每週期「正的伏秒」必須等於「負的伏秒」，兩邊一畫等號，D = V<sub>OUT</sub>/V<sub>IN</sub> 就自己掉出來了。公式看不懂可以先跳過，<strong>懂「裝多少倒多少」這個結論就好</strong>。</p>
+</div>
+
+<h3>3.1 推導（只用一條電感公式）</h3>
+<p>電感的唯一物理定律：</p>
+<div class="formula">
+  V<sub>L</sub> = L × di/dt　⇒　電流變化量 Δi = (V<sub>L</sub> × Δt) / L
+</div>
+<p><strong>白話翻譯：</strong>電感電流的變化量 = 施加的電壓 × 施加的時間 ÷ 電感值。電壓越大、掛越久，電流爬越多。</p>
+<p>穩態（steady state）的定義是：每個週期結束時，I<sub>L</sub> 回到週期開始時的值，即一個週期內 Δi 總和為 0：</p>
+<div class="formula">
+  ON 相爬升量：Δi<sub>(+)</sub> = (V<sub>IN</sub> − V<sub>OUT</sub>) × D·T / L<br>
+  OFF 相下滑量：Δi<sub>(−)</sub> = V<sub>OUT</sub> × (1−D)·T / L<br>
+  穩態要求：Δi<sub>(+)</sub> = Δi<sub>(−)</sub>
+</div>
+<p>把兩式畫等號，L 和 T 直接消掉：</p>
+<div class="formula">
+  (V<sub>IN</sub> − V<sub>OUT</sub>) × D = V<sub>OUT</sub> × (1 − D)　⇒　<strong>D = V<sub>OUT</sub> / V<sub>IN</sub></strong>
+</div>
+<p><strong>白話翻譯：</strong>想要多少比例的電壓，開關就開多少比例的時間。12V 轉 1V，duty cycle 就是約 8.3%——high-side MOS 每個週期只開一小下。另一個等價說法：<strong>V<sub>SW</sub> 是 0～V<sub>IN</sub> 的方波，LC 濾波器取它的平均值，平均值就是 D×V<sub>IN</sub></strong>。兩種講法面試都通，第二種更直觀。</p>
+
+<div class="card takeaway">
+  <span class="label">必背結論</span>
+  <p><strong>理想 buck：D = V<sub>OUT</sub>/V<sub>IN</sub>（僅 CCM 成立）。</strong>實際 D 會略大一點，因為要多補 MOS 導通壓降與電感直流電阻（DCR）吃掉的部分。另外注意：<strong>DCM 下這條公式不成立</strong>（D 還會跟負載電流有關），面試被追問時要講得出來。</p>
+</div>
+
+<h3>3.2 電感漣波電流 ΔI<sub>L</sub></h3>
+<p>從 ON 相那條式子直接得到（設計上天天用）：</p>
+<div class="formula">
+  ΔI<sub>L</sub> = (V<sub>IN</sub> − V<sub>OUT</sub>) × D / (L × f<sub>SW</sub>)　＝　V<sub>OUT</sub> × (1 − D) / (L × f<sub>SW</sub>)
+</div>
+<p><strong>白話翻譯：</strong>電感越大、切換頻率越高，三角波越「瘦」（漣波越小）；反之越「胖」。兩個寫法等價（用 D = V<sub>OUT</sub>/V<sub>IN</sub> 可互換），挑手邊已知的數字代即可。</p>
+
+<h2>4. 電感選型——20～40% 法則與飽和電流</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>選電感像選水壺：太小的水壺（小 L）一下就空、水流忽大忽小（漣波大）；太大的水壺（大 L）笨重又貴、倒水反應慢（暫態響應差、DCR 大）。業界的甜蜜點是：讓三角波的胖瘦（ΔI<sub>L</sub>）約等於<strong>滿載電流的 20～40%</strong>（常用 30% 起手）。另外水壺有「裝滿就撐破」的問題——<strong>飽和電流（I<sub>SAT</sub>）</strong>：鐵芯磁通飽和後電感值瞬間崩掉，電流失控暴衝，這是絕對不能踩的線。</p>
+</div>
+
+<h3>4.1 設計流程（面試可直接照念）</h3>
+<ol>
+  <li>定規格：V<sub>IN</sub>、V<sub>OUT</sub>、I<sub>OUT(max)</sub>、f<sub>SW</sub>（IC datasheet 給）。</li>
+  <li>設 ΔI<sub>L</sub> = 0.3 × I<sub>OUT(max)</sub>（20～40% 之間取捨）。</li>
+  <li>反解電感值：
+    <div class="formula">L = V<sub>OUT</sub> × (1 − D) / (ΔI<sub>L</sub> × f<sub>SW</sub>)</div>
+  </li>
+  <li>算峰值電流：<strong>I<sub>L(peak)</sub> = I<sub>OUT(max)</sub> + ΔI<sub>L</sub>/2</strong>，選 I<sub>SAT</sub> 高於它並留餘裕（含暫態與 OCP 觸發前的 headroom，實務常抓約 20～30% 以上）。</li>
+  <li>檢查 DCR（直流電阻，影響效率與發熱）與 I<sub>RMS</sub>（溫升額定）。</li>
+</ol>
+<p><strong>例：</strong>V<sub>IN</sub>=3.8V、V<sub>OUT</sub>=1.2V、I<sub>OUT</sub>=2A、f<sub>SW</sub>=2MHz。D=0.316，設 ΔI<sub>L</sub>=0.6A → L = 1.2×0.684/(0.6×2M) ≈ <strong>0.68μH</strong>（取常規值 0.68 或 1.0μH）。I<sub>L(peak)</sub> = 2 + 0.3 = 2.3A，I<sub>SAT</sub> 至少選約 3A 級。這正是手機/camera 供電常見的 μH 級小電感量級。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>只看電感標稱值不看 I<sub>SAT</sub> 曲線。</strong>小尺寸電感（如 0806、2016 封裝）的 L-I 曲線往往「軟飽和」，在額定電流附近 L 值可能已掉 20～30%——漣波比你算的更大，EMI 與漣波超標就是這樣來的。另外注意 I<sub>SAT</sub> 隨溫度下降，要看高溫曲線。</p>
+</div>
+
+<h2>5. 輸出電容與輸出漣波</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>三角波電流的「平均部分」給負載，「波動部分」全部由輸出電容吞下。電容像水桶：桶越大（C 大），同樣的水量波動造成的水位起伏越小。但水桶還有兩個「不完美」：進水口的窄管（<strong>ESR</strong>，等效串聯電阻）與水管本身的慣性（<strong>ESL</strong>，等效串聯電感），高頻下它們貢獻的漣波常常比電容本體還大。</p>
+</div>
+
+<h3>5.1 漣波三成分</h3>
+<div class="formula">
+  容性成分：ΔV<sub>C</sub> = ΔI<sub>L</sub> / (8 × C × f<sub>SW</sub>)<br>
+  ESR 成分：ΔV<sub>ESR</sub> = ΔI<sub>L</sub> × ESR<br>
+  ESL 成分：切換邊緣的尖刺（spike），與 di/dt 成正比
+</div>
+<p><strong>白話翻譯：</strong>第一項是「水桶大小」決定的慢波動（那個 8 來自三角波積分的幾何，不必背推導，記公式即可）；第二項是電流波動直接打在窄管上的壓降；第三項是每次切換瞬間的高頻毛刺。用 MLCC（ESR 極低）時第一項主導；用電解/聚合物電容時第二項主導。<strong>公式看不懂沒關係，記住結論：想壓漣波→加大 C、選低 ESR、或提高 f<sub>SW</sub>、或加大 L（先把 ΔI<sub>L</sub> 變瘦）。</strong></p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>MLCC 的 DC bias 降容效應：</strong>一顆標 22μF/6.3V 的小封裝 MLCC，掛上 3.3V 直流偏壓後實際容值可能只剩約一半甚至更少。算漣波與迴路穩定性時要用「偏壓後的有效容值」，不是料號上的數字。這在 camera 模組這種空間受限、只能用小封裝電容的場合特別致命。</p>
+</div>
+
+<h2>6. CCM vs DCM——水壺會不會見底？</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p><strong>CCM（連續導通模式）</strong>：負載夠重，水壺整個週期都有水在流，電感電流三角波谷底不碰 0。<strong>DCM（不連續導通模式）</strong>：負載很輕，OFF 相還沒結束水壺就倒空了（I<sub>L</sub> 掉到 0），剩下的時間大家乾瞪眼，SW 節點電壓懸空、出現特徵性的<strong>振鈴（ringing）</strong>——示波器上看到 SW 波形尾巴在「盪鞦韆」，就是 DCM 的招牌。</p>
+</div>
+<table>
+  <tr><th>比較項</th><th>CCM</th><th>DCM</th></tr>
+  <tr><td>發生條件</td><td>I<sub>OUT</sub> &gt; ΔI<sub>L</sub>/2（重載）</td><td>I<sub>OUT</sub> &lt; ΔI<sub>L</sub>/2（輕載，非同步或二極體模擬時）</td></tr>
+  <tr><td>I<sub>L</sub> 波形</td><td>三角波，谷底 &gt; 0</td><td>三角波觸 0 後停在 0 一段時間</td></tr>
+  <tr><td>D 與 V<sub>OUT</sub> 關係</td><td>D = V<sub>OUT</sub>/V<sub>IN</sub>，與負載無關</td><td>D 與負載電流有關，公式變複雜</td></tr>
+  <tr><td>SW 節點特徵</td><td>乾淨方波</td><td>第三段出現 L 與寄生電容的振鈴（頻率約數十 MHz 量級）</td></tr>
+  <tr><td>迴路特性</td><td>教科書標準小訊號模型</td><td>動態特性改變，補償設計需另外考慮</td></tr>
+</table>
+<p><strong>邊界條件</strong>（面試常考）：I<sub>OUT</sub> = ΔI<sub>L</sub>/2 時剛好是 CCM/DCM 邊界（boundary/critical conduction）。注意：<strong>同步整流的 buck 若允許電感電流反向（forced PWM 模式），輕載也能維持 CCM</strong>——電流三角波直接穿到負值，這是同步架構才有的玩法，下一節接著講。</p>
+
+<h2>7. 同步 vs 非同步整流</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>OFF 相的「回水管」有兩種做法：裝一個<strong>單向閥（二極體）</strong>＝非同步；或裝一個<strong>電動閘門（low-side MOS）</strong>＝同步。單向閥便宜、不用控制，但水每次通過都要「頂開閥門」損失一點壓力（二極體順向壓降 V<sub>F</sub> 約 0.3～0.5V）；電動閘門幾乎沒有壓降（MOS 的 R<sub>DS(on)</sub> 僅 mΩ 級），但要多一組驅動、還要小心兩個閘門同時打開（shoot-through 直通短路）——所以控制器會插入<strong>死區時間（dead time）</strong>。</p>
+</div>
+<table>
+  <tr><th>比較項</th><th>非同步（二極體）</th><th>同步（low-side MOS）</th></tr>
+  <tr><td>OFF 相壓降</td><td>V<sub>F</sub> ≈ 0.3～0.5V（蕭特基）</td><td>I × R<sub>DS(on)</sub>，通常 &lt; 0.1V</td></tr>
+  <tr><td>效率（低壓大電流）</td><td>差。V<sub>OUT</sub>=1V 時光二極體就吃掉可觀比例</td><td>好，主流行動裝置全用同步</td></tr>
+  <tr><td>輕載行為</td><td>自然進 DCM（二極體不讓電流反向）</td><td>可選：diode emulation（進 DCM）或 forced PWM（電流反向、維持 CCM）</td></tr>
+  <tr><td>複雜度／成本</td><td>低</td><td>高（驅動、dead time、防直通）</td></tr>
+</table>
+<p><strong>低壓輸出時同步整流是必然：</strong>V<sub>OUT</sub> = 1V、OFF 相占大半週期時，0.4V 的 V<sub>F</sub> 意味著光整流損就數十個百分點的效率——不可接受。你板子上 PMIC 內的 buck 全部是同步架構。</p>
+
+<h2>8. 效率曲線與損耗來源</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Buck 的效率曲線是一座「小山」：中載最高（可到約 90% 上下），輕載和極重載兩頭往下掉。原因是損耗分兩大類：<strong>「過路費」（導通損耗）跟電流平方成正比，重載時主導</strong>；<strong>「開門關門費」（開關損耗＋驅動損耗）跟頻率成正比、跟負載無關，輕載時主導</strong>——就像開一間店，房租（固定成本）不管有沒有客人都要繳，客人少的時候房租占比就特別難看。</p>
+</div>
+<table>
+  <tr><th>損耗類型</th><th>公式（量級感）</th><th>特性</th><th>主導區間</th></tr>
+  <tr><td>導通損耗（conduction）</td><td>I<sub>RMS</sub>² × R<sub>DS(on)</sub>（＋電感 DCR 損）</td><td>∝ I²，與 f<sub>SW</sub> 無關</td><td>重載</td></tr>
+  <tr><td>開關損耗（switching）</td><td>≈ ½ × V<sub>IN</sub> × I × (t<sub>rise</sub>+t<sub>fall</sub>) × f<sub>SW</sub></td><td>∝ V×I×f<sub>SW</sub>，每次切換 V 與 I 交疊燒掉一小塊能量</td><td>中載到重載、高 f<sub>SW</sub></td></tr>
+  <tr><td>閘極驅動損耗（gate drive）</td><td>Q<sub>g</sub> × V<sub>DRV</sub> × f<sub>SW</sub></td><td>固定開銷，與負載無關</td><td>輕載</td></tr>
+  <tr><td>其他</td><td>dead time 期間 body diode 導通、電感鐵損、控制器靜態電流 I<sub>Q</sub></td><td>—</td><td>輕載（I<sub>Q</sub>）／高頻（鐵損）</td></tr>
+</table>
+<p><strong>f<sub>SW</sub> 的取捨（面試愛問）：</strong>頻率高 → L 與 C 可以縮小（省面積，camera/手機的最愛，所以行動裝置 PMIC 常跑 1～4MHz 量級）；但開關損與驅動損上升、效率降。頻率低 → 效率好、但電感肥大。NB 主機板 VR 常見數百 kHz，就是往效率與大電流那邊取捨。</p>
+
+<h2>9. 輕載模式：PFM vs PWM</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>PWM 是「不管客人多少，店都照常每天開門」——頻率固定，輕載時房租（切換固定損耗）壓垮效率。<strong>PFM（脈衝頻率調變，也叫 power-save/skip mode）是「客人少就隔幾天才開一次門」</strong>：負載輕時打一個較胖的脈衝把 C<sub>OUT</sub> 灌飽，然後乾脆停止切換，讓電容慢慢放電，掉到門檻再打下一發。切換次數大減，輕載效率從慘不忍睹拉回到堪用。</p>
+</div>
+<table>
+  <tr><th></th><th>PWM（forced PWM）</th><th>PFM（auto/power-save）</th></tr>
+  <tr><td>切換頻率</td><td>固定（頻譜乾淨、可預測）</td><td>隨負載變動（可能掉進音頻或影像敏感頻段）</td></tr>
+  <tr><td>輕載效率</td><td>差</td><td>好</td></tr>
+  <tr><td>輸出漣波</td><td>小而規律</td><td>較大、突發狀（burst）</td></tr>
+  <tr><td>適合場景</td><td>雜訊敏感負載工作中（如 camera 拍攝中）</td><td>待機、休眠</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">Camera 工程師的血淚點</span>
+  <p>PFM 的切換頻率<strong>不固定、隨負載飄</strong>，可能剛好飄進影像的 row rate 或 frame rate 的諧波附近，在畫面上打出<strong>會游動的橫紋（rolling band）</strong>——比固定頻率的干擾更難看也更難查。所以許多平台的做法是：<strong>camera 使用中把相關 rail 強制切到 forced PWM</strong>（犧牲一點待機效率換頻譜可預測），關 camera 再放回 auto/PFM。PMIC 的 mode pin／暫存器就是為這件事存在的。面試講出這一段，直接展現你是「用過 buck 打過仗」的人。</p>
+</div>
+
+<h2>10. Layout 要點——hot loop 與 SW node</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Buck 的 layout 只要記兩條鐵律。第一：<strong>hot loop（熱迴路）越小越好</strong>。hot loop 是「電流有沒有在流」每個週期切換得最劇烈的那一圈——在同步 buck 就是「輸入電容 → Q1 → Q2 → 回輸入電容地」這一小圈，di/dt 極大，迴路面積就是天線面積，圈越大 EMI 越強。第二：<strong>SW 節點銅面積要小</strong>。SW 是全板 dV/dt 最猛的節點（幾 ns 內從 0 跳到 V<sub>IN</sub>），銅皮面積就是電容耦合的極板面積，鋪越大越會用電場把雜訊「噴」給鄰居。但也不能小到散熱與載流不夠——「necessary but no more（夠用就好，不多鋪）」。</p>
+</div>
+<ul>
+  <li><strong>輸入電容（尤其小容值高頻 MLCC）緊貼 IC 的 VIN/PGND pin</strong>——它就是 hot loop 的一邊，離 1mm 跟離 5mm 是天壤之別。</li>
+  <li><strong>hot loop 不要跨層、不要穿 via</strong>；若必須，用第二層完整地平面讓回流緊貼正下方（迴路面積=走線長×層間距，薄介質層是你的朋友）。</li>
+  <li><strong>SW 節點：短、粗、面積最小化</strong>，正下方保留完整地平面遮蔽，且不要讓敏感訊號（feedback、MIPI、類比）從旁邊或下方經過。</li>
+  <li><strong>feedback 走線</strong>：遠離 SW 與電感，從輸出電容之後取樣（量到真正交付給負載的電壓），必要時包地。</li>
+  <li><strong>電感下方</strong>：注意漏磁；屏蔽型（shielded）電感是行動裝置預設選擇，即便如此，靈敏類比線仍別從電感正下方鑽過。</li>
+  <li>注意：<strong>L→C<sub>OUT</sub> 這一圈電流連續（三角波），不算 hot loop</strong>——很多人搞反。切換「不連續電流」的是輸入側，所以輸入電容擺位比輸出電容更關鍵。</li>
+</ul>
+
+<h2>11. 實務案例：NB 主機板與 Camera 電源樹</h2>
+
+<h3>11.1 NB 主機板：多相 VR 一瞥</h3>
+<p>你在 NB 案子上看到 CPU 周圍一整排電感，那是<strong>多相（multiphase）buck VR</strong>：把一顆 buck 複製 N 相並聯，各相的 PWM 相位錯開 360°/N。好處：</p>
+<ul>
+  <li><strong>分流</strong>：CPU 動輒近百安培量級，單相元件根本扛不住，N 相各扛 1/N。</li>
+  <li><strong>漣波對消</strong>：各相三角波錯相疊加，輸出端漣波互相抵消、等效漣波頻率 ×N → 輸出電容可以少放很多。</li>
+  <li><strong>相位增減（phase shedding）</strong>：輕載自動關掉幾相，只留一相跑省電模式，效率曲線全域拉平。</li>
+  <li><strong>熱分散</strong>：損耗攤在多顆 MOS/電感上，避免熱點。</li>
+</ul>
+<p>面試只需講到這個深度：「multiphase 是用交錯並聯換取大電流能力、漣波對消與熱分散」。控制器如何做各相電流平衡（current sharing）屬進階題，被追問再說 DCR sensing 這個關鍵詞即可。</p>
+
+<h3>11.2 Camera 電源樹：buck 站在哪裡？</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Camera 供電的標準架構是「<strong>先用 buck 粗降壓（高效率搬運），再用 LDO 洗乾淨（低雜訊交付）</strong>」——跟自來水系統一樣：水庫→加壓站（buck）→家用濾水器（LDO）→飲用。直接讓 sensor 喝 buck 的水？切換漣波會直接印在影像上。</p>
+</div>
+<p>典型鏈路（以電池平台為例，數值為常見量級）：</p>
+<ul>
+  <li>電池 V<sub>BAT</sub>（約 3.0～4.4V）→ <strong>buck</strong> 降到中繼電壓（如約 1.8～2.9V）→ <strong>低雜訊 LDO</strong> → sensor <strong>AVDD</strong>（類比，最敏感，專題 6 主角）。</li>
+  <li>數位核心 <strong>DVDD</strong>（約 0.8～1.2V）：電流較大、雜訊耐受高 → 常常<strong>直接吃 buck</strong>，省掉 LDO 的功耗。</li>
+  <li>IO 電源 <strong>DOVDD</strong>（1.8V）：中間地帶，視平台用 buck 或 LDO。</li>
+  <li>VCM／OIS 驅動：電流脈動大，注意別跟 AVDD 共用上游造成串擾。</li>
+</ul>
+<p>設計 headroom 的取捨你在專題 6 已學過：buck 輸出設在 LDO 目標值上方約 0.2～0.4V——太少 LDO 掉出穩壓區且 PSRR 崩、太多 LDO 燒熱白白浪費。<strong>buck 與 LDO 是分工，不是競爭。</strong></p>
+
+<h3>11.3 Buck 切換雜訊 → camera 影像的干擾路徑（debug 地圖）</h3>
+<p>影像出現條紋雜訊時，buck 的能量有四條路可以走到影像上，查案照這張地圖：</p>
+<ol>
+  <li><strong>傳導—電源路徑</strong>：buck 漣波（f<sub>SW</sub> 及其諧波）→ LDO 的 PSRR 在 MHz 級恰好是弱區 → 殘餘漣波進 AVDD → 被 row-by-row 讀出取樣 → <strong>橫向條紋</strong>。頻率混疊（aliasing）後條紋間距與 f<sub>SW</sub>/row rate 的比值有關。</li>
+  <li><strong>傳導—地彈路徑</strong>：hot loop 的大 di/dt 打在共用地阻抗上 → 地電位抖動 → 汙染 sensor 的參考地或 MIPI 共模。</li>
+  <li><strong>輻射—磁耦合</strong>：hot loop／電感漏磁對鄰近的 flex、類比走線感應電壓——camera flex 常常剛好從 PMIC 附近繞過去，中槍率極高。</li>
+  <li><strong>輻射—電場耦合</strong>：SW 節點大 dV/dt 經寄生電容打到鄰近高阻抗節點（feedback、sensor 類比腳）。</li>
+</ol>
+<p><strong>Debug 切入點：</strong>先改變 f<sub>SW</sub> 或切 PFM/PWM 模式看條紋是否跟著變（確認凶手是誰）；再沿四條路徑逐一隔離——換乾淨外部電源供 AVDD（切斷路徑 1）、墊開 flex 走線（切斷路徑 3）等。這套敘事在 behavioral 面試（"tell me about a tough debug"）同樣好用。</p>
+
+<h2>12. 動手練習與詳解</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：V_IN = 12V、V_OUT = 1.2V、f_SW = 600kHz。求 duty cycle 與 ON 時間。</summary>
+<p><strong>解：</strong>D = V<sub>OUT</sub>/V<sub>IN</sub> = 1.2/12 = <strong>10%</strong>。週期 T = 1/600kHz ≈ 1.67μs，ON 時間 = D×T ≈ <strong>167ns</strong>。順帶一提：D 很小時，high-side MOS 導通時間極短，開關損占比高、且控制器的最小導通時間（min on-time）可能成為限制——高降壓比是 12V→1V 直接轉換的工程難點之一。</p>
+</details>
+
+<details>
+<summary>練習 2：承上，I_OUT = 3A，想要 ΔI_L = 30% × I_OUT。求 L 與電感峰值電流，I_SAT 至少選多少？</summary>
+<p><strong>解：</strong>ΔI<sub>L</sub> = 0.9A。L = V<sub>OUT</sub>×(1−D)/(ΔI<sub>L</sub>×f<sub>SW</sub>) = 1.2×0.9/(0.9×600k) = <strong>2.0μH</strong>（取常規值 2.2μH）。峰值 I<sub>L(peak)</sub> = 3 + 0.9/2 = <strong>3.45A</strong>。I<sub>SAT</sub> 要高於峰值並留暫態餘裕，至少選 <strong>約 4.5A 級以上</strong>（並確認高溫下的 I<sub>SAT</sub> 曲線）。</p>
+</details>
+
+<details>
+<summary>練習 3：承上，C_OUT 用 2×22μF MLCC（DC bias 後有效約 22μF 總計），ESR 可忽略。估輸出漣波。</summary>
+<p><strong>解：</strong>ΔV<sub>C</sub> = ΔI<sub>L</sub>/(8×C×f<sub>SW</sub>) = 0.9/(8×22μ×600k) ≈ <strong>8.5mV</strong>。注意兩個實務點：(1) 有效容值用了 DC bias 折損後的數字，若直接用標稱 44μF 會低估一倍；(2) 若換成有 ESR 的電容（如 10mΩ），ESR 項 = 0.9×0.01 = 9mV，跟容性項同量級，不能忽略。</p>
+</details>
+
+<details>
+<summary>練習 4：這顆 buck 在 I_OUT 掉到多少以下會進入 DCM（假設 diode emulation 模式）？</summary>
+<p><strong>解：</strong>CCM/DCM 邊界在 I<sub>OUT</sub> = ΔI<sub>L</sub>/2 = 0.9/2 = <strong>0.45A</strong>。低於 0.45A、且 low-side 做二極體模擬（不允許電流反向）時進 DCM。若切成 forced PWM，電感電流允許反向，任何負載都維持 CCM——代價是輕載時能量在電感裡來回搬運、效率變差。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念題）：示波器量 SW 節點，發現方波的「低電位段」尾巴出現約 30MHz 的振鈴，且只在輕載出現。這是什麼？要「修」嗎？</summary>
+<p><strong>解：</strong>這是 <strong>DCM 的招牌振鈴</strong>：電感電流歸零後，兩顆 MOS 都關閉，SW 節點懸空，L 與 SW 節點寄生電容（MOS 的 C<sub>OSS</sub> 等）形成 LC 諧振腔，殘餘能量在裡面盪鞦韆，頻率 = 1/(2π√(L×C<sub>par</sub>))，典型數十 MHz 量級。它<strong>本身是正常現象，不需要修</strong>——能量很小、阻尼後自然衰減。但若它的頻率剛好打到敏感頻段造成 EMI/影像問題，可用 RC snubber 阻尼（犧牲一點效率），或改 forced PWM 避免 DCM。面試時能區分「正常特徵」與「異常」是 senior 的標誌。</p>
+</details>
+
+<h2>13. 面試怎麼考</h2>
+<p>白板題實際出法（請先用英文口頭作答再展開）：</p>
+
+<details>
+<summary>Q1: "Draw a buck converter, then sketch the switch-node voltage, inductor current, and output voltage ripple. Explain why the duty cycle equals Vout over Vin."</summary>
+<p><strong>參考答案骨架：</strong>A buck has four elements: a high-side switch from the input to the switch node, a low-side switch or diode from the switch node to ground, an inductor from the switch node to the output, and an output capacitor. During the on-time, the input charges the inductor and feeds the load — inductor current ramps up with slope V-in minus V-out over L. During the off-time, the low-side device freewheels the inductor current, which ramps down with slope V-out over L. So the switch node is a square wave swinging between V-in and ground, the inductor current is a triangle wave riding on the DC load current, and the output is nearly flat with a small ripple — millivolts — because the LC filter averages the square wave. In steady state the inductor's volt-seconds must balance: V-in minus V-out times D-T equals V-out times one-minus-D times T, which gives D equals V-out over V-in. Equivalently, the output is just the average of the switch-node square wave.</p>
+<p><strong>加分點：</strong>邊畫邊講三個細節——(1) 三條波形垂直對齊並標注 D·T；(2) 輸出漣波的極值落在電感電流穿越平均值處；(3) 主動補一句 "this holds in CCM; at light load with diode emulation it enters DCM and the relation changes."</p>
+</details>
+
+<details>
+<summary>Q2: "Your camera image shows horizontal bands that appear only in low-power mode. The sensor's analog rail is an LDO fed from a buck. Walk me through your debug."</summary>
+<p><strong>參考答案骨架：</strong>The trigger condition — low-power mode only — immediately suggests the buck has entered PFM or pulse-skipping, where the switching frequency drops and varies with load. That moves the ripple energy to lower frequencies where two things get worse: the LDO's PSRR is load- and frequency-dependent, and the ripple can alias against the sensor's row rate, showing up as bands. My first experiment is cheap and decisive: force the buck into fixed-frequency PWM via its mode pin or register. If the bands disappear, I've confirmed the mechanism, and the production fix is to force PWM whenever the camera is streaming. In parallel I'd verify the LDO headroom in low-power mode — if the buck's setpoint also drops, the LDO may be near dropout with almost no PSRR — and probe the AVDD rail with a proper low-inductance ground connection to correlate ripple frequency with band spacing. If conduction paths are ruled out, I'd look at magnetic coupling from the inductor's hot loop into the camera flex.</p>
+<p><strong>考點：</strong>測你能否把「電源模式 → 頻譜變化 → PSRR/aliasing → 影像症狀」串成因果鏈，以及有沒有「先做一個便宜且能一刀切分假設的實驗」的 debug 素養。提到 forced PWM 這個具體對策幾乎是必要條件。</p>
+</details>
+
+<h2>14. Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：buck 四大元件與各自角色？SW 節點是什麼？</p>
+  <p class="a">A1：high-side MOS（主開關，V_IN→SW）、low-side MOS/二極體（續流，SW→GND）、電感（儲能/釋能，把方波平均成直流）、輸出電容（吸收三角波漣波）。SW 節點＝兩顆 MOS 中點，全板 dV/dt 最大、最吵的節點。</p>
+  <p class="q">Q2：伏秒平衡一句話？由它推出的 duty cycle 公式與適用條件？</p>
+  <p class="a">A2：穩態下電感每週期「正伏秒＝負伏秒」（裝多少水倒多少水）：(V_IN−V_OUT)·D·T = V_OUT·(1−D)·T ⇒ D = V_OUT/V_IN。僅 CCM 成立；DCM 下 D 與負載有關。</p>
+  <p class="q">Q3：CCM 三條標準波形長相？輸出漣波極值位置的魔鬼細節？</p>
+  <p class="a">A3：V_SW＝0～V_IN 方波（平均值=V_OUT）；I_L＝騎在 I_OUT 上的三角波（上斜率 (V_IN−V_OUT)/L、下斜率 −V_OUT/L）；V_OUT＝mV 級小漣波。漣波極值在 I_L 穿越平均值處，不在 I_L 峰/谷處。</p>
+  <p class="q">Q4：電感選型三步驟與兩個關鍵公式？</p>
+  <p class="a">A4：(1) 設 ΔI_L ≈ 20~40%×I_OUT(max)；(2) L = V_OUT(1−D)/(ΔI_L·f_SW)；(3) I_SAT &gt; I_peak = I_OUT + ΔI_L/2 並留餘裕、查高溫曲線與軟飽和。另檢查 DCR 與溫升額定。</p>
+  <p class="q">Q5：buck 三大損耗與效率曲線形狀？layout 兩大鐵律？</p>
+  <p class="a">A5：導通損（∝I²，重載主導）、開關損（∝V·I·f_SW）、驅動損（Q_g·V·f_SW，固定開銷，輕載主導）→ 效率曲線中載最高、兩頭下垂；輕載靠 PFM 救。Layout：hot loop（C_IN→Q1→Q2 一圈）面積最小化＋輸入電容緊貼 IC；SW 節點銅面積「夠用就好」並遠離敏感線。</p>
+</div>
+
+<h2>15. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>TI《Basic Calculation of a Buck Converter's Power Stage》（SLVA477）</strong>——本課第 3～5 節所有公式的官方版，一頁一頁對著算一遍。</li>
+  <li><strong>TI《Reduce Buck-Converter EMI and Voltage Stress by Minimizing Inductive Parasitics》與各家 layout app note</strong>——hot loop 概念的實測與剖面圖，把第 10 節立體化。</li>
+  <li><strong>Erickson &amp; Maksimović《Fundamentals of Power Electronics》第 1～2 章</strong>——伏秒平衡與電荷平衡的嚴謹版；想走深電源路線的聖經，面試準備讀前兩章就夠。</li>
+  <li><strong>任一顆行動裝置 PMIC/buck datasheet</strong>（如 TI TPS62 系列這一級）——精讀 efficiency vs load 曲線（找 PFM/PWM 交界）、mode pin 說明、layout guideline 頁，面試前至少能口述一份的 trade-off。</li>
+  <li><strong>複習連結：</strong>專題 6（LDO）＋本專題＝完整兩級式電源故事：buck 高效搬運、LDO 低雜訊交付；配合 SI/PI 課程的 PDN 觀念，就是 camera 電源設計的全貌。</li>
+</ul>
+
+<footer>
+  <span>專題先修 7｜DC-DC Buck 降壓轉換器</span>
+  <span class="progress-note">Camera HW EE 面試準備系列</span>
+</footer>
+
+</div>
+</body>
+</html>

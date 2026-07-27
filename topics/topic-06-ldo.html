@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 6｜LDO 線性穩壓器——原理、規格與選型</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 6｜LDO 線性穩壓器——原理、規格與選型</h1>
+  <div class="meta">預估學習時間：120 分鐘｜難度：★★★☆☆（電源面試必考、camera 供電核心）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這個專題，你要能夠：</p>
+  <ol>
+    <li>畫出 LDO 內部方塊圖（pass element、error amplifier、reference、feedback network），並用白話講出「它怎麼把電壓穩住」</li>
+    <li>解釋 dropout voltage 是什麼、由什麼決定、為什麼 PMOS pass element 的 dropout 可以做很低</li>
+    <li>看懂 datasheet 上的五大關鍵規格：PSRR（含頻率相依性）、輸出雜訊（μVrms）、load/line regulation、transient response、quiescent current（I<sub>Q</sub>）</li>
+    <li>說明 LDO 穩定性與輸出電容 ESR 的關係，知道為什麼有些老 LDO「不能用太好的電容」</li>
+    <li>用 P = (V<sub>IN</sub> − V<sub>OUT</sub>) × I<sub>OUT</sub> 與 θ<sub>JA</sub> 做熱設計快速估算</li>
+    <li>講出 LDO vs DC-DC（buck）的選擇法則，並用 camera sensor AVDD 的例子說服面試官「為什麼這一路要用 LDO」</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼這個專題重要？</h2>
+<p>你在 NB 主機板和鏡頭模組案子上，電源樹（power tree）一定畫過、LDO 一定擺過。但 Apple／Google 的 Camera HW 面試，電源題幾乎必考，而且問法長這樣：</p>
+<ul>
+  <li>Why is the sensor's analog rail powered by an LDO instead of directly from a buck?（為什麼 sensor 的類比電源用 LDO，不直接接 buck？）</li>
+  <li>Your image has horizontal band noise that changes with load. Where do you look first?（影像出現隨負載變化的橫向條紋雜訊，你先查哪裡？）</li>
+  <li>How do you pick between an LDO and a switcher for a given rail?（一路電源要用 LDO 還是 switcher，你怎麼判斷？）</li>
+</ul>
+<p>這些題目考的不是「你會不會抄參考設計」，而是<strong>你懂不懂 LDO 的物理極限與規格背後的意義</strong>。這個專題把 LDO 拆到見骨，最後回到你最熟的戰場：camera 的 AVDD、VCM/OIS 供電、NB 主機板上的各路小電源。</p>
+
+<h2>1. LDO 是什麼？——一個「自動調節的水龍頭」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>想像你家水塔（輸入電源 V<sub>IN</sub>）水壓忽高忽低，但你想要蓮蓬頭出水永遠是固定的舒服水壓（輸出 V<sub>OUT</sub>）。LDO 就是一個<strong>裝了自動手的水龍頭</strong>：</p>
+  <ul>
+    <li><strong>水龍頭閥門</strong>＝pass element（通過元件，一顆電晶體）：轉緊一點水變小、轉鬆一點水變大。</li>
+    <li><strong>水壓計</strong>＝feedback network（迴授分壓電阻）：隨時量出水口的水壓。</li>
+    <li><strong>標準刻度</strong>＝voltage reference（參考電壓，通常是 bandgap，約 1.2V）：這是「理想水壓長什麼樣」的標準答案。</li>
+    <li><strong>那隻自動手</strong>＝error amplifier（誤差放大器）：不停比較「量到的水壓」和「標準刻度」，水壓高了就把閥門轉緊、低了就轉鬆。</li>
+  </ul>
+  <p>整個系統就是一個<strong>負迴授（negative feedback）迴路</strong>：出口永遠被「手」壓在目標值上，不管水塔怎麼晃。而多餘的水壓去哪了？<strong>全部消耗在閥門上，變成熱</strong>——這就是 LDO 效率不高、會發熱的根本原因。</p>
+</div>
+
+<h3>1.1 內部方塊圖</h3>
+
+<figure>
+<svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">LDO 內部方塊圖（PMOS pass element 架構）</text>
+  <!-- VIN rail -->
+  <line x1="60" y1="80" x2="330" y2="80" stroke="#374151" stroke-width="2.5"/>
+  <text x="60" y="70" font-size="14" font-weight="bold" fill="#374151">V_IN</text>
+  <!-- Pass element (PMOS) -->
+  <rect x="330" y="55" width="110" height="50" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="385" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#991b1b">Pass Element</text>
+  <text x="385" y="94" text-anchor="middle" font-size="12" fill="#991b1b">PMOS（水龍頭閥門）</text>
+  <!-- VOUT rail -->
+  <line x1="440" y1="80" x2="700" y2="80" stroke="#374151" stroke-width="2.5"/>
+  <text x="700" y="70" text-anchor="end" font-size="14" font-weight="bold" fill="#374151">V_OUT</text>
+  <!-- output cap -->
+  <line x1="640" y1="80" x2="640" y2="130" stroke="#374151" stroke-width="2"/>
+  <line x1="622" y1="130" x2="658" y2="130" stroke="#374151" stroke-width="2.5"/>
+  <line x1="622" y1="142" x2="658" y2="142" stroke="#374151" stroke-width="2.5"/>
+  <line x1="640" y1="142" x2="640" y2="175" stroke="#374151" stroke-width="2"/>
+  <text x="668" y="140" font-size="12" fill="#6b7280">C_OUT</text>
+  <text x="668" y="156" font-size="12" fill="#6b7280">(+ESR)</text>
+  <line x1="628" y1="175" x2="652" y2="175" stroke="#374151" stroke-width="2"/>
+  <line x1="632" y1="181" x2="648" y2="181" stroke="#374151" stroke-width="1.5"/>
+  <line x1="636" y1="187" x2="644" y2="187" stroke="#374151" stroke-width="1"/>
+  <!-- feedback divider -->
+  <line x1="530" y1="80" x2="530" y2="120" stroke="#0e7490" stroke-width="2"/>
+  <rect x="515" y="120" width="30" height="45" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="556" y="148" font-size="12" fill="#0e7490">R1</text>
+  <line x1="530" y1="165" x2="530" y2="195" stroke="#0e7490" stroke-width="2"/>
+  <rect x="515" y="195" width="30" height="45" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="556" y="223" font-size="12" fill="#0e7490">R2</text>
+  <line x1="530" y1="240" x2="530" y2="270" stroke="#0e7490" stroke-width="2"/>
+  <line x1="518" y1="270" x2="542" y2="270" stroke="#374151" stroke-width="2"/>
+  <line x1="522" y1="276" x2="538" y2="276" stroke="#374151" stroke-width="1.5"/>
+  <line x1="526" y1="282" x2="534" y2="282" stroke="#374151" stroke-width="1"/>
+  <text x="620" y="215" text-anchor="middle" font-size="12" fill="#0e7490">Feedback</text>
+  <text x="620" y="231" text-anchor="middle" font-size="12" fill="#0e7490">（水壓計）</text>
+  <!-- FB tap -->
+  <circle cx="530" cy="180" r="4" fill="#0e7490"/>
+  <line x1="530" y1="180" x2="420" y2="180" stroke="#0e7490" stroke-width="2" stroke-dasharray="none"/>
+  <text x="470" y="172" text-anchor="middle" font-size="12" fill="#0e7490">V_FB</text>
+  <!-- error amp (triangle) -->
+  <polygon points="330,150 330,230 250,190" fill="#fdf6ec" stroke="#d97706" stroke-width="2"/>
+  <text x="303" y="186" text-anchor="middle" font-size="12" font-weight="bold" fill="#92400e">EA</text>
+  <text x="303" y="202" text-anchor="middle" font-size="11" fill="#92400e">誤差放大器</text>
+  <text x="340" y="172" font-size="13" fill="#92400e">−</text>
+  <text x="340" y="222" font-size="13" fill="#92400e">＋</text>
+  <!-- EA inputs -->
+  <line x1="420" y1="180" x2="345" y2="167" stroke="#0e7490" stroke-width="2"/>
+  <!-- reference -->
+  <rect x="360" y="255" width="150" height="45" rx="8" fill="#dcfce7" stroke="#15803d" stroke-width="2"/>
+  <text x="435" y="274" text-anchor="middle" font-size="13" font-weight="bold" fill="#15803d">Bandgap Reference</text>
+  <text x="435" y="291" text-anchor="middle" font-size="12" fill="#15803d">V_REF ≈ 1.2V（標準刻度）</text>
+  <line x1="360" y1="277" x2="335" y2="277" stroke="#15803d" stroke-width="2"/>
+  <line x1="335" y1="277" x2="335" y2="213" stroke="#15803d" stroke-width="2"/>
+  <line x1="335" y1="213" x2="332" y2="213" stroke="#15803d" stroke-width="2"/>
+  <!-- EA output to gate -->
+  <line x1="250" y1="190" x2="220" y2="190" stroke="#d97706" stroke-width="2"/>
+  <line x1="220" y1="190" x2="220" y2="130" stroke="#d97706" stroke-width="2"/>
+  <line x1="220" y1="130" x2="385" y2="130" stroke="#d97706" stroke-width="2"/>
+  <line x1="385" y1="130" x2="385" y2="105" stroke="#d97706" stroke-width="2"/>
+  <polygon points="385,105 379,117 391,117" fill="#d97706"/>
+  <text x="270" y="122" text-anchor="middle" font-size="12" fill="#92400e">控制閥門開度（gate 電壓）</text>
+  <!-- loop annotation -->
+  <text x="130" y="250" font-size="13" fill="#6b7280">負迴授迴路：</text>
+  <text x="130" y="270" font-size="12" fill="#6b7280">V_OUT 偏高 → V_FB &gt; V_REF</text>
+  <text x="130" y="288" font-size="12" fill="#6b7280">→ EA 把閥門關小 → V_OUT 拉回</text>
+  <text x="130" y="306" font-size="12" fill="#6b7280">（反之亦然，永遠自動修正）</text>
+  <!-- load -->
+  <rect x="686" y="95" width="14" height="60" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="693" y="172" text-anchor="middle" font-size="12" fill="#6b7280">負載</text>
+</svg>
+<figcaption>圖 1：LDO 四大件——pass element（閥門）、error amplifier（自動手）、bandgap reference（標準刻度）、feedback 分壓（水壓計）。V<sub>OUT</sub> = V<sub>REF</sub> × (1 + R1/R2)。</figcaption>
+</figure>
+
+<h3>1.2 原理一句話</h3>
+<p>誤差放大器持續比較 V<sub>FB</sub>（V<sub>OUT</sub> 經 R1/R2 分壓）與 V<sub>REF</sub>，並調整 pass element 的導通程度，使兩者永遠相等。迴路穩態時：</p>
+
+<div class="formula">
+  V<sub>OUT</sub> = V<sub>REF</sub> × (1 + R1/R2)
+</div>
+
+<p><strong>白話翻譯：</strong>輸出電壓由「標準刻度 × 分壓比」決定，跟輸入電壓幾乎無關——這就是「穩壓」。公式看不懂沒關係，記住結論：<strong>改 R1/R2 就能改輸出電壓，V<sub>REF</sub> 準、輸出就準</strong>。</p>
+
+<div class="card takeaway">
+  <span class="label">關鍵結論</span>
+  <p>LDO 本質上是「一顆電晶體 + 一個運算放大器組成的負迴授系統」。它所有的優點（低雜訊、快速響應、無切換漣波）和缺點（效率差、會發熱）都源自這個結構：<strong>它用「燒掉多餘電壓」的方式換取乾淨的輸出</strong>。</p>
+</div>
+
+<h2>2. Dropout Voltage——LDO 名字的由來</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>水龍頭全開時，水塔水壓還是得比出水口高「一點點」，水才推得動。這個「最少要高多少」就是 <strong>dropout voltage（壓差電壓，V<sub>DO</sub>）</strong>。LDO 的全名 Low DropOut regulator，賣點就是這個「一點點」可以做到非常小（幾十到幾百 mV），舊式線性穩壓器（如 7805）則要 2V 以上。</p>
+</div>
+
+<p>正式定義：<strong>當 V<sub>IN</sub> 降到 V<sub>OUT(目標)</sub> + V<sub>DO</sub> 以下，迴路已把 pass element 開到全開仍撐不住輸出，輸出開始跟著輸入掉</strong>——此時 LDO 失去穩壓能力（drop out of regulation）。</p>
+<p>Dropout 由 pass element 架構決定：</p>
+<table>
+  <tr><th>Pass element 架構</th><th>Dropout 量級</th><th>說明</th></tr>
+  <tr><td>NPN Darlington（傳統 7805 類）</td><td>約 1.5～2.5V</td><td>兩個 V<sub>BE</sub> + V<sub>CE(sat)</sub> 疊起來，天生高壓差</td></tr>
+  <tr><td>PNP</td><td>約 0.3～0.7V</td><td>只剩一個 V<sub>CE(sat)</sub>，但基極電流大、I<sub>Q</sub> 差</td></tr>
+  <tr><td>PMOS（現代 LDO 主流）</td><td>約 30～300mV</td><td>全開時就是一顆電阻 R<sub>DS(on)</sub>，V<sub>DO</sub> = I<sub>OUT</sub> × R<sub>DS(on)</sub>，與電流成正比</td></tr>
+</table>
+
+<div class="formula">
+  PMOS LDO：V<sub>DO</sub> ≈ I<sub>OUT</sub> × R<sub>DS(on)</sub>
+</div>
+<p><strong>白話翻譯：</strong>現代 LDO 全開時就像一顆小電阻，電流越大、需要的最小壓差越大。datasheet 上的 dropout 規格一定會標「在多少 mA 條件下」——<strong>看 dropout 不看測試電流，等於沒看</strong>。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「V<sub>IN</sub> 只要比 V<sub>OUT</sub> 高於 dropout 就好」——實務上不夠！</strong>接近 dropout 時，pass element 已接近全開，迴路增益暴跌，<strong>PSRR 會嚴重劣化</strong>（後面第 3 節細講）。經驗法則：對雜訊敏感的電源（如 camera AVDD），headroom 至少留 0.3～0.5V，讓迴路「有力氣」壓制漣波，而不是踩在 dropout 邊緣。這是選 V<sub>IN</sub> 電源樹時最常被忽略的 trade-off：headroom 大→PSRR 好但發熱多；headroom 小→涼但壓不住雜訊。</p>
+</div>
+
+<h2>3. 五大關鍵規格——datasheet 怎麼讀</h2>
+
+<h3>3.1 PSRR（Power Supply Rejection Ratio，電源漣波抑制比）</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>PSRR 是「隔音牆」：輸入端吵吵鬧鬧（水塔水壓晃動、buck 的切換漣波），輸出端能安靜多少。PSRR 60dB 意思是輸入的晃動傳到輸出時被砍成 <strong>1/1000</strong>；40dB 是 1/100。但這面隔音牆有個致命特性：<strong>頻率越高，隔音越差</strong>——因為牆是「那隻自動手」蓋的，手的反應速度有限，晃太快它就跟不上了。</p>
+</div>
+
+<div class="formula">
+  PSRR(f) = 20 · log₁₀ ( 輸入漣波振幅 / 輸出漣波振幅 )　[dB]
+</div>
+<p><strong>白話翻譯：</strong>每 20dB 代表雜訊被砍成 1/10。60dB＝砍成千分之一。公式跳過沒關係，記住「dB 越大越好、每 20dB 少一個零」。</p>
+
+<p><strong>為什麼高頻 PSRR 會掉？</strong>三段式理解：</p>
+<ol>
+  <li><strong>低頻（DC～數 kHz）：</strong>迴路增益很高，誤差放大器每一絲晃動都修得掉，PSRR 最好（常見 60～80dB 量級）。</li>
+  <li><strong>中頻（數 kHz～數百 kHz）：</strong>誤差放大器的增益隨頻率下降（跟所有運算放大器一樣有增益頻寬限制），修正能力變弱，PSRR 以約 −20dB/decade 的斜率滑落。<strong>糟糕的是，buck 的切換頻率（數百 kHz～數 MHz）剛好落在這一帶</strong>。</li>
+  <li><strong>高頻（數 MHz 以上）：</strong>迴路完全跟不上，此時靠的是「被動路徑」——pass element 的寄生電容會把輸入雜訊直接耦合到輸出，PSRR 掉到 20～30dB 甚至更差；再往上要靠輸出電容和 PCB 佈局撐場。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">典型 LDO PSRR 對頻率曲線（量級示意）＋ camera 敏感頻段</text>
+  <!-- axes -->
+  <line x1="80" y1="270" x2="710" y2="270" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="80" y1="270" x2="80" y2="50" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="395" y="322" text-anchor="middle" font-size="13" fill="#6b7280">頻率（對數刻度）</text>
+  <text x="30" y="160" text-anchor="middle" font-size="13" fill="#6b7280" transform="rotate(-90 30 160)">PSRR (dB)</text>
+  <!-- y labels -->
+  <text x="72" y="75" text-anchor="end" font-size="12" fill="#6b7280">80</text>
+  <text x="72" y="125" text-anchor="end" font-size="12" fill="#6b7280">60</text>
+  <text x="72" y="175" text-anchor="end" font-size="12" fill="#6b7280">40</text>
+  <text x="72" y="225" text-anchor="end" font-size="12" fill="#6b7280">20</text>
+  <text x="72" y="274" text-anchor="end" font-size="12" fill="#6b7280">0</text>
+  <line x1="80" y1="70" x2="710" y2="70" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="80" y1="120" x2="710" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="80" y1="170" x2="710" y2="170" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="80" y1="220" x2="710" y2="220" stroke="#e5e7eb" stroke-width="1"/>
+  <!-- x labels -->
+  <text x="110" y="290" text-anchor="middle" font-size="12" fill="#6b7280">100Hz</text>
+  <text x="230" y="290" text-anchor="middle" font-size="12" fill="#6b7280">10kHz</text>
+  <text x="360" y="290" text-anchor="middle" font-size="12" fill="#6b7280">100kHz</text>
+  <text x="480" y="290" text-anchor="middle" font-size="12" fill="#6b7280">1MHz</text>
+  <text x="600" y="290" text-anchor="middle" font-size="12" fill="#6b7280">10MHz</text>
+  <!-- PSRR curve -->
+  <path d="M85,72 L200,76 C260,80 290,110 340,150 C390,190 420,215 470,228 C520,240 560,235 600,225 C640,216 670,220 705,228"
+    fill="none" stroke="#0e7490" stroke-width="3.5"/>
+  <text x="150" y="60" text-anchor="middle" font-size="12" fill="#0e7490" font-weight="bold">低頻：迴路增益高，PSRR 最好</text>
+  <text x="330" y="130" font-size="12" fill="#0e7490">中頻：迴路增益下降</text>
+  <text x="330" y="146" font-size="12" fill="#0e7490">PSRR 一路滑落</text>
+  <text x="580" y="200" text-anchor="middle" font-size="12" fill="#0e7490">高頻：靠寄生與 C_OUT，</text>
+  <text x="580" y="216" text-anchor="middle" font-size="12" fill="#0e7490">迴路已無能為力</text>
+  <!-- buck switching band -->
+  <rect x="400" y="50" width="150" height="220" fill="#dc2626" opacity="0.10"/>
+  <line x1="400" y1="50" x2="400" y2="270" stroke="#dc2626" stroke-dasharray="5 4" stroke-width="1.5"/>
+  <line x1="550" y1="50" x2="550" y2="270" stroke="#dc2626" stroke-dasharray="5 4" stroke-width="1.5"/>
+  <text x="475" y="44" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">buck 切換頻率＋諧波落點</text>
+  <!-- audio/row-noise sensitive band -->
+  <rect x="85" y="50" width="180" height="220" fill="#d97706" opacity="0.10"/>
+  <text x="175" y="255" text-anchor="middle" font-size="12" fill="#b45309" font-weight="bold">影像 row noise 敏感頻段</text>
+  <text x="175" y="240" text-anchor="middle" font-size="11" fill="#b45309">（row rate 附近：數 kHz～數十 kHz 量級）</text>
+  <!-- annotation arrow -->
+  <line x1="475" y1="232" x2="475" y2="205" stroke="#dc2626" stroke-width="2"/>
+  <polygon points="475,205 469,215 481,215" fill="#dc2626"/>
+  <text x="478" y="252" text-anchor="middle" font-size="11" fill="#dc2626">此處 PSRR 已只剩 20～30dB 量級！</text>
+</svg>
+<figcaption>圖 2：PSRR 隨頻率下滑（量級示意，實際曲線依料號而異）。橘色帶是影像最怕的低頻段（row noise 相關），紅色帶是 buck 切換漣波落點——正好落在 LDO 隔音最弱的中高頻。這就是「LDO 不是萬靈丹，buck 前端漣波要先自己收乾淨」的原因。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「datasheet 首頁寫 PSRR 75dB，所以沒問題」——首頁那個數字通常是 100Hz 或 1kHz 的最佳值！</strong>你的 buck 切在 2MHz，你該查的是曲線圖上 2MHz 那一點，很可能只剩 20～30dB 量級。另外 PSRR 還跟 headroom（V<sub>IN</sub>−V<sub>OUT</sub>）和負載電流有關：headroom 越小、負載越重，PSRR 越差。<strong>看 PSRR 要看三件事：頻率、headroom、負載條件。</strong></p>
+</div>
+
+<h3>3.2 輸出雜訊（Output Noise，μVrms）</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>PSRR 管「外面吵進來的」，輸出雜訊管「LDO 自己講話的音量」。就算輸入電源完美無聲，LDO 內部的參考電壓（bandgap）和放大器本身也會產生熱雜訊和 flicker 雜訊，像水龍頭自己會嘶嘶作響。這個自產雜訊用 <strong>μVrms（在指定頻寬內積分，常見 10Hz～100kHz）</strong>表示。</p>
+</div>
+<ul>
+  <li>一般數位電源用 LDO：數十～數百 μVrms 都無所謂。</li>
+  <li><strong>低雜訊 LDO（camera AVDD、PLL、RF 用）：約 5～30μVrms 量級</strong>，datasheet 會主打「low noise」，且常有 <code>NR/SS</code>（noise reduction）腳位——外掛一顆電容對 reference 做低通濾波，把 bandgap 的雜訊先濾掉再放大。</li>
+  <li>雜訊主要來源是 reference，而 V<sub>OUT</sub> = V<sub>REF</sub> ×(1+R1/R2)，所以<strong>輸出設越高、reference 雜訊被放大越多</strong>——同一顆料 3.3V 輸出比 1.8V 輸出吵。</li>
+</ul>
+
+<h3>3.3 Load Regulation 與 Line Regulation</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>兩個「穩不穩」的靜態成績單：<strong>load regulation</strong>＝突然多人一起洗澡（負載電流從輕載變重載），出水口水壓「穩定後」掉了多少；<strong>line regulation</strong>＝水塔水位（V<sub>IN</sub>）慢慢變化時，出水口跟著動多少。注意兩個都是「穩定後的 DC 值」，中間那段晃動屬於下一個規格（transient response）。</p>
+</div>
+<div class="formula">
+  Load regulation = ΔV<sub>OUT</sub> / ΔI<sub>OUT</sub>（單位常見 mV/A 或 %/A）；Line regulation = ΔV<sub>OUT</sub> / ΔV<sub>IN</sub>（mV/V）
+</div>
+<p><strong>白話翻譯：</strong>數字越小越好，代表迴路 DC 增益越高、修正越徹底。現代 LDO 這兩項通常都很優秀（mV 量級），實戰上反而是<strong>量測點到負載之間的 PCB 走線 IR drop</strong> 更常是罪魁禍首——sense 點要 Kelvin 接到負載端。</p>
+
+<h3>3.4 Transient Response（負載暫態響應）</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>有人「瞬間」把另一個水龍頭全開（負載電流階躍），自動手需要反應時間，這段期間水壓會先凹下去（undershoot）再彈回來。凹多深、多久回穩，就是 transient response。凹陷深度由三件事決定：<strong>迴路頻寬（手多快）、輸出電容（現場備用水缸多大）、電容 ESR/ESL（水缸出水口粗細）</strong>。負載階躍的最初幾百 ns，迴路根本來不及動，<strong>全靠 C<sub>OUT</sub> 撐</strong>。</p>
+</div>
+<p>實務重點：camera sensor 從 standby 進入 streaming、或 VCM 啟動的瞬間，都是大 dI/dt 事件。如果 AVDD 在這瞬間凹太深，sensor 可能 reset 或前幾個 frame 出現異常。改善順序：加大／換低 ESL 的 C<sub>OUT</sub>、電容靠近負載擺、必要時換迴路頻寬更高的 LDO。</p>
+
+<h3>3.5 Quiescent Current（I<sub>Q</sub>，靜態電流）</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>I<sub>Q</sub> 是「水龍頭自己喝掉的水」——就算沒人用水，那隻自動手、水壓計、標準刻度本身也要吃電。負載為零時 LDO 從輸入端抽的電流就是 I<sub>Q</sub>。對插電的 NB 主機板無關痛癢，但對<strong>電池待機路徑</strong>（always-on rail、RTC、待機 MCU）是生死攸關：待機幾個月的裝置，I<sub>Q</sub> 1μA 和 100μA 差一百倍待機時間。</p>
+</div>
+<p>Trade-off 鐵律：<strong>低 I<sub>Q</sub> 和「快、低雜訊、高 PSRR」互相打架</strong>——迴路要快要安靜，放大器就要偏壓大電流。所以低 I<sub>Q</sub> LDO 的暫態響應和 PSRR 通常較差，選型時先問這一路「是常時輕載待機、還是動態重載敏感」。</p>
+
+<h2>4. 穩定性與輸出電容 ESR——為什麼有些 LDO「怕好電容」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>負迴授系統的通病：修正指令繞一圈回來如果「延遲太多、力道又還很大」，就會從「修正」變成「推波助瀾」——系統開始自激振盪，輸出電壓像盪鞦韆一樣自己晃個不停。輸出電容和它的 ESR（等效串聯電阻）是這個迴圈裡的重要角色：<strong>ESR 會在頻率響應上製造一個「零點」，像幫鞦韆裝了阻尼</strong>。老一代 LDO 的補償設計「依賴」這個阻尼——你換上 ESR 幾乎為零的高級 MLCC，反而把阻尼拆了，LDO 就振了。</p>
+</div>
+
+<p>兩代 LDO 的差別：</p>
+<table>
+  <tr><th>類型</th><th>對 C<sub>OUT</sub> 的要求</th><th>典型情境</th></tr>
+  <tr><td>舊式（依賴 ESR 零點補償）</td><td>datasheet 給一個 <strong>ESR 合法區間</strong>（例如約 0.1Ω～數 Ω）：太低會振、太高也會振。當年搭鉭質電容設計</td><td>老料號、汽車/工業老平台。換成 MLCC 直接出事</td></tr>
+  <tr><td>現代「MLCC-stable / any-cap」</td><td>內部補償，接受低 ESR MLCC；datasheet 指定最小電容量（常見 1μF 量級）與容值範圍</td><td>目前手機/NB 新設計主流</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區（真實血案類型）</span>
+  <p>兩個都要防：<strong>(1) 老 LDO 換新電容</strong>：料況缺料，採購把鉭質電容替代成 MLCC，板子上電後輸出出現數十 kHz～數百 kHz 的振盪，時好時壞。<strong>(2) MLCC 的 DC bias 降容</strong>：一顆標稱 1μF 的小尺寸 MLCC 在 2.8V 偏壓下實際容量可能只剩一半以下，低於 LDO 要求的最小容量，一樣不穩。<strong>驗證方法：示波器 AC 耦合看輸出，掃負載電流與溫度，看有沒有固定頻率的正弦狀振盪（振盪≠漣波，漣波跟切換頻率走，振盪頻率由迴路自己決定）。</strong></p>
+</div>
+
+<h2>5. 熱設計——LDO 的錢都花在哪</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>LDO 把「多餘的電壓 × 電流」全部變成熱，像把水壓差全耗在閥門的摩擦上。所以 LDO 熱不熱，一條國中數學就能算。而晶片會不會燒，取決於熱「排不排得出去」——θ<sub>JA</sub>（junction-to-ambient 熱阻）就是「排熱通道的塞車程度」，單位 °C/W：每瓦功耗會讓晶片內部比環境熱幾度。</p>
+</div>
+
+<div class="formula">
+  P<sub>D</sub> = (V<sub>IN</sub> − V<sub>OUT</sub>) × I<sub>OUT</sub> + V<sub>IN</sub> × I<sub>Q</sub>　（I<sub>Q</sub> 項通常可忽略）<br>
+  T<sub>J</sub> = T<sub>A</sub> + P<sub>D</sub> × θ<sub>JA</sub>　，需確保 T<sub>J</sub> &lt; T<sub>J(max)</sub>（常見 125°C）
+</div>
+<p><strong>白話翻譯：</strong>發熱＝壓差×電流；晶片溫度＝環境溫度＋發熱×塞車係數。兩條乘法加一條加法，面試白板必寫。</p>
+
+<p><strong>快算範例</strong>（面試等級）：5V 轉 2.8V、負載 300mA、小封裝 θ<sub>JA</sub> 約 250°C/W（SOT-23 量級）、板內環溫 50°C：</p>
+<ul>
+  <li>P<sub>D</sub> = (5 − 2.8) × 0.3 = 0.66W</li>
+  <li>T<sub>J</sub> = 50 + 0.66 × 250 = <strong>215°C → 直接燒毀等級，不行！</strong></li>
+  <li>對策：① 改從 3.3V 進（P<sub>D</sub> = 0.5×0.3 = 0.15W，T<sub>J</sub> ≈ 88°C，可行）② 換帶散熱 pad 的封裝（DFN with exposed pad，θ<sub>JA</sub> 可壓到約 50～70°C/W 量級）③ 前面加一級 buck 先降壓。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">關鍵結論</span>
+  <p>這個例子就是電源樹設計的核心哲學：<strong>「buck 負責效率、LDO 負責乾淨」的兩級式架構</strong>——buck 先把 5V/12V 高效率降到比目標高 0.3～0.5V 的中繼電壓，LDO 只吃小壓差做最後淨化，發熱小、PSRR headroom 又夠。注意 θ<sub>JA</sub> 不是晶片常數，它強烈依賴 PCB 銅箔面積與層數，datasheet 的值是標準測試板（JEDEC）條件，自己板子要保守估。</p>
+</div>
+
+<h2>6. LDO vs DC-DC（buck）——選擇法則</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Buck 像「變速腳踏車」：用開關+電感把能量高效率搬運，90% 以上效率，但鏈條喀喀響（切換漣波、EMI）。LDO 像「用手捏住水管」：絕對安靜，但捏掉的全變熱。<strong>選擇的本質是：這一路負載「怕吵」還是「怕熱/怕耗電」？</strong></p>
+</div>
+
+<table>
+  <tr><th>判斷維度</th><th>選 LDO</th><th>選 Buck</th></tr>
+  <tr><td>效率</td><td>≈ V<sub>OUT</sub>/V<sub>IN</sub>（5V→1.2V 只有 24%，災難）</td><td>85～95% 量級，與壓差比幾乎無關</td></tr>
+  <tr><td>壓差 × 電流（發熱）</td><td>壓差小（&lt;0.5V）或電流小（&lt;100~300mA 量級）</td><td>壓差大或電流大（&gt;0.5~1A）必選</td></tr>
+  <tr><td>雜訊敏感度</td><td>類比/RF/PLL/sensor 電源，怕切換漣波</td><td>數位邏輯、CPU core 不在乎漣波</td></tr>
+  <tr><td>EMI</td><td>零切換動作，無 EMI 議題</td><td>有 hot loop，天線/sensor 附近要小心</td></tr>
+  <tr><td>面積/成本</td><td>一顆 IC + 兩顆電容，超省</td><td>要電感（最佔面積）+ 輸入輸出電容</td></tr>
+  <tr><td>瞬態/雜訊規格</td><td>低雜訊 LDO 可到個位數 μVrms</td><td>漣波 mV 量級，靠後級濾波硬壓</td></tr>
+</table>
+
+<p>決策順序（面試可直接背）：</p>
+<ol>
+  <li>先算 <strong>P<sub>D</sub> = ΔV × I</strong>：超過約 0.5W（小封裝）就要認真考慮 buck 或兩級式。</li>
+  <li>再看負載屬性：<strong>類比、怕吵 → LDO（或 buck+LDO 兩級）</strong>；純數位、大電流 → buck。</li>
+  <li>最後看系統限制：待機電池壽命看 I<sub>Q</sub>；空間爆炸看電感放不放得下；靠近天線/sensor 看 EMI。</li>
+</ol>
+
+<h2>7. 數學推導（選讀）——迴路怎麼把 PSRR 做出來的</h2>
+<p><strong>先講結論，公式看不懂可以整節跳過：低頻 PSRR 好，是因為「迴路增益」大；高頻 PSRR 掉，是因為迴路增益隨頻率下降。</strong></p>
+<p>把輸入端的擾動 v<sub>in</sub> 視為經過 pass element 直通到輸出的干擾路徑，而迴授路徑努力把它壓掉。負迴授的通用結果：干擾被壓制的倍率約等於迴路增益 T(f)：</p>
+<div class="formula">
+  PSRR(f) ≈ 20 · log₁₀ |1 + T(f)| ≈ 20 · log₁₀ |T(f)|　（當 T ≫ 1）
+</div>
+<p>而迴路增益 T(f) = A<sub>EA</sub>(f) × G<sub>pass</sub> × β（誤差放大器增益 × pass 級增益 × 迴授分壓比）。誤差放大器是典型的單極點系統：</p>
+<div class="formula">
+  A<sub>EA</sub>(f) = A₀ / (1 + j·f/f<sub>p</sub>)　→　f ≫ f<sub>p</sub> 時每十倍頻率掉 20dB
+</div>
+<p><strong>白話翻譯：</strong>放大器低頻時力大無窮（A₀ 很大，例如 80dB），但超過某個轉折頻率 f<sub>p</sub> 後，頻率每高十倍、力氣少十倍。PSRR 曲線基本上就是迴路增益曲線的翻版——這解釋了圖 2 那條下坡。到了迴路增益 &lt; 1 的頻率（crossover 以上），穩壓器等於不存在，剩下的抑制全靠 C<sub>OUT</sub> 對上游阻抗的分壓，以及封裝寄生的「漏音」。</p>
+<p>順帶一提穩定性：迴路增益掉到 1（0dB）的那個頻率點，相位若已經延遲接近 180°，系統就振盪。輸出電容的 ESR 零點（f<sub>z</sub> = 1/(2π·ESR·C<sub>OUT</sub>)）能「拉回相位」，這就是第 4 節「老 LDO 需要 ESR」的數學根源。</p>
+
+<h2>8. 實務案例——回到你的戰場</h2>
+
+<h3>8.1 為什麼 camera sensor 的 AVDD（2.8V 類比電源）用 LDO，不直接用 buck？</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>Image sensor 的心臟是一排「量光子的極精密天平」——pixel 陣列的類比讀出鏈（source follower、PGA、ADC）。AVDD 是這排天平的基準桌面。桌面若在「秤重的瞬間」晃了 1mV，秤出來的重量就錯一點點。更糟的是 sensor 是<strong>一列一列（row by row）依序讀出</strong>的：如果電源雜訊的頻率和讀出節奏產生關聯，同一列的 pixel 會一起偏亮或偏暗——在畫面上形成<strong>整條橫向的亮暗條紋，就是 row noise / band noise</strong>。人眼對「有結構的條紋」遠比對隨機顆粒雜訊敏感，所以這種瑕疵在影像品質評測上是重罪。</p>
+</div>
+
+<p>把因果鏈講完整（面試就是要你講這條鏈）：</p>
+<ol>
+  <li>Buck 輸出必然帶有切換頻率漣波（mV 量級）＋負載暫態的低頻晃動。</li>
+  <li>AVDD 上的擾動經由 pixel 讀出鏈（對電源的 PSRR 有限，且類比增益越開越糟——<strong>高 ISO/低照度時最明顯</strong>）混進訊號。</li>
+  <li>擾動頻率 vs row 讀出頻率（row rate，數 kHz～數十 kHz 量級）混頻／取樣後，落在低頻的成分呈現為整列同步的偏移 → 橫條紋（row noise）；與 frame rate 相關的成分則呈現為畫面整體閃爍（flicker/banding）。</li>
+  <li>因此 AVDD 的規格要求是「μVrms 級乾淨」：<strong>用低雜訊 LDO（約 10~30μVrms 量級、NR 電容）從中繼電壓（例如 buck 出來的 3.1~3.3V）再生 2.8V</strong>，同時吃掉 buck 漣波（靠 PSRR）和自身雜訊壓低。</li>
+  <li>直接用 buck 給 AVDD 為什麼不行：漣波 mV 量級比 LDO 雜訊大 2~3 個數量級；就算加 LC 後濾波，低頻負載暫態和 EMI（電感就在 sensor 旁邊輻射）依然難解，而 AVDD 電流通常只有數十~兩百 mA 量級，LDO 的發熱完全可控——<strong>這正是 LDO 的甜蜜點</strong>。</li>
+</ol>
+
+<p>典型 camera 模組電源樹（以常見 sensor 為例，實際依料號 datasheet）：</p>
+<table>
+  <tr><th>電源</th><th>典型電壓</th><th>屬性</th><th>常見做法</th></tr>
+  <tr><td>AVDD（類比）</td><td>2.8V 附近</td><td>最怕吵，直接影響影像</td><td>低雜訊 LDO，NR 電容，佈局遠離切換節點</td></tr>
+  <tr><td>DVDD（數位核心）</td><td>1.05~1.2V 量級</td><td>電流較大、不怕吵</td><td>buck 直供（效率），或壓差夠小時用 LDO</td></tr>
+  <tr><td>DOVDD（數位 I/O）</td><td>1.8V</td><td>中等</td><td>LDO 或與系統 1.8V 共用，注意上電順序</td></tr>
+  <tr><td>VCM/OIS 驅動</td><td>2.8~3.3V 量級</td><td>大電流暫態、會「吵別人」</td><td>獨立供電路徑，見 8.2</td></tr>
+</table>
+<p>另一個必考點：<strong>上電順序（power sequencing）</strong>——sensor datasheet 會規定各 rail 的先後與時間差，順序錯可能 latch-up 或 I/O 倒灌，這也是 PMIC/LDO enable 腳與 sequencing 電路存在的原因。</p>
+
+<h3>8.2 VCM / OIS 電源的雜訊考量——它是加害者也是受害者</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>VCM（音圈馬達，對焦）和 OIS（光學防手震）是「用電磁鐵推鏡片」的執行器。它們有雙重身分：<strong>加害者</strong>——驅動電流大且動態（幾十到上百 mA 級的階躍或 PWM），會在共用電源和地上砸出暫態，若和 AVDD 共用來源，砸出來的坑透過有限的 PSRR 變成影像條紋；<strong>受害者</strong>——OIS 的位置控制迴路依賴 Hall sensor 的微小訊號，電源太吵會讓位置讀值抖動，防手震反而變成「製造手震」。</p>
+</div>
+<ul>
+  <li><strong>隔離原則：</strong>VCM/OIS 供電與 AVDD 分開走（不同 LDO 或不同 buck 輸出），地回流路徑也要規劃，避免大電流回流從 sensor 類比地底下穿過。</li>
+  <li><strong>驅動方式的取捨：</strong>PWM 驅動效率高但引入切換頻率紋波與 EMI（就在鏡頭旁邊）；linear 驅動安靜但熱。許多 driver IC 兩種模式都提供，影像品質敏感的場合會在錄影/預覽時選 linear 或提高 PWM 頻率避開敏感頻段。</li>
+  <li><strong>對焦掃描時的 banding：</strong>AF 掃描時 VCM 電流階躍若造成 AVDD 被拖動，畫面會出現與對焦動作同步的亮度跳動——debug 時把 VCM 拔掉/固定電流就能切割問題，是很好的面試 debug 故事。</li>
+</ul>
+
+<h3>8.3 NB 主機板上常見的 LDO 應用</h3>
+<p>NB 主機板的大電流 rail（V<sub>CORE</sub>、記憶體、5V/3.3V 系統電）全是 buck/VR 的天下，但板上仍散布大量 LDO，位置都很有邏輯——全部符合第 6 節的法則：</p>
+<table>
+  <tr><th>應用</th><th>為什麼用 LDO</th></tr>
+  <tr><td>RTC / always-on 電源（3.3V→3V 量級）</td><td>μA 級負載 + 電池待機，看重超低 I<sub>Q</sub>，效率無意義</td></tr>
+  <tr><td>時脈產生器 / PLL 電源</td><td>jitter 對電源雜訊極敏感，切換漣波會直接變成相位雜訊</td></tr>
+  <tr><td>音訊 codec 類比電源</td><td>漣波會變成聽得見的底噪或 whine，與 camera AVDD 同理</td></tr>
+  <tr><td>WLAN / WWAN 模組的 RF 前端電源</td><td>RF 靈敏度怕電源雜訊混入 LO/PA</td></tr>
+  <tr><td>panel / touch 的小電流輔助電源</td><td>電流小、壓差小，LDO 面積成本完勝一顆電感</td></tr>
+  <tr><td>各種 sequencing 小電源（EC 周邊、BIOS flash 3.3V→1.8V）</td><td>負載輕、要簡單可靠、要 enable 控制順序</td></tr>
+  <tr><td>camera module 供電（見 8.1）</td><td>NB 的 webcam 一樣有 AVDD/DVDD/DOVDD 三路，常由一顆多輸出 LDO/PMIC 供應</td></tr>
+</table>
+
+<div class="card takeaway">
+  <span class="label">關鍵結論</span>
+  <p>看懂一張 power tree 的訣竅：<strong>順著「效率 vs 乾淨」的分工看</strong>——主幹全是 buck（搬能量），末梢對雜訊敏感的葉子節點全是 LDO（做淨化）。面試時能主動講出「我們板上這幾路為什麼是 LDO」，比背十個公式更值錢。</p>
+</div>
+
+<h2>9. 動手練習與詳解</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（熱設計）：用 3.6V 的中繼電壓經 LDO 產生 2.8V AVDD，負載 250mA，封裝 θ_JA = 180°C/W，機構內環溫 60°C。T_J 是多少？可以接受嗎？如果改從 5V 直接降呢？</summary>
+<p><strong>解：</strong></p>
+<ul>
+  <li>3.6V 進：P<sub>D</sub> = (3.6−2.8) × 0.25 = 0.2W；T<sub>J</sub> = 60 + 0.2×180 = <strong>96°C</strong>。低於 125°C，可接受，但已無太多餘裕（量產要考慮環溫上修與負載峰值，通常希望 T<sub>J</sub> 留 20~30°C margin）。</li>
+  <li>5V 進：P<sub>D</sub> = (5−2.8) × 0.25 = 0.55W；T<sub>J</sub> = 60 + 0.55×180 = <strong>159°C → 超過絕對上限，不行</strong>。</li>
+  <li>結論：這就是「buck 先降到 3.3~3.6V、LDO 收尾」兩級式架構的數字證明。</li>
+</ul>
+</details>
+
+<details>
+<summary>練習 2（PSRR 換算）：buck 輸出在 2MHz 有 20mV 峰對峰漣波，後級 LDO 在 2MHz 的 PSRR 是 25dB。到達 sensor AVDD 的殘餘漣波多大？如果 sensor 希望 AVDD 高頻擾動低於 0.5mVpp，夠嗎？怎麼補救？</summary>
+<p><strong>解：</strong>25dB → 倍率 = 10^(25/20) ≈ 17.8 倍。殘餘漣波 ≈ 20mV / 17.8 ≈ <strong>1.1mVpp → 超標，不夠</strong>。補救方向（按性價比）：
+① 在 buck 到 LDO 之間加一級 ferrite bead / LC 濾波，先把 2MHz 漣波砍 10~20dB；
+② 選高頻 PSRR 更好的 LDO（有些料號特別強化 1~10MHz PSRR）；
+③ 提高 LDO headroom（PSRR 隨 headroom 改善）；
+④ 佈局：縮小 buck hot loop、AVDD 電容貼緊 sensor 腳。
+重點觀念：<strong>高頻抑制不能只指望 LDO，被動濾波＋佈局是隊友。</strong></p>
+</details>
+
+<details>
+<summary>練習 3（dropout 與 headroom）：某 PMOS LDO 規格：R_DS(on) 全開時使 V_DO = 120mV @ 200mA。中繼電壓是 3.0V±3%，輸出 2.8V，負載 200mA。這樣設計安全嗎？</summary>
+<p><strong>解：</strong>V<sub>IN</sub> 最低 = 3.0 × 0.97 = 2.91V。需要的最小輸入 = 2.8 + 0.12 = 2.92V。<strong>2.91V &lt; 2.92V → 最差情況會掉出穩壓區，不安全！</strong>而且就算勉強及格，headroom 只剩約 0.1V，PSRR 會爛到幾乎沒有淨化效果（別忘了 buck 漣波還會讓瞬時 V<sub>IN</sub> 更低）。正確做法：中繼電壓抬到 3.2~3.3V，犧牲一點效率換 PSRR 與裕度。<strong>教訓：算 headroom 要用 V<sub>IN</sub> 的最低值（含容差與漣波谷底），不是標稱值。</strong></p>
+</details>
+
+<details>
+<summary>練習 4（穩定性 debug）：量產線回報某批板子 1.8V LDO 輸出用示波器看到約 80kHz 的連續正弦狀擺動，幅度 150mVpp，換一批電容就消失。最可能原因？怎麼系統性驗證？</summary>
+<p><strong>解：</strong>最可能是<strong>迴路振盪</strong>，且線索都指向輸出電容：
+① 80kHz 不是任何切換頻率（LDO 沒有切換動作），是迴路自己的振盪頻率；
+② 換電容批次就消失 → C<sub>OUT</sub> 的容量或 ESR 落在不穩定區。可能劇本：替代料 MLCC 的 DC bias 降容後低於最小需求，或（老 LDO）新電容 ESR 太低失去零點補償。
+驗證步驟：(1) 查 LDO datasheet 的穩定範圍（最小 C、ESR 區間）；(2) 量替代料在實際偏壓下的有效容量（LCR meter 加 DC bias）；(3) 掃負載電流與溫度確認振盪邊界；(4) 對策——選 DC bias 降容後仍達標的容值/尺寸（例如 0603 換 0805、或標稱值加倍），或依 datasheet 串一顆小電阻補 ESR。</p>
+</details>
+
+<details>
+<summary>練習 5（架構題）：一路 1.1V/3A 的 SoC core power 和一路 2.8V/150mA 的 sensor AVDD，輸入都是 3.8V 電池。各用 LDO 還是 buck？用一句數字說服人。</summary>
+<p><strong>解：</strong>
+Core 1.1V/3A 用 LDO 的話：P<sub>D</sub> = (3.8−1.1)×3 = <strong>8.1W</strong>（效率僅 29%）——根本是暖爐，必用 buck（效率約 90%，損耗約 0.37W）。
+AVDD 2.8V/150mA 用 LDO：P<sub>D</sub> = (3.8−2.8)×0.15 = 0.15W，完全可控，且拿到 μVrms 級乾淨輸出；若更講究，先 buck 到 3.2V 再 LDO，LDO 只耗 0.06W。
+<strong>一句話：功耗差 8.1W vs 0.15W，兩個數字自己會說話——大電流大壓差歸 buck，小電流怕吵歸 LDO。</strong></p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>先試著用英文口頭回答，再展開參考答案。</p>
+
+<details>
+<summary>Q1: "Why do we power the image sensor's analog rail with an LDO instead of using the buck converter output directly?"</summary>
+<p><strong>參考答案骨架：</strong>The analog rail supplies the pixel readout chain — source followers, PGA, and ADC — which has limited supply rejection, so any ripple on AVDD couples into the signal path. A buck output carries millivolt-level switching ripple plus low-frequency load transients. Because the sensor reads out row by row, supply disturbance gets sampled at the row rate and shows up as horizontal band noise — row noise — which is far more visible to the human eye than random noise, especially at high analog gain in low light. A low-noise LDO gives microvolt-rms-level output noise and rejects the upstream buck ripple through its PSRR. And since AVDD only draws tens to a couple hundred milliamps with a small voltage drop, the LDO's efficiency penalty is negligible — it's exactly the LDO sweet spot.</p>
+<p><strong>加分點：</strong>主動補一句 PSRR 的頻率相依性——"One caveat: LDO PSRR degrades at the buck's switching frequency, so I'd still add a ferrite-bead or LC filter between the buck and the LDO, keep enough headroom — say 300 to 500 millivolts — and keep the buck's hot loop away from the sensor."</p>
+</details>
+
+<details>
+<summary>Q2: "How do you decide between an LDO and a switching regulator for a given rail? Walk me through your thought process."</summary>
+<p><strong>參考答案骨架：</strong>I start with power dissipation: for a linear regulator it's simply the voltage drop times the load current. If that exceeds roughly half a watt in a small package — I sanity-check with T_J equals ambient plus P_D times theta-JA against the junction limit — a switcher or a two-stage architecture is mandatory. Next I look at the load's noise sensitivity: analog, RF, PLL, or sensor rails favor an LDO for its microvolt-level noise and no switching artifacts; purely digital rails don't care, so they take the buck for efficiency. Then system constraints: battery standby life pushes toward ultra-low quiescent current, board area may not fit an inductor, and EMI near antennas or camera modules argues against a switcher. Very often the answer is both: a buck brings the voltage down efficiently to a few hundred millivolts above target, and an LDO does the final clean-up.</p>
+<p><strong>考點：</strong>測你有沒有「先算功耗、再看負載屬性、最後看系統限制」的結構化思路，以及會不會主動提出兩級式架構。能配上具體數字（0.5W、125°C、300~500mV headroom）就是 senior 等級答案。</p>
+</details>
+
+<h2>11. Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：LDO 四大內部組件與各自角色？輸出電壓公式？</p>
+  <p class="a">A1：pass element（閥門，調導通量）、error amplifier（比較並修正）、bandgap reference（約 1.2V 標準）、feedback 分壓（回報輸出）。V_OUT = V_REF × (1 + R1/R2)，本質是負迴授系統。</p>
+  <p class="q">Q2：dropout voltage 的定義？PMOS LDO 的 V_DO 由什麼決定？</p>
+  <p class="a">A2：維持穩壓所需的最小 V_IN − V_OUT；再低就掉出穩壓區。PMOS 架構全開時像電阻：V_DO ≈ I_OUT × R_DS(on)，與負載電流成正比，故 dropout 規格必附測試電流。</p>
+  <p class="q">Q3：為什麼 LDO 的 PSRR 在高頻會變差？對系統設計的含意？</p>
+  <p class="a">A3：PSRR 主要靠迴路增益，而誤差放大器增益隨頻率以約 −20dB/decade 下降；高頻時迴路跟不上，只剩 C_OUT 與寄生路徑。含意：buck 切換頻率（數百 kHz~數 MHz）落在 LDO 弱區，需靠前級 LC/bead 濾波、足夠 headroom 與佈局協同。</p>
+  <p class="q">Q4：LDO 熱設計兩條公式？快速判斷可行性的門檻感？</p>
+  <p class="a">A4：P_D = (V_IN − V_OUT) × I_OUT；T_J = T_A + P_D × θ_JA &lt; T_J(max)（常見 125°C）。小封裝（θ_JA 約 200°C/W 量級）超過約 0.3~0.5W 就要警戒：換散熱 pad 封裝、降 V_IN 或改兩級式。</p>
+  <p class="q">Q5：camera AVDD 為什麼用低雜訊 LDO？電源雜訊在影像上呈現什麼？</p>
+  <p class="a">A5：pixel 讀出鏈對電源抑制有限，AVDD 擾動被 row-by-row 讀出取樣後呈現為橫向條紋（row noise/banding），高 ISO 更明顯，人眼對結構性條紋極敏感。低雜訊 LDO（約 10~30μVrms 量級＋NR 電容）同時壓自產雜訊並以 PSRR 擋 buck 漣波；AVDD 電流小、壓差小，正是 LDO 甜蜜點。</p>
+</div>
+
+<h2>12. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>TI Application Report《Understanding PSRR of LDOs》與《LDO Basics》系列（SLYY151 等）</strong>——把 PSRR vs 頻率/headroom/負載的關係用實測曲線講透，圖 2 的完整版都在裡面。</li>
+  <li><strong>ADI《LDO Regulator Stability Using Ceramic Output Capacitors》</strong>——ESR 零點與 MLCC 穩定性的正式版，第 4 節的數學後盾。</li>
+  <li><strong>各低雜訊 LDO datasheet 的 Typical Characteristics 頁</strong>（如 TI TPS7A20/TPS7A47、ADI LT3045 這一級的料號）——練習讀 PSRR 曲線、noise spectral density、dropout vs I_OUT 圖，面試前至少精讀一份並能口述其 trade-off。</li>
+  <li><strong>你手上任一顆 image sensor 的 datasheet 電源章節</strong>——對照 AVDD/DVDD/DOVDD 的電壓容差、漣波要求與 power-up sequence，把本課內容落到真料號上。</li>
+  <li><strong>複習連結：</strong>本系列 PI 相關課程（PDN 阻抗、去耦電容）＋本專題＝完整的「電源鏈」故事：buck 管搬運、LDO 管淨化、PDN 管最後一哩交付。</li>
+</ul>
+
+<footer>
+  <span>專題先修 6｜LDO 線性穩壓器</span>
+  <span class="progress-note">Camera HW EE 面試準備系列</span>
+</footer>
+
+</div>
+</body>
+</html>

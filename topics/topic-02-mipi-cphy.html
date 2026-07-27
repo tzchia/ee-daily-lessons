@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 2｜MIPI C-PHY——三線編碼與 D-PHY 全面對決</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 2｜MIPI C-PHY——三線編碼與 D-PHY 全面對決</h1>
+  <div class="meta">預估學習時間：120 分鐘｜難度：★★★☆☆（觀念新但不難，重點在「換腦袋」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這一課，你要能夠：</p>
+  <ol>
+    <li>說出 C-PHY 為什麼存在——它解決了 D-PHY 的什麼瓶頸（pin 數效率、頻寬密度）</li>
+    <li>解釋 trio（三線一組）的 6 種線態，以及「用狀態變化傳資訊」這個核心思想</li>
+    <li>白話推導出「每個 symbol 約 2.28 bits」的由來（log₂5 ≈ 2.32 與 16/7 ≈ 2.286 兩個層次）</li>
+    <li>解釋 C-PHY 為什麼不需要獨立 clock lane（embedded clock 的原理）</li>
+    <li>完整比較 D-PHY vs C-PHY：速率、pin 效率、layout 難度、EMI、生態系</li>
+    <li>回答面試經典題：「你的 camera 案子，什麼情況選 D-PHY、什麼情況選 C-PHY？」</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼要學 C-PHY？</h2>
+<p>你做鏡頭模組 5 年，MIPI D-PHY 一定摸到滾瓜爛熟：一對 clock lane、幾對 data lane、HS/LP 模式切換、量眼圖、拉等長。但這幾年手機與高階相機的旗艦 sensor（尤其 Sony 的高畫素、高幀率型號）越來越多<strong>只有 C-PHY 才餵得動</strong>，或是同時支援兩者、由系統端選擇。Apple、Google 的 Camera HW 面試，C-PHY vs D-PHY 選型已經是常客題——因為這正是他們天天在做的 trade-off。</p>
+<p>C-PHY 的難點不在數學，在於它<strong>徹底顛覆你對「訊號傳輸」的直覺</strong>：它不是差動對、沒有 clock lane、一個 symbol 不是 1 bit、電壓有三個 level。今天我們把這些「怪」一個一個拆開，你會發現每個怪都有漂亮的工程理由。</p>
+
+<h2>1. 觀念講解（一）：為什麼需要 C-PHY？</h2>
+
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>想像 D-PHY 是一間貨運公司：每台卡車（data lane）用 2 條車道（差動對 2 條線），而且整個車隊還要額外配一台「打拍子的指揮車」（clock lane，又占 2 條線）。你想加大運量，只能一直加卡車，車道（pin 腳、走線）很快就不夠用。</p>
+  <p>C-PHY 是新式貨運：每台卡車用 3 條車道（trio），但<strong>每趟載的貨多了一倍以上</strong>，而且司機看前車的「動作變化」就知道節拍，<strong>不需要指揮車</strong>。同樣的車道總數，運量硬是多出一大截——這就是「pin 效率」與「頻寬密度」。</p>
+</div>
+
+<h3>1.1 D-PHY 的兩個天花板</h3>
+<p>D-PHY 架構：1 條 clock lane（差動 2 線）+ N 條 data lane（每條差動 2 線）。典型 4-lane 配置共 <strong>10 條線</strong>。它有兩個結構性瓶頸：</p>
+<ul>
+  <li><strong>Pin / 線數效率低</strong>：clock lane 占了 2 條線卻不載資料，是純開銷。sensor 端與 SoC 端的封裝 pin、連接器 pin、flex 上的走線，每一條都是錢與空間——尤其手機鏡頭模組的 flex 寬度被機構掐得死死的。</li>
+  <li><strong>單 lane 速率再往上推，通道損耗吃不消</strong>：D-PHY 是 NRZ（一個 UI 傳 1 bit），要加倍頻寬就得加倍 symbol rate，高頻損耗、jitter 預算立刻變得非常難做。</li>
+</ul>
+
+<h3>1.2 C-PHY 的答案：一次改兩件事</h3>
+<p>C-PHY（MIPI 聯盟約 2014 年發布 v1.0）用兩招同時打這兩個瓶頸：</p>
+<ol>
+  <li><strong>三線一組（trio）＋ 多階編碼</strong>：3 條線一組，每個 symbol 帶約 2.28 bits（下面細講），等於在<strong>不提高 symbol rate 的前提下</strong>，把每條線的「資料密度」拉高。</li>
+  <li><strong>把時脈藏進資料裡（embedded clock）</strong>：規定每個 symbol 邊界「狀態必變」，接收端看變化就能恢復時脈，clock lane 直接省掉。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">必記結論</span>
+  <p>同樣約 10 條線的預算：D-PHY 4-lane（10 線）在 v2.5 世代每 lane 約 4.5 Gbps，合計約 18 Gbps（量級）；C-PHY 3 trio（9 線）在 v2.0 世代每 trio 約 6 Gsps × 2.28 ≈ 13.7 Gbps，合計約 41 Gbps（量級）。<strong>每條實體線的頻寬密度，C-PHY 大約是 D-PHY 的 2 倍上下（依世代與條件浮動，記「約 2 倍」這個量級就好）。</strong></p>
+</div>
+
+<h2>2. 觀念講解（二）：trio、6 種線態、用「狀態變化」傳資訊</h2>
+
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>先丟掉「一條線代表一個 bit」的舊腦袋。C-PHY 比較像<strong>三個人玩「大風吹」</strong>：三張椅子分別叫「高、中、低」（三個電壓 level），三個人（三條線 A、B、C）每個人各坐一張，不能坐同一張。三個人怎麼坐，總共有 3×2×1 = 6 種坐法——這 6 種坐法就是 6 種「線態（wire state）」。</p>
+  <p>更關鍵的是：<strong>資訊不在「現在坐哪」，而在「怎麼換位子」</strong>。每次哨聲（symbol 邊界）大家「必須」換一種坐法，而從任何一種坐法出發，可以換到剩下的 5 種坐法之一——每次換位子就傳遞了「5 選 1」的資訊。</p>
+</div>
+
+<h3>2.1 三個電壓 level 與 6 種線態</h3>
+<p>trio 的三條線（習慣稱 A、B、C），每條線在任一時刻被驅動到三個電壓之一：<strong>高（H）、中（M）、低（L）</strong>——訊號擺幅是低壓等級（數百 mV 量級，見第 5 節）。有效線態規定<strong>三條線必須各占一個不同的 level</strong>，所以組合數是 3! = 6 種，習慣命名為：</p>
+
+<div class="formula">
+  6 種線態：+x, −x, +y, −y, +z, −z　（x/y/z 表示「哪條線在中間」的三種旋轉，± 表示極性）
+</div>
+<p><strong>白話翻譯：</strong>就是「三個人坐三張椅子的 6 種坐法」，各取一個代號而已。x、y、z 像三種「隊形」，正負號表示隊形整個「上下顛倒」。</p>
+
+<p>接收端怎麼讀？C-PHY 接收器不是讀單線對地電壓，而是內建<strong>三個差動比較器</strong>，分別看 A−B、B−C、C−A 三組線間差。因為三條線 level 互不相同，三個比較器的輸出永遠是明確的正或負（不會遇到 0），三個比較器的正負組合就唯一決定目前是 6 態中的哪一態。這也是 C-PHY 仍保有「類差動」抗雜訊能力的原因——它看的是<strong>線與線之間的差</strong>，共模雜訊會被抵消一大部分。</p>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">C-PHY trio：6 種線態（左）與「每個 symbol 必變態」的波形（右）</text>
+
+  <!-- LEFT: state hexagon -->
+  <!-- hexagon nodes -->
+  <circle cx="160" cy="90"  r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="160" y="96" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">+x</text>
+  <circle cx="255" cy="145" r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="255" y="151" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">−z</text>
+  <circle cx="255" cy="255" r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="255" y="261" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">+y</text>
+  <circle cx="160" cy="310" r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="160" y="316" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">−x</text>
+  <circle cx="65"  cy="255" r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="65" y="261" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">+z</text>
+  <circle cx="65"  cy="145" r="26" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="65" y="151" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">−y</text>
+  <!-- transitions from +x to all other 5 (red arrows) -->
+  <line x1="180" y1="106" x2="238" y2="130" stroke="#dc2626" stroke-width="2.2"/>
+  <polygon points="238,130 224,128 230,117" fill="#dc2626"/>
+  <line x1="175" y1="112" x2="243" y2="232" stroke="#dc2626" stroke-width="2.2"/>
+  <polygon points="243,232 232,223 243,217" fill="#dc2626"/>
+  <line x1="160" y1="116" x2="160" y2="284" stroke="#dc2626" stroke-width="2.2"/>
+  <polygon points="160,284 154,271 166,271" fill="#dc2626"/>
+  <line x1="145" y1="112" x2="77" y2="232" stroke="#dc2626" stroke-width="2.2"/>
+  <polygon points="77,232 77,217 88,223" fill="#dc2626"/>
+  <line x1="140" y1="106" x2="82" y2="130" stroke="#dc2626" stroke-width="2.2"/>
+  <polygon points="82,130 90,117 96,128" fill="#dc2626"/>
+  <text x="160" y="355" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="bold">從 +x 出發：可跳到其餘 5 態之一</text>
+  <text x="160" y="375" text-anchor="middle" font-size="13" fill="#374151">每次跳躍 = 5 選 1 = log₂5 ≈ 2.32 bits</text>
+  <text x="160" y="395" text-anchor="middle" font-size="12" fill="#6b7280">（禁止原地不動 → 保證每個 symbol 都有變化）</text>
+
+  <!-- RIGHT: 3-wire waveform -->
+  <text x="540" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#155e75">trio 三線波形（每條線 3 個 level）</text>
+  <!-- level guides -->
+  <line x1="360" y1="100" x2="720" y2="100" stroke="#e5e7eb"/>
+  <line x1="360" y1="150" x2="720" y2="150" stroke="#e5e7eb"/>
+  <line x1="360" y1="200" x2="720" y2="200" stroke="#e5e7eb"/>
+  <text x="352" y="105" text-anchor="end" font-size="12" fill="#6b7280">H</text>
+  <text x="352" y="155" text-anchor="end" font-size="12" fill="#6b7280">M</text>
+  <text x="352" y="205" text-anchor="end" font-size="12" fill="#6b7280">L</text>
+  <!-- UI boundaries -->
+  <line x1="432" y1="90" x2="432" y2="300" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="504" y1="90" x2="504" y2="300" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="576" y1="90" x2="576" y2="300" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="648" y1="90" x2="648" y2="300" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <!-- wire A (teal): H H M L H -->
+  <polyline points="360,100 428,100 436,100 500,100 508,150 572,150 580,200 644,200 652,100 716,100"
+    fill="none" stroke="#0e7490" stroke-width="3"/>
+  <!-- wire B (orange): M L H M L -->
+  <polyline points="360,150 428,150 436,200 500,200 508,100 572,100 580,150 644,150 652,200 716,200"
+    fill="none" stroke="#d97706" stroke-width="3"/>
+  <!-- wire C (red): L M L H M -->
+  <polyline points="360,200 428,200 436,150 500,150 508,200 572,200 580,100 644,100 652,150 716,150"
+    fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="380" y="235" font-size="12" fill="#0e7490">A</text>
+  <text x="380" y="252" font-size="12" fill="#d97706">B</text>
+  <text x="380" y="269" font-size="12" fill="#dc2626">C</text>
+  <!-- state labels under each UI -->
+  <text x="396" y="292" text-anchor="middle" font-size="12" fill="#374151">+x</text>
+  <text x="468" y="292" text-anchor="middle" font-size="12" fill="#374151">−z</text>
+  <text x="540" y="292" text-anchor="middle" font-size="12" fill="#374151">−y</text>
+  <text x="612" y="292" text-anchor="middle" font-size="12" fill="#374151">+z</text>
+  <text x="684" y="292" text-anchor="middle" font-size="12" fill="#374151">+x</text>
+  <text x="540" y="320" text-anchor="middle" font-size="13" fill="#374151" font-weight="bold">每個 UI 邊界：三線坐法「必定」重新洗牌</text>
+  <text x="540" y="340" text-anchor="middle" font-size="12" fill="#6b7280">任一時刻三條線各占一個 level，永不重疊</text>
+  <text x="540" y="368" text-anchor="middle" font-size="12" fill="#15803d" font-weight="bold">接收端：比較 A−B、B−C、C−A 三組差 → 判定目前線態</text>
+  <text x="540" y="388" text-anchor="middle" font-size="12" fill="#15803d">每個邊界必有變化 → 直接當時脈用（embedded clock）</text>
+</svg>
+<figcaption>圖 1：左——6 種線態與「一步可跳 5 處」的狀態轉移；右——trio 三線的三階波形，狀態代號僅為示意配置。資訊藏在「怎麼跳」，時脈藏在「每步必跳」。</figcaption>
+</figure>
+
+<h3>2.2 資訊在「轉移」不在「狀態」——2.28 bits 的白話由來</h3>
+
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>問：一個「5 選 1」的動作，值多少資訊？想想猜數字：如果答案是 32 選 1，你需要問 5 個是非題（2⁵ = 32），所以值 5 bits。同理，5 選 1 值 log₂5 ≈ <strong>2.32 bits</strong>——不是整數沒關係，資訊量本來就可以是小數，就像「平均每趟載 2.32 箱貨」一樣自然。</p>
+  <p>但電路只能處理整數個 bits，怎麼辦？<strong>批發！</strong>不要一個 symbol 一個 symbol 換，而是「7 個 symbol 一組」批發換「16 bits」：7 次 5 選 1 共有 5⁷ = 78,125 種組合，塞得下 2¹⁶ = 65,536 種 16-bit 資料，還有剩。所以實際效率是 16 ÷ 7 ≈ <strong>2.286 bits/symbol</strong>——這就是規格書上「約 2.28 bits/symbol」的由來。</p>
+</div>
+
+<p>整理成一句話：<strong>C-PHY 的 1 個 symbol = 1 次「狀態跳躍」，每次跳躍有 5 種選擇，理論值 log₂5 ≈ 2.32 bits；實作上用「16 bits ↔ 7 symbols」的 mapper 打包，實際 2.286 bits/symbol。</strong></p>
+<p>實務上，這個「跳躍」在編碼器內部被拆成三個自由度來描述（面試講得出來會加分）：</p>
+<table>
+  <tr><th>自由度</th><th>意義（白話）</th><th>選擇數</th></tr>
+  <tr><td>Rotation（旋轉）</td><td>隊形往左轉、往右轉、還是不轉（x→y→z 的輪替方向）</td><td>3</td></tr>
+  <tr><td>Polarity（極性）</td><td>隊形要不要整個上下顛倒（+ ↔ −）</td><td>2</td></tr>
+  <tr><td>Flip 限制</td><td>三個自由度組合本可到 6 種，但「原地不動」被禁止，剩 5 種合法跳法</td><td>合法共 5</td></tr>
+</table>
+<p><strong>白話翻譯：</strong>細節記不住沒關係，只要記住「每一步有 5 種合法跳法、原地不動違規」就掌握了核心。</p>
+
+<h2>3. 觀念講解（三）：沒有 clock lane，時脈藏在哪？</h2>
+
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>D-PHY 像樂隊有專職鼓手（clock lane），大家跟著鼓點走。C-PHY 把鼓手開除了，改成規定：<strong>每個小節，台上每個人「一定」要換一個動作</strong>。台下的你只要看到「動作變了」，就知道「新的一拍開始了」——動作本身是資料，動作的「變」就是拍子。一份訊號，兩份用途。</p>
+</div>
+
+<h3>3.1 原理：保證轉移 → 可恢復時脈</h3>
+<p>因為編碼規則<strong>禁止連續兩個 symbol 停在同一線態</strong>，所以三個差動比較器（A−B、B−C、C−A）的輸出中，<strong>每個 UI 邊界至少有一個會翻轉</strong>。接收端把三路比較器輸出做「邊緣偵測 + OR」就能產生 symbol clock，再用它去取樣資料——這就是 embedded clock（內嵌時脈）。</p>
+<p>對比記憶：8b/10b（PCIe Gen1/2、SATA）與 64b/66b（乙太網）也是 embedded clock，但它們靠「編碼保證 0/1 夠常交替」；C-PHY 更狠——<strong>每個 symbol 100% 保證有變化</strong>，時脈資訊密度更高。</p>
+
+<h3>3.2 好處與代價</h3>
+<table>
+  <tr><th></th><th>內容</th></tr>
+  <tr><td><strong>好處 1</strong></td><td>省 2 條線（clock lane 差動對）——pin、flex 寬度、連接器全都省</td></tr>
+  <tr><td><strong>好處 2</strong></td><td>沒有 clock lane 與 data lane 之間的 lane-to-lane skew 問題（D-PHY 要做 clock 對 data 的等長）；也少一條持續切換、頻譜集中的 EMI 大戶（D-PHY 的 clock lane 是連續方波，能量集中在單一頻率及其諧波，往往是 EMI 掃描時最刺眼的尖峰）</td></tr>
+  <tr><td><strong>代價 1</strong></td><td>接收端 CDR（時脈資料回復）電路較複雜；且三路比較器輸出的翻轉時間點不完全對齊（intra-pair… 正確說是 intra-trio skew），會直接吃掉取樣視窗——所以 C-PHY 對 <strong>trio 內三線等長</strong>極度敏感（第 7 節細講）</td></tr>
+  <tr><td><strong>代價 2</strong></td><td>三階訊號的眼圖是「多層眼」，量測與 debug 比 NRZ 差動眼圖難讀，儀器（示波器軟體選配）與經驗門檻較高</td></tr>
+</table>
+
+<h2>4. 觀念講解（四）：電氣特性——三線間弱終端與訊號擺幅</h2>
+
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>三個 level 的訊號就像把原本「開/關」兩段式的水龍頭改成「大/中/小」三段：好處是一次動作能表達更多資訊；壞處是「中」這一段的判斷餘裕比較小——原本只要分「有水/沒水」，現在要分辨「中」跟「大」、「中」跟「小」的差別，<strong>每一格的雜訊餘裕變窄了</strong>，所以對雜訊、對三線不對稱造成的失真更敏感。</p>
+</div>
+
+<h3>4.1 驅動與終端架構</h3>
+<ul>
+  <li><strong>低壓擺幅</strong>：C-PHY HS 模式的線上訊號擺幅是數百 mV 量級（與 D-PHY HS 的低擺幅同一個世界，量級相近），共模落在低電位附近。低擺幅 = 低功耗 + 低 EMI，但也代表雜訊餘裕小，layout 要乾淨。</li>
+  <li><strong>三個 level 的產生</strong>：發送端以推挽（push-pull）方式把每條線驅動到 H 或 L，「中間 level」的行為則由驅動端與終端網路共同決定——你可以粗略想成 H 與 L 的分壓中點（記這個直覺就夠用）。</li>
+  <li><strong>終端在接收端、且是「線間」終端</strong>：接收端的終端網路把三條線經電阻接到共同節點（星形/Y 形概念），吸收的是<strong>線與線之間</strong>的行進波。單線對地看，終端強度比傳統 50 Ω to GND「弱」——所以常聽到「三線間弱終端」的說法。含義是：<strong>阻抗匹配的對象是線間差模路徑，單端對地的反射抑制相對較弱</strong>，因此對地平面完整性、參考路徑連續性的要求一點都不能鬆。</li>
+  <li><strong>LP 模式照舊</strong>：與 D-PHY 一樣，C-PHY 也有低速 LP 模式（大擺幅、單端）用於控制交握；HS/LP 切換的概念你在 D-PHY 學過的可以直接沿用。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「C-PHY 是三線差動」——不精確。</strong>它不是傳統意義的差動對（兩線互補），而是「三線互異、成對比較」的多線訊號（官方用語：3-phase 編碼）。後果很實際：(1) 阻抗規格要看「線間差模阻抗」與單線阻抗兩種定義，疊構模擬時不能直接套差動對的公式；(2) EDA 工具裡不能把三條線當成 1.5 個差動對亂綁，要用三線耦合模型跑模擬。</p>
+</div>
+
+<h2>5. 觀念講解（五）：D-PHY vs C-PHY 全面對決</h2>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">同樣一條 camera 鏈路：D-PHY 4-lane（10 線） vs C-PHY 3-trio（9 線）</text>
+
+  <!-- D-PHY side -->
+  <rect x="30" y="50" width="340" height="330" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="200" y="78" text-anchor="middle" font-size="15" font-weight="bold" fill="#155e75">D-PHY（NRZ 差動 + 獨立時脈）</text>
+  <rect x="50" y="95" width="70" height="260" rx="8" fill="#e0f2f7" stroke="#0e7490"/>
+  <text x="85" y="230" text-anchor="middle" font-size="13" fill="#0f4c5c" transform="rotate(-90 85 230)">Sensor（TX）</text>
+  <rect x="280" y="95" width="70" height="260" rx="8" fill="#e0f2f7" stroke="#0e7490"/>
+  <text x="315" y="225" text-anchor="middle" font-size="13" fill="#0f4c5c" transform="rotate(-90 315 225)">SoC / ISP（RX）</text>
+  <!-- clock pair -->
+  <line x1="120" y1="115" x2="280" y2="115" stroke="#dc2626" stroke-width="2.5"/>
+  <line x1="120" y1="127" x2="280" y2="127" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="200" y="108" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">CLK lane（2 線，不載資料）</text>
+  <!-- data lanes -->
+  <g stroke="#0e7490" stroke-width="2.5">
+    <line x1="120" y1="160" x2="280" y2="160"/><line x1="120" y1="172" x2="280" y2="172"/>
+    <line x1="120" y1="205" x2="280" y2="205"/><line x1="120" y1="217" x2="280" y2="217"/>
+    <line x1="120" y1="250" x2="280" y2="250"/><line x1="120" y1="262" x2="280" y2="262"/>
+    <line x1="120" y1="295" x2="280" y2="295"/><line x1="120" y1="307" x2="280" y2="307"/>
+  </g>
+  <text x="200" y="153" text-anchor="middle" font-size="12" fill="#374151">Lane 0（2 線）</text>
+  <text x="200" y="198" text-anchor="middle" font-size="12" fill="#374151">Lane 1（2 線）</text>
+  <text x="200" y="243" text-anchor="middle" font-size="12" fill="#374151">Lane 2（2 線）</text>
+  <text x="200" y="288" text-anchor="middle" font-size="12" fill="#374151">Lane 3（2 線）</text>
+  <text x="200" y="340" text-anchor="middle" font-size="13" fill="#374151" font-weight="bold">共 10 線｜每 lane 1 bit/UI</text>
+  <text x="200" y="368" text-anchor="middle" font-size="13" fill="#b45309">合計約 18 Gbps 量級（v2.5、4.5 Gbps/lane）</text>
+
+  <!-- C-PHY side -->
+  <rect x="390" y="50" width="340" height="330" rx="12" fill="#f0fdf4" stroke="#15803d"/>
+  <text x="560" y="78" text-anchor="middle" font-size="15" font-weight="bold" fill="#15803d">C-PHY（3 線 trio + 內嵌時脈）</text>
+  <rect x="410" y="95" width="70" height="260" rx="8" fill="#dcfce7" stroke="#15803d"/>
+  <text x="445" y="230" text-anchor="middle" font-size="13" fill="#166534" transform="rotate(-90 445 230)">Sensor（TX）</text>
+  <rect x="640" y="95" width="70" height="260" rx="8" fill="#dcfce7" stroke="#15803d"/>
+  <text x="675" y="225" text-anchor="middle" font-size="13" fill="#166534" transform="rotate(-90 675 225)">SoC / ISP（RX）</text>
+  <!-- trios -->
+  <g stroke="#15803d" stroke-width="2.5">
+    <line x1="480" y1="120" x2="640" y2="120"/><line x1="480" y1="132" x2="640" y2="132"/><line x1="480" y1="144" x2="640" y2="144"/>
+    <line x1="480" y1="195" x2="640" y2="195"/><line x1="480" y1="207" x2="640" y2="207"/><line x1="480" y1="219" x2="640" y2="219"/>
+    <line x1="480" y1="270" x2="640" y2="270"/><line x1="480" y1="282" x2="640" y2="282"/><line x1="480" y1="294" x2="640" y2="294"/>
+  </g>
+  <text x="560" y="113" text-anchor="middle" font-size="12" fill="#374151">Trio 0（3 線，clock 內嵌）</text>
+  <text x="560" y="188" text-anchor="middle" font-size="12" fill="#374151">Trio 1（3 線）</text>
+  <text x="560" y="263" text-anchor="middle" font-size="12" fill="#374151">Trio 2（3 線）</text>
+  <text x="560" y="340" text-anchor="middle" font-size="13" fill="#374151" font-weight="bold">共 9 線｜每 trio 約 2.28 bits/symbol</text>
+  <text x="560" y="368" text-anchor="middle" font-size="13" fill="#15803d">合計約 41 Gbps 量級（v2.0、6 Gsps/trio）</text>
+
+  <!-- bottom verdict -->
+  <text x="380" y="405" text-anchor="middle" font-size="14" fill="#dc2626" font-weight="bold">線數 9 &lt; 10，頻寬卻約 2 倍 —— 這就是「頻寬密度 / pin 效率」的意義</text>
+</svg>
+<figcaption>圖 2：同量級的線數預算下，C-PHY 少一條線、頻寬卻約兩倍。速率數字依規格世代與實作條件浮動，記量級與結構差異即可。</figcaption>
+</figure>
+
+<h3>5.1 對決總表（面試前背這張）</h3>
+<table>
+  <tr><th>比較項</th><th>D-PHY</th><th>C-PHY</th></tr>
+  <tr><td>實體結構</td><td>差動對；1 clock lane + N data lane</td><td>3 線一組（trio），無 clock lane</td></tr>
+  <tr><td>編碼</td><td>NRZ，1 bit/UI</td><td>3-phase 狀態轉移編碼，約 2.28 bits/symbol</td></tr>
+  <tr><td>速率（量級，依版本）</td><td>每 lane 約 2.5～4.5+ Gbps（v1.2→v2.x；新版本更高）</td><td>每 trio 約 8～13.7+ Gbps（v1.x 約 3.5 Gsps → v2.0 約 6 Gsps）</td></tr>
+  <tr><td>Pin / 線效率</td><td>較低（clock lane 純開銷）</td><td>較高（每線頻寬密度約 2 倍）</td></tr>
+  <tr><td>時脈</td><td>獨立 clock lane（source-synchronous）</td><td>內嵌（每 symbol 必變態，RX 端 CDR 恢復）</td></tr>
+  <tr><td>Layout 難度</td><td>差動對內等長 + lane 間等長；規則成熟</td><td><strong>trio 內三線等長更嚴苛</strong>；三線耦合模型；規則較新、工具支援較少</td></tr>
+  <tr><td>EMI</td><td>clock lane 頻譜集中，常是輻射尖峰主角</td><td>無連續 clock、狀態轉移類似擾頻 → 頻譜較散；但三線和不恆為零，仍有共模成分要注意</td></tr>
+  <tr><td>眼圖 / 量測</td><td>NRZ 雙眼皮，好量好讀</td><td>三階多層眼 + 用「相鄰比較器差」看眼，需示波器選配軟體，門檻高</td></tr>
+  <tr><td>生態系</td><td>最廣：sensor、display、SoC 幾乎都支援；歷史悠久</td><td>集中在高階 camera sensor 與旗艦 SoC；display 端少見；持續擴大（趨勢）</td></tr>
+  <tr><td>功耗（每 bit）</td><td>基準</td><td>通常較優（同頻寬下 symbol rate 低、又省 clock lane 的持續功耗）——記「趨勢上較好」即可</td></tr>
+</table>
+
+<div class="card takeaway">
+  <span class="label">一句話總結</span>
+  <p><strong>C-PHY 用「編碼複雜度」換「實體線效率」</strong>：矽面積與設計難度放進晶片裡（一次性成本），換來每條線約 2 倍頻寬與更少 pin（每台裝置都省的成本）。當 sensor 解析度×幀率把 D-PHY 逼到牆角、或 flex 寬度就是塞不下更多線時，C-PHY 就是答案。</p>
+</div>
+
+<h2>6. 數學推導：把 2.28 bits 算乾淨</h2>
+<p><em>公式看不懂可以先跳過，懂第 2.2 節的白話結論就好。</em>這裡把三個層次的數字一次算清，面試被追問時你能寫在白板上。</p>
+
+<h3>6.1 每個 symbol 的理論資訊量</h3>
+<div class="formula">
+  每 symbol 資訊量 = log₂(可能的轉移數) = log₂(6 − 1) = log₂5 ≈ 2.3219 bits
+</div>
+<p><strong>白話翻譯：</strong>6 種狀態、禁止原地不動，所以每步 5 選 1；「5 選 1」換算成是非題約等於 2.32 個。</p>
+
+<h3>6.2 實作的 mapper：16 bits ↔ 7 symbols</h3>
+<p>要用整數電路實現，找一組 (n, m) 使 5<sup>n</sup> ≥ 2<sup>m</sup> 且 m/n 盡量接近 2.32：</p>
+<div class="formula">
+  5⁷ = 78,125 ≥ 2¹⁶ = 65,536　→　效率 = 16/7 ≈ 2.2857 bits/symbol（利用率 65,536/78,125 ≈ 84%）
+</div>
+<p><strong>白話翻譯：</strong>7 步跳躍的花樣（78,125 種）足夠編下所有 16-bit 資料（65,536 種），所以硬體用「16 bits 進、7 symbols 出」的查表式 mapper。多出來的組合有些拿去當特殊控制碼。</p>
+
+<h3>6.3 頻寬換算練習（量級）</h3>
+<div class="formula">
+  Trio 資料率 ≈ symbol rate × 2.28　；例：3.5 Gsps × 2.28 ≈ 8.0 Gbps/trio；6 Gsps × 2.28 ≈ 13.7 Gbps/trio
+</div>
+<div class="formula">
+  每線頻寬密度：C-PHY ≈ 13.7/3 ≈ 4.6 Gbps/線　vs　D-PHY(4-lane) ≈ 18/10 = 1.8 Gbps/線　→ 約 2.5 倍
+</div>
+<p><strong>白話翻譯：</strong>把總頻寬除以實體線數，就是「每條線的生產力」。不同世代互比會得到 2～2.5 倍不等，所以口頭講「約 2 倍以上」最安全。</p>
+
+<h3>6.4 為什麼不乾脆用更多 level、更多線？</h3>
+<p>資訊理論上 level 越多、線越多當然能塞更多 bits，但：(1) level 每加一階，每階的電壓餘裕變小，SNR 需求上升（跟 PAM4 取代 NRZ 遇到的問題同源）；(2) 線每加一條，等長匹配與耦合模型的複雜度指數上升。3 線 3 level 是 MIPI 聯盟權衡後的甜蜜點——這個「為什麼是 3」的思路，面試聊起來很加分。</p>
+
+<h2>7. 實務案例：NB 主機板與鏡頭模組上的 C-PHY</h2>
+
+<h3>7.1 三線等長：比差動對更嚴苛的一場仗</h3>
+<div class="card intuition">
+  <span class="label">白話比喻</span>
+  <p>差動對等長像「兩人三腳」：綁好兩個人的步伐就行。C-PHY 的 trio 是「三人四腳」：三個人步伐要同時對齊，任何一人快半步，整組節奏就亂。而且 C-PHY 的「拍子」就是從三線的變化裡讀出來的——三線不齊，接收端連拍子都會抓歪。</p>
+</div>
+<ul>
+  <li><strong>為什麼更嚴苛：</strong>D-PHY 的 intra-pair skew 只影響一對線的差動眼；C-PHY 的 intra-trio skew 同時扭曲三個比較器（A−B、B−C、C−A）的翻轉時刻，三路邊緣互相錯開會直接壓縮 symbol 取樣視窗，等於同時吃掉「資料」與「時脈」兩份預算。粗略量級感：symbol rate 到 Gsps 等級時，UI 只有幾百 ps，intra-trio skew 得控制在 UI 的一小部分——換算 FR-4 約 6.7 ps/mm，等長要求會落在<strong>零點幾 mm 到 1 mm 等級</strong>（實際數字看規格版本與速率，用 UI 比例去推，不要背絕對值）。</li>
+  <li><strong>蛇形線補償的三線版：</strong>三條線兩兩之間都要補，補償段還會改變三線間耦合的對稱性，蛇形線本身又引入阻抗微擾——比差動對的補償更容易「補了 A 壞了 B」。原則：<strong>從源頭避免不等長</strong>（連接器 pinout、BGA 逃線、via 安排先想好），蛇形線是最後手段。</li>
+  <li><strong>via 與換層：</strong>三條線務必同層同走、一起換層、via 對稱擺放；任何一條單獨換層都會製造 skew 與阻抗不對稱雙重災難。</li>
+</ul>
+
+<h3>7.2 Flex（軟板）上的挑戰——鏡頭模組工程師的主場</h3>
+<ul>
+  <li><strong>空間 vs 對稱的兩難：</strong>flex 上省下 1 條線（9 vs 10）本是 C-PHY 的賣點，但三線組要維持「線寬、線距、對地距離」三者對稱，比差動對多一個維度。夾在中間的那條線與兩側線的耦合環境天生不同，模擬時要用三線耦合模型確認差模阻抗平衡。</li>
+  <li><strong>動態彎折區：</strong>模組 flex 過彎折區時，三條線的曲率半徑不同 → 長度與阻抗都產生不對稱微擾。建議三線垂直於彎折軸通過、避免在彎折區換向；量產前要驗彎折老化後的 margin。</li>
+  <li><strong>參考層不完整：</strong>flex 常為了柔軟度做網格地（cross-hatch）。C-PHY 的線間終端對「單端對地」的反射抑制較弱（第 4 節），參考層不連續造成的共模轉換會更直接反映在多層眼上。網格密度與走線的相對位置要跟 SI 模擬一起定。</li>
+  <li><strong>連接器：</strong>board-to-board 連接器的 pin 分配要讓 trio 三線相鄰且長度路徑相近，並安插地 pin 隔離相鄰 trio——這是「免費的等長與隔離」，比事後在板上補救便宜得多。</li>
+</ul>
+
+<h3>7.3 生態系與採用現況（趨勢描述，非精確數字)</h3>
+<ul>
+  <li><strong>Sensor 端：</strong>Sony 是 C-PHY 最積極的推手之一，旗艦手機用的高畫素 IMX 系列多半支援 C-PHY（不少同時支援 D-PHY 雙模）；Samsung 高階 ISOCELL 亦跟進。大致趨勢：<strong>解析度 × 幀率越高（例如 50MP 以上高速讀出、8K 錄影、高倍率無裁切變焦），越傾向 C-PHY</strong>。</li>
+  <li><strong>SoC 端：</strong>旗艦手機 SoC（Qualcomm Snapdragon 高階、聯發科天璣高階等）的 CSI 介面普遍雙模支援 C/D-PHY，甚至同一組 pin 可設定成兩種模式（MIPI 有 combo PHY 的設計慣例）。</li>
+  <li><strong>NB / 相機模組現況：</strong>NB 的 webcam 頻寬需求低，D-PHY 2-lane 綽綽有餘，C-PHY 少見；但 NB 開始上高畫素相機與 Windows Studio Effects 類應用後，頻寬需求在往上走（趨勢）。Display 端則幾乎仍是 D-PHY 天下。</li>
+  <li><strong>下一步：</strong>MIPI 路線圖上 A-PHY（車用長距離）與 D-PHY/C-PHY 持續演進並存；C-PHY 新版本也引入更高階調變的選項以繼續拉高每 symbol 資訊量（記「持續演進」即可，數字不用背）。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「C-PHY 比較新，所以一定比較好，全面取代 D-PHY」——錯。</strong>選型是系統工程：如果頻寬需求 D-PHY 2-lane 就能滿足（如 NB webcam、低階模組），用 C-PHY 反而承擔量測門檻、layout 複雜度、料源選擇變少等成本，毫無收益。<strong>介面選型永遠從「需求頻寬 + 線數/空間預算 + 兩端晶片支援 + 團隊量測能力」出發</strong>，不是從技術新舊出發。這句話本身就是面試的滿分答案骨架。</p>
+</div>
+
+<h2>8. 動手練習與詳解</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：一顆 sensor 需要約 10 Gbps 的原始輸出頻寬。用 D-PHY v2.5（約 4.5 Gbps/lane）與 C-PHY v1.2（約 3.5 Gsps/trio）各需要幾條實體線？</summary>
+<p><strong>解：</strong></p>
+<ul>
+  <li>D-PHY：10 ÷ 4.5 ≈ 2.2 → 需 3 條 data lane；線數 = 3×2 + clock 2 = <strong>8 條線</strong>。</li>
+  <li>C-PHY：每 trio ≈ 3.5 Gsps × 2.28 ≈ 8.0 Gbps；10 ÷ 8.0 ≈ 1.25 → 需 2 個 trio；線數 = 2×3 = <strong>6 條線</strong>。</li>
+</ul>
+<p>C-PHY 省 2 條線，且第二個 trio 還有大量餘裕（16 Gbps 總容量），未來 sensor 升級不用改 pinout——這種「餘裕論述」在設計評審會議上非常有說服力。</p>
+</details>
+
+<details>
+<summary>練習 2：為什麼是「16 bits 對 7 symbols」？驗算 6 個 symbol 或 8 個 symbol 一組行不行、好不好。</summary>
+<p><strong>解：</strong>條件是 5<sup>n</sup> ≥ 2<sup>m</sup>，且 m 最好是方便的整數（如 16）。</p>
+<ul>
+  <li>n = 6：5⁶ = 15,625，最多編 log₂15,625 ≈ 13.9 → 只能載 13 bits，13/6 ≈ 2.17 bits/symbol，效率差。</li>
+  <li>n = 7：5⁷ = 78,125 ≥ 2¹⁶ = 65,536 → 載 16 bits，16/7 ≈ <strong>2.286</strong>，很接近理論值 2.32，且 16 bits 對硬體極友善（2 bytes）。</li>
+  <li>n = 8：5⁸ = 390,625，最多 log₂ ≈ 18.6 → 載 18 bits，18/8 = 2.25，反而比 7 symbols 差，而且 18 bits 不是整數 byte，硬體麻煩。</li>
+</ul>
+<p>所以 (16, 7) 是效率與硬體便利的甜蜜點。這題能當場推出來，面試官會眼睛一亮。</p>
+</details>
+
+<details>
+<summary>練習 3：C-PHY trio 跑約 3.0 Gsps。(a) 一個 UI 多長？(b) 若 intra-trio skew 預算抓 UI 的 10%（假設值），FR-4 上三線長度差要控制在幾 mm 內？</summary>
+<p><strong>解：</strong></p>
+<ul>
+  <li>(a) UI = 1 / 3.0 Gsps ≈ <strong>333 ps</strong>。</li>
+  <li>(b) 10% × 333 ps ≈ 33 ps。FR-4 傳播延遲約 6.7 ps/mm（15 cm/ns），33 ÷ 6.7 ≈ <strong>5 mm</strong>。</li>
+</ul>
+<p>注意：10% 是本題的假設練習值，實際 skew 預算由規格書與兩端晶片的時序預算分配決定，通常還要扣掉連接器、封裝內的 skew，留給 PCB 的往往只剩一部分——所以實務等長規則常收斂到 1 mm 上下甚至更緊。<strong>方法（用 UI 比例推）比數字重要。</strong></p>
+</details>
+
+<details>
+<summary>練習 4（觀念題）：D-PHY 的 EMI 尖峰常出現在 clock 頻率的諧波上。C-PHY 沒有 clock lane，是不是就沒有 EMI 問題了？</summary>
+<p><strong>解：不是。</strong>差別在頻譜「形狀」：</p>
+<ul>
+  <li>D-PHY clock lane 是連續週期方波 → 能量集中在基頻與奇次諧波，形成又高又窄的尖峰，容易撞認證限值，但也容易定位（spread spectrum、加屏蔽等對策明確）。</li>
+  <li>C-PHY 的轉移由資料決定，頻譜較「散」，尖峰較不突出——這是優勢；<strong>但</strong>三條線的電壓和並非時時刻刻完美抵消（三線各在 H/M/L，切換瞬間三線和會抖動），存在共模成分；加上擺幅雖低但 edge 快，flex 當天線的效率不差。所以 C-PHY 的 EMI 是「由尖峰問題變成寬頻底噪與共模問題」，仍需要好的參考層、必要時的共模抑制與屏蔽設計。</li>
+</ul>
+<p>一句話：<strong>C-PHY 改變了 EMI 的長相，不是消滅它。</strong></p>
+</details>
+
+<details>
+<summary>練習 5（進階觀念題）：為什麼 C-PHY 接收端用「三個差動比較器」而不是「三個對地 ADC 各判 3 個 level」？</summary>
+<p><strong>解：</strong>兩個理由：</p>
+<ul>
+  <li><strong>抗共模雜訊：</strong>比較器看的是線間差（A−B 等），地彈跳、共模干擾同時出現在兩條線上時會被相減抵消；對地判 level 則直接吃下所有共模雜訊，低擺幅下根本不可行。</li>
+  <li><strong>判決簡單且永遠有效：</strong>因為三線 level 互不相同，任兩線之差永不為零，比較器輸出永遠是乾淨的 ±（不需要辨認「差 = 0」的第三種情況）；三個 ± 的組合恰好 2³ = 8 種中有 6 種合法，直接對應 6 態。用三個 1-bit 比較器就解掉了「三階訊號」的判決問題——這是 C-PHY 設計最優雅的地方之一。</li>
+</ul>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+<p>C-PHY 相關的面試題，八成落在「選型 trade-off」與「你真的懂編碼嗎」兩類。先試著用英文口頭回答，再展開對答案。</p>
+
+<details>
+<summary>Q1: "You're designing a new camera module. How would you decide between D-PHY and C-PHY for the sensor interface?"</summary>
+<p><strong>參考答案骨架：</strong>I'd start from four constraints. First, required bandwidth: resolution times frame rate times bit depth, plus blanking overhead — if two D-PHY lanes can carry it comfortably, D-PHY wins by simplicity. Second, physical budget: C-PHY delivers roughly twice the bandwidth per wire because each symbol carries about 2.28 bits and there's no dedicated clock pair, so if my flex width or connector pin count is the bottleneck, C-PHY is attractive. Third, ecosystem: both the sensor and the SoC must support the same PHY and version — many flagship Sony sensors are C-PHY-first, while lower-end sensors and most display links are D-PHY only. Fourth, engineering cost: C-PHY needs tighter three-wire intra-trio length matching since the clock is embedded in the state transitions, and the three-level eye is harder to measure — my team's tooling and experience matter. In short: D-PHY for low-to-mid bandwidth and simplicity; C-PHY when bandwidth density and pin efficiency justify the extra design and validation effort.</p>
+<p><strong>加分點：</strong>主動補一句自己的經驗連結——"On my previous notebook camera designs, D-PHY two-lane was more than enough for the webcam; but for a 50-megapixel-class phone sensor at high frame rates, C-PHY becomes the practical choice."</p>
+</details>
+
+<details>
+<summary>Q2: "C-PHY has no clock lane. Explain how the receiver recovers timing, and why each symbol carries about 2.28 bits."</summary>
+<p><strong>參考答案骨架：</strong>A C-PHY trio has three wires, each driven to one of three voltage levels, with all three wires always at different levels — that gives 3 factorial, six valid wire states. The encoding rule forbids staying in the same state across a symbol boundary, so every symbol is a transition to one of the five remaining states. Two consequences follow. For timing: since the state must change every unit interval, at least one of the three differential receivers — which compare A minus B, B minus C, and C minus A — toggles at every symbol boundary, so the receiver derives the symbol clock directly from these guaranteed transitions; that's the embedded clock. For data capacity: a choice among five options carries log base 2 of 5, about 2.32 bits. In practice the mapper packs 16 bits into 7 symbols, because 5 to the 7th is 78,125, which exceeds 2 to the 16th, 65,536 — giving 16 over 7, about 2.28 bits per symbol.</p>
+<p><strong>考點：</strong>測你是不是真的理解「資訊在轉移、時脈也在轉移」這個一體兩面，以及能否把 log₂5 → 16/7 的兩層數字講乾淨。背不出 78,125 沒關係，講出 5⁷ ≥ 2¹⁶ 的邏輯就滿分。</p>
+</details>
+
+<h2>10. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：C-PHY trio 為什麼恰好有 6 種線態？</p>
+  <p class="a">A1：3 條線各占 H/M/L 三個 level 之一且互不相同 → 3! = 6 種排列，命名 ±x、±y、±z。</p>
+  <p class="q">Q2：「每 symbol 約 2.28 bits」怎麼來的？（兩層）</p>
+  <p class="a">A2：理論：每個 symbol 必須跳到其餘 5 態之一 → log₂5 ≈ 2.32 bits。實作：mapper 以 16 bits ↔ 7 symbols 打包（5⁷ = 78,125 ≥ 2¹⁶ = 65,536）→ 16/7 ≈ 2.286 bits/symbol。</p>
+  <p class="q">Q3：C-PHY 沒有 clock lane，接收端如何取得時脈？</p>
+  <p class="a">A3：編碼禁止連續兩 symbol 同態 → 每個 UI 邊界三個線間比較器（A−B、B−C、C−A）至少一個翻轉 → RX 由保證轉移恢復 symbol clock（embedded clock）。</p>
+  <p class="q">Q4：C-PHY 對 layout 最嚴苛的要求是什麼？為什麼比 D-PHY 嚴？</p>
+  <p class="a">A4：trio 內三線等長（intra-trio skew）。因為時脈與資料都藏在三線的相對變化裡，skew 同時扭曲三路比較器邊緣、直接壓縮取樣視窗；且三線要兩兩互補、同層同 via，比差動對多一個維度。</p>
+  <p class="q">Q5：D-PHY vs C-PHY 選型的四個判斷軸？</p>
+  <p class="a">A5：(1) 需求頻寬（D-PHY 夠用就用 D-PHY）；(2) 線數/空間預算（C-PHY 每線頻寬密度約 2 倍、省 clock 對）；(3) 兩端晶片生態系支援；(4) 團隊 layout 與量測能力（三階多層眼、三線等長門檻高）。</p>
+</div>
+
+<h2>11. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>MIPI Alliance 官網的 C-PHY 介紹頁與白皮書</strong>：規格書本體要會員資格，但官方 overview 與 FAQ 已足夠面試深度，重點看 3-phase 編碼與版本演進表。</li>
+  <li><strong>示波器大廠（Keysight、Tektronix、Teledyne LeCroy）的 C-PHY 量測應用手冊</strong>：工程師視角最實用的資料——多層眼怎麼量、trigger 怎麼設、常見失效長什麼樣，比規格書好讀十倍。</li>
+  <li><strong>Sony 半導體的 image sensor 產品頁</strong>：翻幾顆旗艦 IMX 的公開規格，觀察 C-PHY/D-PHY 支援欄位與對應的最高輸出模式，建立「什麼等級的 sensor 需要 C-PHY」的體感。</li>
+  <li><strong>回頭複習 Day 1 的 1/6 法則與 67 ps/cm</strong>：本課練習 3 的 skew 換算完全建立在那個數字上——量級數感是所有高速介面課的共同地基。</li>
+  <li><strong>下一步預告：</strong>之後的專題會把 C-PHY 的多層眼圖量測、CTS（一致性測試）流程與 debug 案例展開，並串回 flex 疊構設計。</li>
+</ul>
+
+<footer>
+  <span>專題先修 2｜Camera HW EE</span>
+  <span class="progress-note">MIPI 系列：D-PHY → C-PHY → 量測與 CTS</span>
+</footer>
+
+</div>
+</body>
+</html>

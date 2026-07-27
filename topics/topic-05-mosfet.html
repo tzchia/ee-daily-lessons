@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 5｜MOSFET 從零到能看懂電路——開關、放大與寄生效應</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 5｜MOSFET 從零到能看懂電路——開關、放大與寄生效應</h1>
+  <div class="meta">預估學習時間：150 分鐘｜難度：★★★☆☆（元件基礎的核心，面試必考）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這個專題，你要能夠：</p>
+  <ol>
+    <li>用「水龍頭」比喻講清楚 MOSFET 的結構與工作原理，並對應到剖面圖的每個部位</li>
+    <li>分清楚 NMOS／PMOS、增強型／空乏型，看到電路符號能立刻判斷「加什麼電壓會開」</li>
+    <li>看懂 I-V 特性曲線，指出截止區、線性區（三極體區）、飽和區，並說出各區「像什麼」、「用在哪」</li>
+    <li>當開關用時，會挑料：看懂 R<sub>ds(on)</sub>、Q<sub>g</sub>、V<sub>gs(th)</sub>，並解釋導通損耗 vs 開關損耗的取捨</li>
+    <li>解釋寄生電容 C<sub>gs</sub>／C<sub>gd</sub>／C<sub>ds</sub> 與 Miller 效應——為什麼開關瞬間 gate 電壓會卡在一個平台（plateau）</li>
+    <li>說明為什麼需要 gate driver、P-MOS 高邊與 N-MOS 高邊＋bootstrap 的差別</li>
+    <li>把以上全部連回你天天在畫的 NB 主機板 load switch、電源切換、鏡頭模組電源 gating</li>
+    <li>會讀 MOSFET datasheet 的關鍵頁：SOA 曲線與熱阻參數</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼這一課這麼重要？</h2>
+<p>打開任何一張 NB 主機板的原理圖，數一下 MOSFET 的數量——電源樹上的 load switch、DC-DC buck 的上下橋、電池切換的 back-to-back 對管、USB 埠的過流保護、鏡頭模組電源的 gating……一張板子上輕鬆超過 50 顆。<strong>MOSFET 是硬體工程師最常畫、卻最容易「會用但講不出原理」的元件。</strong></p>
+<p>Apple／Google 的 HW EE 面試非常愛考 MOSFET，因為它一題可以同時測出你三層功力：</p>
+<ul>
+  <li><strong>元件物理層</strong>：Vth 是什麼？為什麼有三個工作區？</li>
+  <li><strong>電路設計層</strong>：高邊開關為什麼有時用 P-MOS、有時用 N-MOS？bootstrap 怎麼運作？</li>
+  <li><strong>實務除錯層</strong>：為什麼這顆 MOSFET 燒了？Miller plateau 是什麼、跟誤導通有什麼關係？</li>
+</ul>
+<p>這一課會把三層一次補齊。公式看不懂的地方可以先跳過，<strong>每一段的白話結論才是主幹</strong>，數學只是把結論釘牢的釘子。</p>
+
+<h2>1. MOS 結構直覺：一顆用電壓控制的水龍頭</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>MOSFET 就是一顆<strong>用電壓控制的水龍頭</strong>：</p>
+  <ul>
+    <li><strong>Source（源極）</strong>＝進水口，<strong>Drain（汲極）</strong>＝出水口</li>
+    <li><strong>Gate（閘極）</strong>＝水龍頭的把手。你轉把手<strong>不需要出力搬水</strong>，只要「轉到位」，水就自己流</li>
+    <li><strong>通道（channel）</strong>＝水管內的閥門開口。把手轉越多，開口越大，水流越大</li>
+    <li><strong>Vth（臨界電壓）</strong>＝把手的「空轉段」。把手剛開始轉的前幾度是空的，要轉超過某個角度水才開始流</li>
+  </ul>
+  <p>最關鍵的一句話：<strong>gate 是「用電場隔空控制」的，它跟水路（source–drain）之間隔著一層絕緣的氧化層，穩態時幾乎不消耗任何電流</strong>。這就是 MOSFET 和 BJT（用電流控制）最大的差別，也是它統治數位電路和電源開關的原因。</p>
+</div>
+
+<h3>1.1 剖面結構：M-O-S 三個字母各是什麼</h3>
+<p>MOSFET 全名 Metal-Oxide-Semiconductor Field-Effect Transistor（金屬–氧化物–半導體場效電晶體），名字就是它的三明治結構由上而下唸一遍：</p>
+<ul>
+  <li><strong>M（Metal，金屬閘極）</strong>：最上層的導體電極（現代製程多為多晶矽或金屬閘），就是「把手」。</li>
+  <li><strong>O（Oxide，閘極氧化層）</strong>：一層極薄的絕緣體（SiO₂ 等），把把手和水路隔開。它讓 gate <strong>只能用電場、不能用電流</strong>去影響下面的半導體。</li>
+  <li><strong>S（Semiconductor，半導體基板）</strong>：矽基板，水路的本體。以 NMOS 為例：p 型基板上做兩個 n+ 重摻雜區，分別是 source 和 drain。</li>
+</ul>
+<p>平常（gate 沒加電壓時），source 和 drain 這兩個 n+ 區之間隔著 p 型基板——等效於兩顆背對背的二極體，<strong>不管電流想從哪個方向走都會被其中一顆擋住</strong>，所以水路是斷的。</p>
+<p>當你在 gate 加正電壓（相對於 source），gate 下方的電場會把 p 型基板裡的電子「吸」到氧化層正下方的表面，聚集到一定濃度後，表面那薄薄一層的性質反轉成 n 型——這叫<strong>反轉層（inversion layer）</strong>，它把 source 和 drain 兩個 n+ 區連了起來，形成一條 n 型通道，水路接通。</p>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">NMOS 剖面結構 ⟷ 水龍頭比喻</text>
+
+  <!-- ===== Left: MOS cross section ===== -->
+  <text x="195" y="52" text-anchor="middle" font-size="14" font-weight="bold" fill="#155e75">MOS 剖面（NMOS，加 Vgs &gt; Vth 後）</text>
+  <!-- p substrate -->
+  <rect x="45" y="120" width="300" height="180" fill="#fde8e8" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="195" y="285" text-anchor="middle" font-size="13" fill="#b91c1c">p 型基板（body / bulk）</text>
+  <!-- n+ source -->
+  <rect x="60" y="120" width="70" height="55" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/>
+  <text x="95" y="152" text-anchor="middle" font-size="13" fill="#1d4ed8" font-weight="bold">n+</text>
+  <!-- n+ drain -->
+  <rect x="260" y="120" width="70" height="55" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/>
+  <text x="295" y="152" text-anchor="middle" font-size="13" fill="#1d4ed8" font-weight="bold">n+</text>
+  <!-- oxide -->
+  <rect x="130" y="106" width="130" height="14" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="352" y="112" font-size="12" fill="#ca8a04">氧化層（絕緣）</text>
+  <line x1="262" y1="113" x2="348" y2="110" stroke="#ca8a04" stroke-width="1"/>
+  <!-- gate -->
+  <rect x="130" y="84" width="130" height="22" fill="#d1d5db" stroke="#374151" stroke-width="1.5"/>
+  <text x="195" y="100" text-anchor="middle" font-size="13" fill="#111827" font-weight="bold">Gate（閘極）</text>
+  <!-- inversion channel -->
+  <rect x="130" y="122" width="130" height="10" fill="#4ade80" stroke="#15803d" stroke-width="1"/>
+  <text x="195" y="150" text-anchor="middle" font-size="12" fill="#15803d" font-weight="bold">反轉層＝n 通道</text>
+  <!-- terminals -->
+  <line x1="95" y1="120" x2="95" y2="70" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="95" y="64" text-anchor="middle" font-size="13" fill="#1d4ed8" font-weight="bold">S（源極）</text>
+  <line x1="295" y1="120" x2="295" y2="70" stroke="#1d4ed8" stroke-width="2"/>
+  <text x="295" y="64" text-anchor="middle" font-size="13" fill="#1d4ed8" font-weight="bold">D（汲極）</text>
+  <line x1="195" y1="84" x2="195" y2="70" stroke="#374151" stroke-width="2"/>
+  <text x="195" y="45" text-anchor="middle" font-size="12" fill="#374151">G（＋電壓）</text>
+  <!-- body contact -->
+  <line x1="195" y1="300" x2="195" y2="330" stroke="#b91c1c" stroke-width="2"/>
+  <text x="195" y="348" text-anchor="middle" font-size="12" fill="#b91c1c">B（基極，分離式元件內部接到 S → 形成 body diode）</text>
+  <!-- electron flow arrow -->
+  <line x1="140" y1="127" x2="245" y2="127" stroke="#15803d" stroke-width="2"/>
+  <polygon points="250,127 240,122 240,132" fill="#15803d"/>
+
+  <!-- ===== Right: faucet analogy ===== -->
+  <text x="580" y="52" text-anchor="middle" font-size="14" font-weight="bold" fill="#92400e">水龍頭比喻</text>
+  <!-- pipe -->
+  <rect x="440" y="140" width="280" height="40" rx="6" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="462" y="205" font-size="13" fill="#0e7490">進水口＝Source</text>
+  <text x="716" y="205" text-anchor="end" font-size="13" fill="#0e7490">出水口＝Drain</text>
+  <!-- valve plate -->
+  <rect x="565" y="140" width="16" height="26" fill="#9ca3af" stroke="#374151" stroke-width="1.5"/>
+  <text x="672" y="132" text-anchor="middle" font-size="12" fill="#374151">閥門開口＝通道</text>
+  <line x1="600" y1="150" x2="630" y2="136" stroke="#374151" stroke-width="1"/>
+  <!-- handle -->
+  <line x1="573" y1="140" x2="573" y2="95" stroke="#374151" stroke-width="4"/>
+  <ellipse cx="573" cy="88" rx="34" ry="12" fill="#fca5a5" stroke="#b91c1c" stroke-width="2"/>
+  <text x="573" y="93" text-anchor="middle" font-size="12" fill="#7f1d1d" font-weight="bold">把手＝Gate</text>
+  <!-- rotation arrow -->
+  <path d="M 615 78 A 40 16 0 0 0 545 72" fill="none" stroke="#b91c1c" stroke-width="2"/>
+  <polygon points="541,73 552,68 551,79" fill="#b91c1c"/>
+  <text x="655" y="76" font-size="12" fill="#b91c1c">轉把手＝加 Vgs</text>
+  <!-- water flow -->
+  <line x1="455" y1="160" x2="555" y2="160" stroke="#0e7490" stroke-width="3"/>
+  <polygon points="560,160 548,154 548,166" fill="#0e7490"/>
+  <line x1="592" y1="160" x2="700" y2="160" stroke="#0e7490" stroke-width="3" stroke-dasharray="6 4"/>
+  <text x="580" y="242" text-anchor="middle" font-size="12" fill="#6b7280">水流＝汲極電流 Id</text>
+
+  <!-- mapping table -->
+  <rect x="430" y="262" width="300" height="118" rx="10" fill="#fdf6ec" stroke="#d97706" stroke-width="1.5"/>
+  <text x="580" y="284" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400e">對照表</text>
+  <text x="445" y="306" font-size="12.5" fill="#374151">把手空轉段（轉了但水不出）＝ Vth</text>
+  <text x="445" y="328" font-size="12.5" fill="#374151">把手轉的角度＝ Vgs − Vth（過驅動電壓）</text>
+  <text x="445" y="350" font-size="12.5" fill="#374151">全開後的水管阻力＝ Rds(on)</text>
+  <text x="445" y="372" font-size="12.5" fill="#374151">轉把手本身很省力＝ gate 穩態不耗電流</text>
+</svg>
+<figcaption>圖 1：左邊是 NMOS 剖面（綠色反轉層就是被 gate 電場「吸」出來的通道），右邊是等效的水龍頭。每個電學量都有對應的水路直覺。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">關鍵結論</span>
+  <p>MOSFET 是<strong>電壓控制元件</strong>：gate 隔著絕緣氧化層，用電場控制通道的導電程度。穩態時 gate 電流幾乎為零；但<strong>切換瞬間需要對 gate 的寄生電容充放電，這時 gate 是要吃電流的</strong>——這句話是後面 Qg、Miller 效應、gate driver 三個主題的種子，先記住。</p>
+</div>
+
+<h2>2. 四種基本口味：NMOS／PMOS × 增強型／空乏型</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>MOSFET 有兩個獨立的分類軸，組合成四種：</p>
+  <ul>
+    <li><strong>NMOS vs PMOS</strong>＝水往哪個方向壓才順。NMOS 是「gate 加正電壓開」，PMOS 是「gate 加負電壓（比 source 低）開」。</li>
+    <li><strong>增強型 vs 空乏型</strong>＝水龍頭出廠時是關的還是開的。增強型（enhancement）出廠<strong>常關</strong>，要加電壓才開；空乏型（depletion）出廠<strong>常開</strong>，要加反向電壓才關。</li>
+  </ul>
+  <p>實務上你在板子上畫的 99% 都是<strong>增強型</strong>：增強型 NMOS 和增強型 PMOS。空乏型幾乎只出現在特殊場合（如恆流源、常開保護電路），知道它存在、面試被問到不慌就好。</p>
+</div>
+
+<h3>2.1 NMOS vs PMOS 對照</h3>
+<table>
+  <tr><th></th><th>增強型 NMOS</th><th>增強型 PMOS</th></tr>
+  <tr><td>基板／通道</td><td>p 基板、n 通道（載子＝電子）</td><td>n 基板、p 通道（載子＝電洞）</td></tr>
+  <tr><td>導通條件</td><td>V<sub>gs</sub> &gt; V<sub>th</sub>（V<sub>th</sub> 為正）</td><td>V<sub>gs</sub> &lt; V<sub>th</sub>（V<sub>th</sub> 為負，即 gate 比 source 低超過 |V<sub>th</sub>|）</td></tr>
+  <tr><td>白話</td><td>「gate 拉高就開」</td><td>「gate 拉低就開」</td></tr>
+  <tr><td>同尺寸下的表現</td><td>電子遷移率高 → R<sub>ds(on)</sub> 較低（同面積約低 2～3 倍，量級）</td><td>電洞跑得慢 → 同規格要更大的 die、更貴</td></tr>
+  <tr><td>典型用途</td><td>低邊開關、buck 上下橋、大電流場合</td><td>高邊 load switch（驅動簡單）、反接保護</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「V<sub>gs</sub>」永遠是 gate 相對 source 量的，不是相對 GND！</strong>這是新手看高邊電路最容易犯的錯。一顆 PMOS 的 source 接在 5V 電源上，gate 接 GND 時 V<sub>gs</sub> = 0 − 5 = −5V → 導通；gate 接 5V 時 V<sub>gs</sub> = 0 → 關閉。看任何 MOSFET 電路的第一步，永遠是<strong>先找到 source 在哪，再算 V<sub>gs</sub></strong>。（分辨方向的小技巧：對增強型元件，電路符號上 body diode 的方向可以幫你定位 source——NMOS 的 body diode 陽極在 source；電流「正常」流向是 NMOS 由 D 到 S、PMOS 由 S 到 D。）</p>
+</div>
+
+<h2>3. Vth 與三大工作區：看懂 I-V 曲線</h2>
+
+<h3>3.1 Vth：把手的空轉段</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>gate 電壓要「吸」出足夠多的電子才能形成通道，在那之前吸出來的電子都被基板裡的正電荷「吃掉」了——就像把手前幾度的空轉。這個門檻就是<strong>臨界電壓 V<sub>th</sub></strong>。</p>
+  <p>實務上要知道：小訊號／邏輯電平 MOSFET 的 V<sub>th</sub> 約 0.4～2V（量級），功率 MOSFET 常見約 1～4V。datasheet 上的 V<sub>gs(th)</sub> 是在<strong>極小電流（如 250 µA）下定義的「剛剛開始滲水」的點</strong>，不是「可以全開扛大電流」的電壓——這是選料時最經典的坑，後面 4.1 再展開。</p>
+</div>
+
+<h3>3.2 三大工作區</h3>
+<p>以 NMOS 為例（PMOS 全部符號反過來即可），依 V<sub>gs</sub> 和 V<sub>ds</sub> 的相對大小，分三區：</p>
+<table>
+  <tr><th>工作區</th><th>條件</th><th>白話比喻</th><th>元件像什麼</th><th>用在哪</th></tr>
+  <tr><td><strong>截止區（cutoff）</strong></td><td>V<sub>gs</sub> &lt; V<sub>th</sub></td><td>把手還在空轉段，閥門全關</td><td>開路（斷開的開關）</td><td>開關的 OFF 態</td></tr>
+  <tr><td><strong>線性區／三極體區（triode / linear）</strong></td><td>V<sub>gs</sub> &gt; V<sub>th</sub> 且 V<sub>ds</sub> &lt; V<sub>gs</sub> − V<sub>th</sub></td><td>閥門大開、上下游水位差很小，水流大小由水位差決定</td><td><strong>一顆可調電阻</strong>（V<sub>ds</sub> 很小時 I<sub>d</sub> ∝ V<sub>ds</sub>）</td><td>開關的 ON 態（R<sub>ds(on)</sub> 就住在這區）</td></tr>
+  <tr><td><strong>飽和區（saturation）</strong></td><td>V<sub>gs</sub> &gt; V<sub>th</sub> 且 V<sub>ds</sub> ≥ V<sub>gs</sub> − V<sub>th</sub></td><td>閥門開口固定、下游怎麼抽水流都不變——水流只由把手角度決定</td><td><strong>一顆由 V<sub>gs</sub> 控制的電流源</strong></td><td>放大器、恆流源；開關<strong>切換的過渡瞬間</strong>會路過這區（損耗發生地）</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p>MOSFET 的「飽和區」跟 BJT 的「飽和區」<strong>意思完全相反</strong>！BJT 飽和＝開關全開（深度導通）；MOSFET 飽和＝電流源區（放大區）。開關全開時 MOSFET 待在<strong>線性區</strong>。面試講英文時建議用 “triode/ohmic region” 和 “saturation (active) region” 明確區分，展現你知道這個命名地雷。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">NMOS 輸出特性曲線：Id vs Vds（不同 Vgs）</text>
+  <!-- axes -->
+  <line x1="80" y1="360" x2="700" y2="360" stroke="#374151" stroke-width="2"/>
+  <line x1="80" y1="360" x2="80" y2="50" stroke="#374151" stroke-width="2"/>
+  <polygon points="705,360 693,354 693,366" fill="#374151"/>
+  <polygon points="80,45 74,57 86,57" fill="#374151"/>
+  <text x="700" y="385" text-anchor="end" font-size="14" fill="#374151">Vds</text>
+  <text x="60" y="55" text-anchor="end" font-size="14" fill="#374151">Id</text>
+  <text x="80" y="380" text-anchor="middle" font-size="13" fill="#6b7280">0</text>
+
+  <!-- boundary parabola Vds = Vgs - Vth -->
+  <path d="M 80 360 Q 200 330 300 220 Q 380 130 430 80" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="452" y="70" font-size="13" fill="#dc2626" font-weight="bold">邊界：Vds = Vgs − Vth</text>
+
+  <!-- curves for various Vgs -->
+  <!-- Vgs4 (highest) -->
+  <path d="M 80 360 C 200 300 330 160 400 105 L 430 100 C 520 96 620 92 690 90" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="695" y="88" font-size="13" fill="#0e7490" font-weight="bold" text-anchor="end"></text>
+  <text x="620" y="80" font-size="13" fill="#0e7490" font-weight="bold">Vgs = 4.5V</text>
+  <!-- Vgs3 -->
+  <path d="M 80 360 C 180 315 280 220 330 185 L 355 180 C 470 174 600 170 690 168" fill="none" stroke="#0891b2" stroke-width="3"/>
+  <text x="620" y="160" font-size="13" fill="#0891b2" font-weight="bold">Vgs = 3.5V</text>
+  <!-- Vgs2 -->
+  <path d="M 80 360 C 160 330 230 275 270 255 L 290 252 C 430 246 590 244 690 243" fill="none" stroke="#38bdf8" stroke-width="3"/>
+  <text x="620" y="234" font-size="13" fill="#0284c7" font-weight="bold">Vgs = 2.5V</text>
+  <!-- Vgs1 -->
+  <path d="M 80 360 C 140 342 190 320 215 312 L 230 310 C 390 306 580 305 690 304" fill="none" stroke="#7dd3fc" stroke-width="3"/>
+  <text x="620" y="296" font-size="13" fill="#0369a1" font-weight="bold">Vgs = 1.8V</text>
+  <!-- cutoff -->
+  <line x1="80" y1="358" x2="690" y2="358" stroke="#9ca3af" stroke-width="2.5"/>
+  <text x="620" y="350" font-size="13" fill="#6b7280" font-weight="bold">Vgs &lt; Vth（截止）</text>
+
+  <!-- region labels -->
+  <rect x="95" y="120" width="140" height="52" rx="8" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <text x="165" y="142" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#15803d">線性區（三極體區）</text>
+  <text x="165" y="162" text-anchor="middle" font-size="12" fill="#166534">像可調電阻：斜率＝1/Rds</text>
+  <line x1="165" y1="172" x2="180" y2="250" stroke="#15803d" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+  <rect x="470" y="118" width="130" height="52" rx="8" fill="#e0f2f7" stroke="#0e7490" stroke-width="1.5"/>
+  <text x="535" y="140" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#0e7490">飽和區</text>
+  <text x="535" y="160" text-anchor="middle" font-size="12" fill="#155e75">像電流源：Id 只看 Vgs</text>
+
+  <rect x="330" y="322" width="120" height="30" rx="8" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="390" y="342" text-anchor="middle" font-size="13" font-weight="bold" fill="#6b7280">截止區：Id ≈ 0</text>
+
+  <!-- switch ON operating point -->
+  <circle cx="110" cy="345" r="6" fill="#dc2626"/>
+  <text x="125" y="410" font-size="12.5" fill="#dc2626">開關 ON 的工作點：貼在原點附近的線性區深處（Vds 極小、斜率＝1/Rds(on)）</text>
+  <line x1="113" y1="350" x2="130" y2="398" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 3"/>
+</svg>
+<figcaption>圖 2：I-V 特性曲線判讀。紅色虛線拋物線是線性區與飽和區的分界。開關應用的 ON 點貼在原點旁邊（V<sub>ds</sub> 越小損耗越小）；放大器工作點放在右邊平坦的飽和區。V<sub>gs</sub> 越大，曲線整條被抬高、線性區斜率越陡（R<sub>ds</sub> 越小）。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">看曲線的三個口訣</span>
+  <ol>
+    <li><strong>左邊陡坡＝電阻</strong>：斜率的倒數就是 R<sub>ds</sub>，V<sub>gs</sub> 越大坡越陡、電阻越小。</li>
+    <li><strong>右邊平台＝電流源</strong>：V<sub>ds</sub> 再怎麼加，I<sub>d</sub> 幾乎不動（實際有微微上翹，那是通道長度調變，等效輸出電阻 r<sub>o</sub>）。</li>
+    <li><strong>開關的一生</strong>：OFF（截止，貼著橫軸）→ 切換瞬間爬過飽和區（<strong>同時有大 V<sub>ds</sub> 和大 I<sub>d</sub>，最耗損的一段路</strong>）→ ON（線性區深處，貼著縱軸旁）。</li>
+  </ol>
+</div>
+
+<h2>4. 當開關用：選料四大天王</h2>
+
+<h3>4.1 R<sub>ds(on)</sub>：全開後的水管阻力</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>開關全開後，MOSFET 就是一顆小電阻。電流流過它會發熱：<strong>P = I² × R<sub>ds(on)</sub></strong>，這叫<strong>導通損耗（conduction loss）</strong>。電流越大的軌，越需要低 R<sub>ds(on)</sub> 的料。</p>
+</div>
+<p>讀 datasheet 時的三個重點：</p>
+<ul>
+  <li><strong>R<sub>ds(on)</sub> 一定要看測試條件的 V<sub>gs</sub></strong>。同一顆料，V<sub>gs</sub> = 10V 時可能約 5 mΩ，V<sub>gs</sub> = 4.5V 時約 8 mΩ，V<sub>gs</sub> = 2.5V 時也許根本沒 spec（不保證能用）。你的 gate 驅動電壓有多少，就查那一欄。</li>
+  <li><strong>V<sub>gs(th)</sub> ≠ 可以全開的電壓</strong>。V<sub>th</sub> 是「開始滲水」（約 250 µA 那種等級），要讓 R<sub>ds(on)</sub> 到 spec 值，V<sub>gs</sub> 通常要比 V<sub>th</sub> 高出好幾伏。用 1.8V GPIO 直推一顆 V<sub>th</sub> = 1.5V 的功率管，它「有導通」但是在半開狀態，R<sub>ds</sub> 可能是 spec 的十倍以上，輕則壓降超標、重則燒管。</li>
+  <li><strong>R<sub>ds(on)</sub> 有正溫度係數</strong>：溫度升高，R<sub>ds(on)</sub> 跟著升（125°C 時常見約為 25°C 值的 1.4～1.8 倍，量級）。好處是多顆並聯會自動均流（熱的那顆電阻變大、分到的電流變少），這是 MOSFET 比 BJT 容易並聯的原因，面試加分點。</li>
+</ul>
+
+<h3>4.2 Gate charge Q<sub>g</sub>：把手有多重</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>雖然穩態不耗電，但<strong>每一次開關，driver 都要把一包電荷 Q<sub>g</sub> 搬進 gate（開）再搬出來（關）</strong>——就像把手雖然不用一直握著，但每轉一次都要出一次力。Q<sub>g</sub> 越大，把手越重：切換越慢、driver 越吃力、開關頻率越高時驅動損耗越大。</p>
+</div>
+<div class="formula">
+  驅動損耗 P<sub>gate</sub> = Q<sub>g</sub> × V<sub>gs</sub> × f<sub>sw</sub>
+</div>
+<p><strong>白話翻譯</strong>：每秒開關 f<sub>sw</sub> 次，每次搬 Q<sub>g</sub> 的電荷、每包電荷付 V<sub>gs</sub> 的「運費」。這個損耗發生在 driver 和 gate 電阻上，不在 MOSFET 通道裡。公式看不懂沒關係，記住結論：<strong>高頻開關（如 buck 的 1 MHz 級）要挑小 Q<sub>g</sub>；慢速 load switch（幾乎不切換）Q<sub>g</sub> 無所謂</strong>。</p>
+
+<h3>4.3 開關損耗 vs 導通損耗：魚與熊掌</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>MOSFET 發熱有兩個來源：</p>
+  <ul>
+    <li><strong>導通損耗</strong>＝全開之後電流持續流過 R<sub>ds(on)</sub> 的熱——「水管太細的摩擦熱」。跟開關頻率無關，跟電流平方成正比。</li>
+    <li><strong>開關損耗</strong>＝每次切換的過渡瞬間，V<sub>ds</sub> 和 I<sub>d</sub> <strong>同時不為零</strong>那幾十奈秒產生的熱——「閥門開一半時水流又急、壓差又大，最磨損」。每切一次付一次，跟頻率成正比。</li>
+  </ul>
+  <p>殘酷的取捨：<strong>低 R<sub>ds(on)</sub>（die 大）↔ 大 Q<sub>g</sub>（切得慢、開關損耗大）</strong>，同一世代製程下兩者的乘積 R<sub>ds(on)</sub>×Q<sub>g</sub> 大致是個常數（稱為 FOM，品質因數）。所以：<strong>慢開關（load switch）挑 R<sub>ds(on)</sub> 低的；快開關（DC-DC）在兩者間找平衡</strong>。</p>
+</div>
+<div class="formula">
+  P<sub>cond</sub> = I<sub>rms</sub>² × R<sub>ds(on)</sub> × D　；　P<sub>sw</sub> ≈ ½ × V<sub>ds</sub> × I<sub>d</sub> × (t<sub>on</sub> + t<sub>off</sub>) × f<sub>sw</sub>
+</div>
+<p><strong>白話翻譯</strong>：左式＝電流平方乘電阻（再乘導通時間比例 D）；右式＝每次切換的「三角形能量」（電壓電流交疊的面積）乘每秒切換次數。不想推導沒關係，只要會判斷：「這顆料燒，是因為電流太大（換低 R<sub>ds(on)</sub>）？還是因為切太頻繁／切太慢（換低 Q<sub>g</sub>、加強 driver）？」</p>
+
+<h3>4.4 Body diode：買一送一的寄生二極體</h3>
+<p>回看圖 1：分離式（discrete）MOSFET 的基板（body）在封裝內部接到 source，於是 body–drain 之間的 pn 接面就成了一顆<strong>永遠存在、不受 gate 控制的二極體</strong>——NMOS 的 body diode 方向是 S→D（陽極在 S）。</p>
+<ul>
+  <li><strong>好處</strong>：buck 的 dead time 期間，電感電流靠低邊管的 body diode 續流，不會斷路打火。</li>
+  <li><strong>壞處 1</strong>：它讓單顆 MOSFET <strong>只能擋一個方向的電壓</strong>。反方向電流會直接從 body diode 溜過去——這就是為什麼電池／adapter 電源切換要用<strong>兩顆 back-to-back（共 source 或共 drain 對接）</strong>，讓兩顆 body diode 背對背互相擋住。</li>
+  <li><strong>壞處 2</strong>：body diode 壓降大（約 0.7～1V）、反向恢復（reverse recovery）慢，高頻電路裡它導通過的每一段時間都是損耗與雜訊來源。</li>
+</ul>
+
+<h2>5. 寄生電容與 Miller 效應：為什麼 gate 波形會卡出一個平台</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>MOSFET 的三隻腳兩兩之間都「隔著很近的導體」，天生就是三顆小電容：C<sub>gs</sub>（gate–source）、C<sub>gd</sub>（gate–drain）、C<sub>ds</sub>（drain–source）。其中<strong>最麻煩的是 C<sub>gd</sub></strong>，它像一條「從出水口偷偷接回把手的回饋水管」：</p>
+  <p>你想開閥門（拉高 gate）→ 閥門一開，出水口的壓力（V<sub>d</sub>）就往下掉 → 這個下掉的壓力透過 C<sub>gd</sub> 「拽住」把手不讓它繼續轉 → driver 灌進來的電流全被拿去填 C<sub>gd</sub> 這個無底洞 → <strong>gate 電壓就卡在原地不動，形成一段平台（Miller plateau）</strong>，直到 drain 電壓掉完為止，gate 才繼續往上爬。</p>
+  <p>一句話：<strong>Miller plateau ＝ gate 電壓暫停爬升的那段時間，因為 driver 的電流正在全力對付「被 drain 電壓擺幅放大了的 C<sub>gd</sub>」</strong>。plateau 越長，切換越慢，開關損耗越大——因為整段 plateau 期間元件正好處在「電壓電流都大」的飽和區。</p>
+</div>
+
+<h3>5.1 datasheet 上的三個電容名字</h3>
+<table>
+  <tr><th>datasheet 名稱</th><th>組成</th><th>意義</th></tr>
+  <tr><td>C<sub>iss</sub>（輸入電容）</td><td>C<sub>gs</sub> + C<sub>gd</sub></td><td>driver 看進去的電容，決定驅動難度</td></tr>
+  <tr><td>C<sub>oss</sub>（輸出電容）</td><td>C<sub>ds</sub> + C<sub>gd</sub></td><td>每次開關要充放的輸出端電容，貢獻開關損耗（½C<sub>oss</sub>V²f）</td></tr>
+  <tr><td>C<sub>rss</sub>（反向傳輸電容）</td><td>C<sub>gd</sub></td><td>Miller 電容本尊，越小越好切</td></tr>
+</table>
+
+<h3>5.2 Miller 效應的數學（看不懂可跳過）</h3>
+<div class="formula">
+  等效輸入電容 C<sub>in</sub> ≈ C<sub>gs</sub> + C<sub>gd</sub> × (1 + |A<sub>v</sub>|)，其中 A<sub>v</sub> = ΔV<sub>d</sub>/ΔV<sub>g</sub>（drain 對 gate 的電壓增益）
+</div>
+<p><strong>白話翻譯</strong>：因為 gate 每動 1V、drain 反向動 |A<sub>v</sub>| V，跨在 C<sub>gd</sub> 上的電壓變化是 (1+|A<sub>v</sub>|) V——所以從 gate 看，這顆小電容「膨脹」成 (1+|A<sub>v</sub>|) 倍。開關切換瞬間 drain 要擺完整個電源電壓（例如 12V），而 gate 只動零點幾伏，等效放大倍率極大，於是 C<sub>gd</sub> 瞬間吃光所有驅動電流 → plateau。plateau 的電壓高度就是「維持當前負載電流所需的 V<sub>gs</sub>」（V<sub>plateau</sub> ≈ V<sub>th</sub> + I<sub>load</sub>/g<sub>m</sub>），plateau 的時間長度 ≈ Q<sub>gd</sub> ÷ driver 電流。</p>
+
+<figure>
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">開通瞬間的 gate 波形：Miller plateau</text>
+  <!-- axes -->
+  <line x1="70" y1="270" x2="710" y2="270" stroke="#374151" stroke-width="2"/>
+  <line x1="70" y1="270" x2="70" y2="50" stroke="#374151" stroke-width="2"/>
+  <text x="705" y="292" text-anchor="end" font-size="13" fill="#374151">時間</text>
+  <text x="52" y="60" text-anchor="end" font-size="13" fill="#374151">Vgs</text>
+  <!-- reference levels -->
+  <line x1="70" y1="200" x2="700" y2="200" stroke="#9ca3af" stroke-dasharray="5 4"/>
+  <text x="66" y="204" text-anchor="end" font-size="12" fill="#6b7280">Vth</text>
+  <line x1="70" y1="160" x2="700" y2="160" stroke="#9ca3af" stroke-dasharray="5 4"/>
+  <text x="66" y="164" text-anchor="end" font-size="12" fill="#6b7280">V_plateau</text>
+  <line x1="70" y1="80" x2="700" y2="80" stroke="#9ca3af" stroke-dasharray="5 4"/>
+  <text x="66" y="84" text-anchor="end" font-size="12" fill="#6b7280">V_drv</text>
+  <!-- gate waveform -->
+  <path d="M 80 268 C 150 240 180 215 210 160 L 420 160 C 470 110 520 88 690 82" fill="none" stroke="#0e7490" stroke-width="3.5"/>
+  <!-- drain voltage overlay -->
+  <path d="M 80 66 L 210 66 C 250 66 300 250 420 252 L 690 253" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="8 4"/>
+  <text x="120" y="58" font-size="12.5" fill="#dc2626">Vds（虛線）</text>
+  <!-- phase annotations -->
+  <line x1="210" y1="60" x2="210" y2="270" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="420" y1="60" x2="420" y2="270" stroke="#d1d5db" stroke-width="1"/>
+  <text x="145" y="300" text-anchor="middle" font-size="12.5" fill="#374151">① 充 Cgs：Vgs 爬升</text>
+  <text x="315" y="300" text-anchor="middle" font-size="12.5" fill="#b45309" font-weight="bold">② plateau：電流全灌進 Cgd</text>
+  <text x="555" y="300" text-anchor="middle" font-size="12.5" fill="#374151">③ Vds 掉完，Vgs 繼續充到頂</text>
+  <rect x="235" y="120" width="170" height="28" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+  <text x="320" y="139" text-anchor="middle" font-size="12.5" fill="#92400e" font-weight="bold">Vds 在此區間快速下降 → 損耗最大</text>
+</svg>
+<figcaption>圖 3：開通過程三階段。plateau（②）期間 gate 電壓卡住不動，drain 電壓正在滑落——V<sub>ds</sub> 與 I<sub>d</sub> 同時很大，是開關損耗的主要發生地。driver 電流越大，②越短。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">實戰陷阱：dV/dt 誤導通</span>
+  <p>C<sub>gd</sub> 還有一個反向搞破壞的方式：當 drain 電壓被<strong>別人</strong>快速拉高（例如 buck 上管開通時，下管的 drain 瞬間從 0V 跳到 12V），這個 dV/dt 會透過 C<sub>gd</sub> 對「應該關著」的下管 gate <strong>注入電流</strong>，若 gate 迴路阻抗太高，gate 電壓可能被抬過 V<sub>th</sub> → 上下管瞬間同時導通（shoot-through）。對策：gate 驅動迴路要低阻抗、gate 電阻不要亂加大、選 C<sub>gd</sub>/C<sub>gs</sub> 比例好的料。你如果量過 buck 下管 gate 上那些幾百 mV 的毛刺，就是這個機制。</p>
+</div>
+
+<h2>6. Gate driver：為什麼不能用 GPIO 直推</h2>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>把手很重（Q<sub>g</sub> 幾十 nC），而 GPIO 是一隻小手（源出／灌入能力約幾 mA）。小手轉重把手＝轉得超慢＝閥門長時間停在「半開最磨損」的位置。<strong>gate driver 就是一隻專門轉把手的大力士手臂</strong>：能瞬間提供安培級的電流，把 plateau 壓縮到幾十奈秒內結束。</p>
+</div>
+<p>gate driver 提供的四件事：</p>
+<ol>
+  <li><strong>大電流</strong>：常見約 0.5～4A 峰值源出／灌入，t ≈ Q<sub>g</sub>/I<sub>drv</sub>，電流大十倍、切換快十倍。</li>
+  <li><strong>電平轉換</strong>：把 1.8V/3.3V 邏輯訊號轉成功率管需要的 5V/10V/12V 驅動電壓。</li>
+  <li><strong>高邊驅動能力</strong>：內建 bootstrap 或電荷泵，解決「N-MOS 放高邊時 gate 要比電源還高」的難題（下一節）。</li>
+  <li><strong>保護功能</strong>：dead-time 產生、欠壓鎖定（UVLO）、有些含 Miller clamp（主動把關著的 gate 掐在低電位，防 dV/dt 誤導通）。</li>
+</ol>
+<p>那什麼時候<strong>可以</strong>不用 driver？慢速 load switch：切換一次花幾百 µs 也無所謂（甚至刻意加 RC 放慢做 soft-start、壓 inrush），GPIO＋一顆小 NPN/PMOS 拉 gate 就夠——這正是 NB 板上大多數電源 gating 的做法。</p>
+
+<h2>7. 高邊開關：P-MOS 派 vs N-MOS＋bootstrap 派</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>「高邊開關」＝開關串在電源與負載之間（斷電源）；「低邊」＝串在負載與 GND 之間（斷地）。實務幾乎都要斷電源（斷地會讓負載的 GND 浮動，I/O 會亂灌電）。高邊有兩派做法：</p>
+  <ul>
+    <li><strong>P-MOS 派（簡單）</strong>：P-MOS source 接電源，gate 拉到 GND 就開、拉到電源就關——<strong>驅動電壓都是現成的</strong>，一顆電阻一顆小訊號管就搞定。代價：P-MOS 天生 R<sub>ds(on)</sub> 差、大電流時又貴又熱。</li>
+    <li><strong>N-MOS 派（高效但麻煩）</strong>：N-MOS 便宜又低阻，但放在高邊時 source 接負載端——管子全開後 source ≈ 電源電壓，而 V<sub>gs</sub> 還得再高出約 5～10V，也就是 <strong>gate 需要「比電源軌更高」的電壓</strong>。這個電壓憑空生不出來，得靠 <strong>bootstrap（自舉）電路</strong>或電荷泵去「疊」出來。</li>
+  </ul>
+</div>
+
+<h3>7.1 Bootstrap 的白話原理</h3>
+<p>bootstrap＝「趁低點充電、跟著水位墊高」：</p>
+<ol>
+  <li>當開關節點（N-MOS 的 source，即 buck 的 SW 節點）在低電位（0V）時，driver 的供電（如 5V）透過一顆 bootstrap 二極體把 <strong>bootstrap 電容 C<sub>boot</sub> 充到約 5V</strong>。</li>
+  <li>要開上管時，driver 用 C<sub>boot</sub> 這顆「隨身電池」去推 gate。管子一開、SW 節點被拉到 12V，<strong>C<sub>boot</sub> 的負端跟著 SW 一起浮上去</strong>，正端就變成約 12＋5＝17V——gate 順利拿到比電源高 5V 的驅動電壓。</li>
+  <li>二極體此時反偏，把 17V 和 5V 供電隔開。每次 SW 回到低電位，C<sub>boot</sub> 補一次電。</li>
+</ol>
+<div class="card pitfall">
+  <span class="label">bootstrap 的天生限制</span>
+  <p>C<sub>boot</sub> 是靠「SW 節點週期性回到低電位」來補電的，所以 <strong>bootstrap 不能撐 100% duty（上管永遠開著）</strong>——電容遲早漏光。需要長期恆開的高邊 N-MOS（如 load switch 型應用、電池開關），得改用<strong>電荷泵（charge pump）</strong>持續產生高於電源的 gate 電壓——很多整合式 load switch IC 和 e-fuse 內部就是 N-MOS＋電荷泵。</p>
+</div>
+<table>
+  <tr><th></th><th>P-MOS 高邊</th><th>N-MOS 高邊</th></tr>
+  <tr><td>驅動</td><td>極簡（拉低即開）</td><td>需 bootstrap／電荷泵</td></tr>
+  <tr><td>效率／成本</td><td>同阻值下 die 較大、較貴</td><td>低 R<sub>ds(on)</sub> 便宜好買</td></tr>
+  <tr><td>100% duty</td><td>可以</td><td>bootstrap 不行；電荷泵可以</td></tr>
+  <tr><td>典型場景</td><td>中小電流 load switch、電源 gating（≤ 約 3A 量級）</td><td>buck 上管、大電流電池開關、e-fuse</td></tr>
+</table>
+
+<h2>8. 數學推導：把直覺釘牢（整段可跳過，結論已在上面）</h2>
+<p>平方律模型（長通道近似，功率管實際偏離此式，但面試推導用它就對了）。定義過驅動電壓 V<sub>ov</sub> = V<sub>gs</sub> − V<sub>th</sub>，k = µ<sub>n</sub>C<sub>ox</sub>(W/L)：</p>
+<div class="formula">
+  線性區（V<sub>ds</sub> &lt; V<sub>ov</sub>）：I<sub>d</sub> = k [ V<sub>ov</sub>·V<sub>ds</sub> − V<sub>ds</sub>²/2 ]
+</div>
+<p><strong>白話翻譯</strong>：V<sub>ds</sub> 很小時，第二項可忽略 → I<sub>d</sub> ≈ k·V<sub>ov</sub>·V<sub>ds</sub>，電流正比於電壓——<strong>這就是電阻</strong>，且 R<sub>ds</sub> = 1/(k·V<sub>ov</sub>)：gate 抬越高（V<sub>ov</sub> 越大），電阻越小。這解釋了「為什麼 R<sub>ds(on)</sub> 規格要標 V<sub>gs</sub> 條件」。</p>
+<div class="formula">
+  飽和區（V<sub>ds</sub> ≥ V<sub>ov</sub>）：I<sub>d</sub> = (k/2)·V<sub>ov</sub>²·(1 + λV<sub>ds</sub>)
+</div>
+<p><strong>白話翻譯</strong>：電流只由 V<sub>ov</sub> 決定（平方關係），跟 V<sub>ds</sub> 幾乎無關——<strong>這就是電流源</strong>。物理圖像：V<sub>ds</sub> 大到把通道靠 drain 端「掐斷」（pinch-off），之後再加 V<sub>ds</sub> 只是把掐斷點稍微往 source 挪，電流不再增加。λ 那一項就是「掐斷點會挪」造成的微微上翹（通道長度調變），對應圖 2 飽和區曲線不完全水平。</p>
+<p>兩區的分界怎麼來的？把線性區公式對 V<sub>ds</sub> 微分、令斜率為零，正好發生在 V<sub>ds</sub> = V<sub>ov</sub>——這就是圖 2 那條紅色拋物線（把 V<sub>ds</sub> = V<sub>ov</sub> 代回公式得 I<sub>d</sub> = (k/2)V<sub>ds</sub>²）。</p>
+<p>放大用途再多推一步——<strong>轉導 g<sub>m</sub></strong>（gate 每動 1V，電流動多少）：</p>
+<div class="formula">
+  g<sub>m</sub> = ∂I<sub>d</sub>/∂V<sub>gs</sub> = k·V<sub>ov</sub> = 2I<sub>d</sub>/V<sub>ov</sub>
+</div>
+<p><strong>白話翻譯</strong>：g<sub>m</sub> 是「把手靈敏度」。共源放大器的增益 ≈ −g<sub>m</sub>·R<sub>D</sub>（或 −g<sub>m</sub>·r<sub>o</sub>），這也是第 5 節 Miller 效應裡那個 A<sub>v</sub> 的來源——放大越兇，C<sub>gd</sub> 膨脹得越誇張。Miller plateau 電壓的公式 V<sub>plateau</sub> ≈ V<sub>th</sub> + I<sub>load</sub>/g<sub>m</sub> 也從這裡來：plateau 期間管子是電流源，正好輸出負載電流，反解 V<sub>gs</sub> 即得。</p>
+
+<h2>9. 實務案例：連回你的板子</h2>
+
+<h3>9.1 NB 主機板的 load switch</h3>
+<p>典型場景：EC（嵌入式控制器）的 GPIO 控制某個子系統電源（WLAN、SSD、camera…）。標準電路：GPIO → 小訊號 NMOS（如 2N7002 等級）→ 拉低 P-MOS 的 gate → P-MOS 導通供電。三個實戰細節：</p>
+<ul>
+  <li><strong>Inrush／soft-start</strong>：負載端往往掛著幾十～幾百 µF 的電容，P-MOS 瞬間全開＝對這堆電容短路充電，湧浪電流可達數安培，會把上游電源拉凹（板上其他軌跟著抖）。對策：gate 上加 RC 延緩（利用 Miller 效應反過來幫你：C<sub>gd</sub> 上額外並一顆小電容，讓 drain 電壓斜率受控）——所以「Miller 是敵是友」看場合。整合式 load switch IC 直接內建 slew-rate 控制，就是把這件事做進去。</li>
+  <li><strong>V<sub>gs</sub> 絕對最大值</strong>：P-MOS 的 |V<sub>gs</sub>| max 常見約 ±8V、±12V、±20V。source 接 19V adapter 軌、gate 直接拉到 GND → V<sub>gs</sub> = −19V，超過 ±12V 的管子直接打穿氧化層。對策：gate–source 間加齊納或用電阻分壓箝位。這是 NB 板上真實燒板案例的常客。</li>
+  <li><strong>關斷也有學問</strong>：關斷後負載端電容上的殘壓怎麼放掉？很多 load switch IC 有 output discharge 功能（內建小 NMOS 對地放電），確保 power cycle 時序乾淨——camera 模組尤其在意這個（見 9.3）。</li>
+</ul>
+
+<h3>9.2 電源切換：adapter vs 電池</h3>
+<p>NB 的經典題：19V adapter 和電池兩路電源擇一供電。為什麼每一路都要 <strong>兩顆 MOSFET back-to-back</strong>？因為單顆管子的 body diode 會讓「關斷」名存實亡：adapter 這路關了，若電池電壓比 adapter 端高，電流照樣從 body diode 倒灌。兩顆背對背（共 source），兩顆 body diode 一顆朝左一顆朝右，任何方向都有一顆在擋，才是真正的雙向斷開。理想二極體控制器（ideal diode controller）＋N-MOS 的組合則進一步把「二極體 OR」的 0.5V 壓降換成 mΩ 級的 MOSFET，效率高很多。</p>
+
+<h3>9.3 鏡頭模組電源 gating</h3>
+<p>camera 模組通常有 2～4 軌（如 AVDD 約 2.8V、DVDD 約 1.05/1.2V、IOVDD 約 1.8V，依 sensor 而定），sensor datasheet 對<strong>上電／斷電順序與斜率</strong>有嚴格要求。這裡的 MOSFET 考點：</p>
+<ul>
+  <li><strong>時序由誰保證</strong>：PMIC 或分立 load switch＋EC 時序控制。每一軌一顆 load switch，enable 順序照 sensor spec（常見 IOVDD → AVDD → DVDD → MCLK，以實際 datasheet 為準）。</li>
+  <li><strong>斷電要放電</strong>：若斷電後某軌殘壓透過 sensor 內部 ESD 二極體倒灌到別軌，可能造成 latch-up 或下次上電時序違規——所以選有 discharge 功能的 load switch，或外加放電電阻。</li>
+  <li><strong>漏電流＝待機功耗</strong>：camera 大部分時間是關的，load switch 的關斷漏電（I<sub>off</sub>）直接算進待機電流預算，挑料時要看這個常被忽略的欄位（好料約 µA 級以下）。</li>
+  <li><strong>雜訊敏感</strong>：AVDD 是類比軌，load switch 的 R<sub>ds(on)</sub> 串在路徑上，模組工作電流變動會在上面產生壓差波動——R<sub>ds(on)</sub> 太大時等於在 AVDD 上疊了雜訊源，影像上可能看到條紋。這是「R<sub>ds(on)</sub> 不只關乎發熱」的好例子。</li>
+</ul>
+
+<h3>9.4 Datasheet 閱讀指南：SOA 與熱</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p><strong>SOA（Safe Operating Area，安全工作區）</strong>是一張「這顆管子在什麼電壓×電流×時間組合下不會死」的地圖，橫軸 V<sub>ds</sub>、縱軸 I<sub>d</sub>（雙對數）。看圖口訣：<strong>越往右上越危險，脈衝越短、允許範圍越大</strong>（100 µs 的線比 DC 的線高得多——短痛可以忍，久了會死）。</p>
+</div>
+<ul>
+  <li><strong>SOA 的四條邊界</strong>：左上被 R<sub>ds(on)</sub> 線切掉（電阻決定了小 V<sub>ds</sub> 時電流上限）、上邊是最大電流（打線／封裝限制）、右邊是 V<sub>ds</sub> 崩潰電壓、中間斜線是功率（熱）限制。現代溝槽式功率管還會多一段<strong>熱不穩定區（Spirito 區）</strong>：在高 V<sub>ds</sub>＋中等電流的「線性模式」下，局部熱點會正回饋惡化——<strong>這正是 load switch soft-start 拉太長、或用 MOSFET 做線性限流時最容易踩的死法</strong>：明明功率算起來沒超，管子還是燒了，因為 DC SOA 在那個區域比你想的小很多。</li>
+  <li><strong>熱阻三兄弟</strong>：R<sub>θJC</sub>（junction 到 case）、R<sub>θJA</sub>（junction 到環境，強烈依賴 PCB 銅箔面積——datasheet 標的往往是「1 inch² 2oz 銅」之類的理想條件，你的板子未必有）、Z<sub>θ</sub>（瞬態熱阻抗，算脈衝功率用）。估算式：T<sub>J</sub> = T<sub>A</sub> + P × R<sub>θJA</sub>，算出來要留餘裕（一般設計目標 T<sub>J</sub> 不超過 max 的約 80%）。</li>
+  <li><strong>降額思維</strong>：V<sub>ds</sub> max 對 ringing 尖峰也要成立（SW 節點的過衝要算進去）；V<sub>gs</sub> max 是氧化層生死線，一次超標就可能永久損傷。</li>
+</ul>
+
+<h2>10. 動手練習與詳解</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：一顆 NMOS，V<sub>th</sub> = 2V。(a) V<sub>gs</sub> = 5V、V<sub>ds</sub> = 0.2V 在哪一區？(b) V<sub>gs</sub> = 5V、V<sub>ds</sub> = 8V 呢？(c) V<sub>gs</sub> = 1.5V、V<sub>ds</sub> = 8V 呢？各自像什麼元件？</summary>
+<p><strong>解：</strong>先算 V<sub>ov</sub> = V<sub>gs</sub> − V<sub>th</sub>。</p>
+<p>(a) V<sub>ov</sub> = 3V，V<sub>ds</sub> = 0.2V &lt; 3V → <strong>線性區</strong>，像一顆小電阻（開關 ON 態）。</p>
+<p>(b) V<sub>ov</sub> = 3V，V<sub>ds</sub> = 8V ≥ 3V → <strong>飽和區</strong>，像一顆由 V<sub>gs</sub> 控制的電流源（放大區；若這是開關，代表它正卡在切換途中或被誤用，會很燙）。</p>
+<p>(c) V<sub>gs</sub> = 1.5V &lt; V<sub>th</sub> → <strong>截止區</strong>，開路。V<sub>ds</sub> 多大都一樣（只剩漏電流）。</p>
+</details>
+
+<details>
+<summary>練習 2：5V 軌 load switch，負載 3A，選了 R<sub>ds(on)</sub> = 25 mΩ（@V<sub>gs</sub>=4.5V）的 P-MOS。(a) 導通損耗與壓降？(b) 若板上只有 R<sub>θJA</sub> ≈ 120 °C/W 的散熱條件、環境 60°C，T<sub>J</sub> 大約多少？可以接受嗎？</summary>
+<p><strong>解：</strong></p>
+<p>(a) P = I²R = 3² × 0.025 = <strong>0.225 W</strong>；壓降 V = IR = 75 mV（5V 軌的 1.5%，通常可接受，但若下游還有 DC-DC 對輸入敏感就要算進預算）。</p>
+<p>(b) T<sub>J</sub> = 60 + 0.225 × 120 = 60 + 27 = <strong>約 87°C</strong>。對 T<sub>J(max)</sub> = 150°C 的料，餘裕足夠。但注意兩件事：R<sub>ds(on)</sub> 在 87°C 會比 25°C spec 高（迭代估算約再多三成，P 升到約 0.29W、T<sub>J</sub> 約 95°C，收斂即可）；以及 datasheet 的 120 °C/W 對應的銅箔面積你的 layout 要真的給得出來。</p>
+</details>
+
+<details>
+<summary>練習 3：buck 的上管 N-MOS，Q<sub>gd</sub> = 6 nC，gate driver 在 plateau 期間能提供約 1A。(a) plateau 大約多長？(b) 若此期間 V<sub>ds</sub> 從 12V 掃到 0、負載電流 5A、f<sub>sw</sub> = 500 kHz，這段造成的開關損耗（單邊）約多少？</summary>
+<p><strong>解：</strong></p>
+<p>(a) t<sub>plateau</sub> ≈ Q<sub>gd</sub>/I<sub>drv</sub> = 6 nC / 1A = <strong>6 ns</strong>。</p>
+<p>(b) 用三角形近似：E ≈ ½ × V × I × t = ½ × 12 × 5 × 6n = 180 nJ；P = E × f<sub>sw</sub> = 180n × 500k = <strong>0.09 W</strong>（只算電壓下降段的單邊，實際還要加電流換相段、關斷段與 C<sub>oss</sub> 損耗）。看見槓桿了嗎：driver 電流若只有 0.1A，plateau 變 60 ns、這一項直接變約 0.9W——<strong>driver 強度直接換算成效率</strong>。</p>
+</details>
+
+<details>
+<summary>練習 4（電路判讀）：P-MOS 高邊開關，source 接 19V，gate 經 100kΩ 上拉到 19V，另有一顆小 NMOS 可把 gate 拉到 GND。此 P-MOS 的 V<sub>gs(max)</sub> = ±12V。這個電路有什麼問題？怎麼修？</summary>
+<p><strong>解：</strong>小 NMOS 導通時，P-MOS 的 V<sub>gs</sub> = 0 − 19 = <strong>−19V，超過 ±12V 絕對最大值</strong>，gate 氧化層可能被打穿（就算沒立刻死，也是可靠度未爆彈）。修法（擇一或併用）：</p>
+<ul>
+  <li>gate–source 之間並一顆約 10V 齊納（陰極朝 source），把 |V<sub>gs</sub>| 箝在安全值；</li>
+  <li>把「拉到 GND」改成電阻分壓（例如 gate 經 100k 上拉到 19V、下拉腳串 100k 再進 NMOS → gate 只被拉到約 9.5V，V<sub>gs</sub> ≈ −9.5V）；</li>
+  <li>換 V<sub>gs(max)</sub> = ±20V 或 ±25V 的料。</li>
+</ul>
+<p>順帶檢查：100kΩ 上拉＋gate 電容（C<sub>iss</sub> 假設約 1 nF）→ 關斷時間常數約 100 µs，關得很慢；若此軌需要快速關斷（如過流保護路徑）就要改小電阻或加主動拉高電路。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念題）：為什麼電池與 adapter 的電源切換每一路要用兩顆 back-to-back MOSFET，而普通 load switch 一顆就夠？</summary>
+<p><strong>解：</strong>關鍵是 <strong>body diode 的方向、以及關斷時兩端誰高誰低</strong>。普通 load switch：關斷時上游（電源）永遠比下游（放完電的負載）高，body diode 方向被設計成反偏（P-MOS 高邊：S 接電源、D 接負載，body diode 陽極在 D），單顆就擋得住。電源切換：關斷的那一路，<strong>兩端誰高誰低會變</strong>（電池電壓可能高於或低於 adapter 端），單顆管子的 body diode 總有一個方向擋不住 → 倒灌。兩顆 back-to-back 讓兩顆 body diode 方向相反，任一極性都有一顆反偏在擋，形成真正的雙向阻斷。</p>
+</details>
+
+<h2>11. 面試怎麼考</h2>
+<p>先用英文口頭回答，再展開對照。</p>
+
+<details>
+<summary>Q1: "You're driving a power MOSFET with a weak GPIO and it's overheating even though the load current is well within spec. Walk me through what's happening and how you'd fix it."</summary>
+<p><strong>參考答案骨架：</strong>Two failure mechanisms come to mind, both related to gate drive. First, the GPIO voltage may be too low: the datasheet threshold voltage only marks where the channel barely starts to conduct, but the rated R<sub>ds(on)</sub> requires several volts of overdrive. If I drive a device specified at V<sub>gs</sub> = 10V with a 1.8V GPIO, the FET sits half-on with maybe ten times the expected on-resistance, and conduction loss explodes. Second, even if the amplitude is fine, a weak GPIO sources only a few milliamps, so each transition drags slowly through the Miller plateau — during that plateau the FET is in saturation with high V<sub>ds</sub> and full load current simultaneously, so every switching event dumps significant energy. Fixes: use a logic-level FET matched to my gate voltage, add a proper gate driver to shorten the plateau, or if it's a slow load switch, accept slow edges but verify the operating point stays inside the DC safe operating area, since linear-mode operation can violate SOA even at modest power.</p>
+<p><strong>加分點：</strong>主動提「I'd probe V<sub>gs</sub> and look for the plateau on a scope — its length tells me the effective drive current, and its height tells me the operating current via g<sub>m</sub>.」展示你會從波形反推物理。</p>
+</details>
+
+<details>
+<summary>Q2: "Why do buck converters use an N-MOSFET for the high-side switch and how does the gate get driven above the input rail?"</summary>
+<p><strong>參考答案骨架：</strong>N-channel devices have roughly two to three times better electron mobility than p-channel, so for the same R<sub>ds(on)</sub> they're smaller and cheaper — at buck currents that matters a lot. The catch is that a high-side NMOS has its source on the switch node, so to enhance it fully the gate must be driven several volts above the input rail. The standard solution is a bootstrap circuit: while the low-side FET conducts and the switch node sits near ground, a bootstrap capacitor charges to the driver supply through a diode; when the high-side turns on, the switch node flies up to V<sub>in</sub> and the capacitor rides on top of it, giving the driver a floating supply of roughly V<sub>in</sub> plus 5V to drive the gate. The limitation is that the capacitor only refreshes when the switch node returns low, so bootstrap can't support 100% duty cycle — controllers either limit maximum duty or add a charge pump for that case.</p>
+<p><strong>考點：</strong>測你是否理解「V<sub>gs</sub> 是相對 source」這個根本觀念，以及 bootstrap 的充電路徑與 duty 限制。答得出「refresh 依賴 SW 回低電位」就贏過大多數人。</p>
+</details>
+
+<h2>12. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：MOSFET 三大工作區的條件與等效元件？（NMOS）</p>
+  <p class="a">A1：截止（V<sub>gs</sub>&lt;V<sub>th</sub>）＝開路；線性/三極體區（V<sub>gs</sub>&gt;V<sub>th</sub> 且 V<sub>ds</sub>&lt;V<sub>gs</sub>−V<sub>th</sub>）＝可調電阻，開關 ON 態住這裡；飽和區（V<sub>ds</sub>≥V<sub>gs</sub>−V<sub>th</sub>）＝V<sub>gs</sub> 控制的電流源，放大用、切換過渡時路過。注意與 BJT 的「飽和」意義相反。</p>
+  <p class="q">Q2：Miller plateau 是什麼？長度與高度由什麼決定？</p>
+  <p class="a">A2：開關切換時 gate 電壓暫停爬升的平台——driver 電流全部灌入被電壓增益放大的 C<sub>gd</sub>（C<sub>rss</sub>），用來擺動 drain 電壓。長度 ≈ Q<sub>gd</sub>/I<sub>drv</sub>；高度 ≈ V<sub>th</sub> + I<sub>load</sub>/g<sub>m</sub>。plateau 期間 V<sub>ds</sub>、I<sub>d</sub> 同時大，是開關損耗主要來源。</p>
+  <p class="q">Q3：導通損耗 vs 開關損耗公式與取捨？</p>
+  <p class="a">A3：P<sub>cond</sub>=I<sub>rms</sub>²R<sub>ds(on)</sub>D（與頻率無關）；P<sub>sw</sub>≈½VI(t<sub>on</sub>+t<sub>off</sub>)f<sub>sw</sub>（正比頻率）。低 R<sub>ds(on)</sub>↔大 Q<sub>g</sub>，同製程 R×Q 近似常數（FOM）。慢開關挑低 R，快開關求平衡。</p>
+  <p class="q">Q4：為什麼電源切換要 back-to-back 兩顆 MOSFET？</p>
+  <p class="a">A4：單顆 MOSFET 的 body diode 使它只能單向阻斷；電源切換時關斷路徑兩端極性會反轉，必須兩顆背對背（共 source 或共 drain）讓兩顆 body diode 反向互擋，才能雙向阻斷防倒灌。</p>
+  <p class="q">Q5：N-MOS 高邊為什麼需要 bootstrap？限制是什麼？</p>
+  <p class="a">A5：高邊 N-MOS 全開後 source ≈ 輸入電壓，V<sub>gs</sub> 需再高約 5～10V，即 gate 要高於電源軌。bootstrap 電容趁 SW 節點在低電位時充電，SW 升高時「疊」在其上提供浮動驅動電源。限制：需 SW 週期性回低電位補電 → 不支援 100% duty，恆開場合改用電荷泵。</p>
+</div>
+
+<h2>13. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>Sedra &amp; Smith, <em>Microelectronic Circuits</em></strong> — MOSFET 章節：平方律模型、三工作區、g<sub>m</sub> 與放大器的標準推導，面試手推公式的底本。</li>
+  <li><strong>Erickson &amp; Maksimović, <em>Fundamentals of Power Electronics</em></strong> — 開關損耗、gate 驅動、同步整流的系統化處理。</li>
+  <li><strong>各功率半導體大廠的 application note</strong>：搜尋「MOSFET gate charge explained」「Miller plateau」「Safe Operating Area linear mode / Spirito」「bootstrap circuit design」——大廠 AN 通常有實測波形，把本課圖 3 的三階段對到真實示波器截圖，印象最深。</li>
+  <li><strong>動手</strong>：拿一顆手邊的功率 MOSFET datasheet，把本課提到的每個參數（V<sub>gs(th)</sub>、R<sub>ds(on)</sub>@不同 V<sub>gs</sub>、Q<sub>g</sub>/Q<sub>gd</sub>、C<sub>iss</sub>/C<sub>oss</sub>/C<sub>rss</sub>、SOA、R<sub>θJA</sub> 的銅箔條件）逐一找出來標註一遍——20 分鐘，勝過重讀本課三遍。</li>
+  <li><strong>回連課程</strong>：本課的 dI/dt、dV/dt 與寄生元件觀念，會在 SI/PI 主線（Day 1 起）的電源完整性與 EMI 章節反覆出現；camera 電源時序在 MIPI 專題（專題 1～2）的模組 bring-up 情境會再用到。</li>
+</ul>
+
+<footer>
+  <span>專題先修 5｜MOSFET</span>
+  <span class="progress-note">Camera HW EE 面試準備系列</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 1｜MIPI D-PHY 電氣層——LP/HS 模式、阻抗與眼圖規範</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 1｜MIPI D-PHY 電氣層——LP/HS 模式、阻抗與眼圖規範</h1>
+  <div class="meta">預估學習時間：120 分鐘｜難度：★★★☆☆（面試核心戰場）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這個專題，你要能夠：</p>
+  <ol>
+    <li>畫出 camera 系統的訊號鏈，說清楚 D-PHY 在 CSI-2 協定堆疊裡的位置與職責</li>
+    <li>比較 LP 模式與 HS 模式的電氣特性（電壓、擺幅、速度、單端 vs 差動），並解釋「為什麼要設計成兩套」</li>
+    <li>用白話描述一次完整的 SoT（Start of Transmission）與 EoT（End of Transmission）切換流程</li>
+    <li>說出 HS 模式的關鍵電氣規範：100Ω 差動阻抗、約 200mV 共模電壓、差動擺幅範圍、RX 端終端電阻</li>
+    <li>看懂眼圖與 eye mask，解釋 UI、jitter 怎麼吃掉眼睛的開口</li>
+    <li>講出 NB／手機鏡頭模組 flex 走線的三大實務挑戰：阻抗不連續、長度匹配、EMI</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼這個專題是面試核心？</h2>
+<p>你做過鏡頭模組，一定接過 MIPI 線、量過波形、跑過 CTS 測試。但 Apple／Google 的 Camera HW 面試會這樣問：</p>
+<ul>
+  <li>Walk me through what happens electrically when a D-PHY lane transitions from LP to HS mode.（描述 D-PHY lane 從 LP 切到 HS 時，電氣上發生了什麼事）</li>
+  <li>Why does D-PHY need two signaling modes at all?（為什麼 D-PHY 要有兩種訊號模式？）</li>
+  <li>Your eye diagram fails the mask at the receiver — walk me through your debug plan.（眼圖過不了 mask，你怎麼 debug？）</li>
+</ul>
+<p>這些題目全部考的是「電氣層的物理直覺」，而不是暫存器怎麼設。這個專題就是把你「用過但講不出所以然」的 D-PHY，拆到見骨。</p>
+
+<h2>1. D-PHY 是誰？——camera 系統的「實體層快遞公司」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>把 camera 系統想成一間出版社：<strong>sensor 是攝影師</strong>（拍照產生大量原始底片）、<strong>AP（Application Processor，手機或 NB 的主晶片）是編輯部</strong>（負責後製）。攝影師拍完的底片要送到編輯部，需要一間快遞公司——</p>
+  <ul>
+    <li><strong>CSI-2</strong> 是「快遞的作業規章」：包裹怎麼打包、單號怎麼編、丟件怎麼賠（協定層：封包格式、ECC、CRC）。</li>
+    <li><strong>D-PHY</strong> 是「快遞的卡車與馬路」：實際載貨的車子開多快、用幾線道、輪胎規格是什麼（實體層：電壓、電流、阻抗、時序）。</li>
+  </ul>
+  <p>身為硬體工程師，你的地盤主要是「卡車與馬路」——也就是 D-PHY 電氣層。協定層封包壞掉，十之八九也是你的馬路（走線）出問題。</p>
+</div>
+
+<h3>1.1 協定堆疊裡的位置</h3>
+<p>正式一點說：MIPI Alliance 定義了 <strong>CSI-2（Camera Serial Interface 2）</strong>作為 camera 的協定層，而 CSI-2 可以跑在兩種實體層上：<strong>D-PHY</strong>（本專題主角，最普及）或 <strong>C-PHY</strong>（三線一組、編碼更複雜，之後專題再談）。同一套 D-PHY 也被顯示介面 DSI 使用——所以你學會 D-PHY，等於同時看懂手機螢幕那條線。</p>
+<p>資料流方向：<strong>sensor（TX）→ flex 排線 ＋ 板上走線 → AP（RX）</strong>。sensor 是傳送端，AP 是接收端；另外還有一條 I2C（CSI-2 生態叫 CCI）負責寫 sensor 暫存器，那是低速控制通道，跟 D-PHY 是兩回事。</p>
+
+<h3>1.2 Lane 架構：1 條 clock lane + N 條 data lanes</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>D-PHY 的 lane 架構像一支「行軍隊伍＋一個鼓手」：鼓手（clock lane）負責打拍子，士兵（data lanes）踩著拍子齊步走。士兵可以有 1、2、4 個（常見配置），人越多、一次扛的貨越多，但大家必須<strong>踩同一個拍子、步伐長度一致</strong>——這就是為什麼 layout 要做等長匹配。</p>
+</div>
+
+<p>每條 lane 物理上是<strong>一對差動線（Dp／Dn）</strong>。所以一組「1 clock + 4 data」的 CSI-2 介面，實際上是 5 對、共 10 根訊號線。幾個重點：</p>
+<ul>
+  <li><strong>Clock lane 在 HS 模式下是 DDR（雙邊緣取樣）</strong>：clock 的上升與下降緣都取一筆資料，所以「資料速率（bit rate）＝ 2 × clock 頻率」。例如 clock 跑 500 MHz，每條 data lane 就是 1 Gbps。</li>
+  <li><strong>總頻寬 ＝ 每 lane 速率 × lane 數</strong>。4 lane、每 lane 1 Gbps ≈ 4 Gbps 原始頻寬（還要扣掉封包 overhead 與 blanking）。</li>
+  <li><strong>clock 是 source-synchronous</strong>：時脈跟資料由同一顆 sensor 送出、走幾乎一樣的路徑，所以兩者的延遲會「一起變」，這是 D-PHY 能跑很快的關鍵之一——RX 不用自己從資料裡還原時脈（相較於 PCIe 那種 embedded clock 架構）。</li>
+</ul>
+
+<h2>2. 兩套人格：LP 模式 vs HS 模式</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>D-PHY 每條 lane 都有雙重人格，像一台油電混合車：</p>
+  <ul>
+    <li><strong>LP（Low-Power）模式＝市區低速電動模式</strong>：安靜、省油（省電）、開得慢，用來「講話溝通」——告訴對方我要開始傳了、進入逃生模式（escape mode）等控制行為。</li>
+    <li><strong>HS（High-Speed）模式＝高速公路引擎全開</strong>：吵、耗油，但飆得飛快，專門用來「載大貨」——一整行、一整張影像的畫素資料。</li>
+    <li>而且是<strong>同一對線</strong>在兩種人格之間切換——同一台車、同一條路，只是開法完全不同。</li>
+  </ul>
+  <p>為什麼要兩套？因為「快」跟「省電」在電路上是天敵：快就得用小擺幅差動＋一直燒終端電阻的電流；省電就得關掉那些電流、用大擺幅慢慢動。camera 的特性是「一陣一陣傳」（一個 frame 猛傳、frame 之間休息），所以傳的時候用 HS、休息的時候退回 LP，兩全其美。</p>
+</div>
+
+<h3>2.1 電氣特性對照表</h3>
+<table>
+  <tr><th>特性</th><th>LP 模式</th><th>HS 模式</th></tr>
+  <tr><td>訊號型態</td><td><strong>單端（single-ended）</strong>，Dp、Dn 各自獨立當一根 CMOS 線用</td><td><strong>差動（differential）</strong>，Dp 與 Dn 永遠互補</td></tr>
+  <tr><td>擺幅</td><td>0 ～ 約 1.2V（規格上 LP 高位準典型約 1.1～1.3V）</td><td>差動擺幅約 140～270mV（典型講 <strong>200mV</strong>）</td></tr>
+  <tr><td>共模電壓</td><td>（單端，無共模概念）</td><td>約 <strong>200mV</strong>（V<sub>CMTX</sub> 規格約 150～250mV）</td></tr>
+  <tr><td>速度</td><td>低速，LP 資料傳輸約 10 Mbps 量級</td><td>每 lane 數百 Mbps ～ 數 Gbps</td></tr>
+  <tr><td>終端電阻</td><td>無終端（unterminated），驅動端阻抗刻意做高</td><td>RX 端 <strong>100Ω 差動終端</strong>，走線控 100Ω 差動阻抗</td></tr>
+  <tr><td>靜態功耗</td><td>幾乎為零（CMOS 式，不切換就不耗電）</td><td>持續有電流流過終端（約 2mA 量級持續電流）</td></tr>
+  <tr><td>用途</td><td>控制、狀態指示、escape mode、ULPS（超低功耗睡眠）</td><td>影像畫素資料（payload）</td></tr>
+  <tr><td>邊緣速度</td><td>刻意放慢（降低 EMI，規格限制 LP 邊緣斜率）</td><td>非常快（100 ps 量級，必須當傳輸線處理）</td></tr>
+</table>
+
+<div class="card takeaway">
+  <span class="label">必背數字</span>
+  <p><strong>LP：約 1.2V 單端、慢。HS：約 200mV 差動擺幅、約 200mV 共模、100Ω 差動阻抗、RX 端 100Ω 終端。</strong>面試講出這五個數字（並知道哪些是「約」），基本盤就穩了。</p>
+</div>
+
+<h3>2.2 LP 狀態的命名：LP-11、LP-01、LP-00</h3>
+<p>LP 模式下 Dp、Dn 是兩根獨立的線，各自可以是高（1）或低（0），所以用兩個 bit 描述狀態，<strong>寫法是 LP-(Dp 的值)(Dn 的值)</strong>：</p>
+<ul>
+  <li><strong>LP-11（Stop state）</strong>：兩根都拉到約 1.2V，「大家休息、路是空的」——這是 lane 的預設待機狀態。</li>
+  <li><strong>LP-01 ／ LP-10</strong>：其中一根拉低，作為進入 HS 或 escape mode 的「敲門訊號」。</li>
+  <li><strong>LP-00（Bridge state）</strong>：兩根都拉到 0V，「橋接狀態」——這是從 1.2V 世界跳進 200mV 世界前的過渡月台。</li>
+</ul>
+
+<h3>2.3 SoT／EoT：從 LP 切到 HS 的完整流程</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>SoT 就像高鐵發車的標準廣播流程：先響鈴（LP-01：「注意，要發車了」）→ 關門（LP-00：「所有人退到月台線後」，RX 此時打開終端電阻＝把「軌道接好」）→ 車子先空跑一小段固定速度讓大家對時（HS-0 一段時間＋一組同步碼 sync sequence）→ 正式載客（HS 資料）。EoT 則是反過來：最後一個 bit 的反相電位撐一小段時間（讓 RX 確認「真的結束了、不是雜訊」）→ 拉回 LP-11 收工。</p>
+</div>
+
+<p>把流程拆成電氣動作（TX 視角／RX 視角對照）：</p>
+<table>
+  <tr><th>階段</th><th>TX 做什麼</th><th>RX 做什麼</th></tr>
+  <tr><td>① LP-11</td><td>兩線拉高（約 1.2V），待機</td><td>LP 接收器監看，終端電阻<strong>關閉</strong></td></tr>
+  <tr><td>② LP-01（T<sub>LPX</sub>）</td><td>Dp 拉低，宣告「準備進 HS」</td><td>偵測到請求，開始準備</td></tr>
+  <tr><td>③ LP-00（T<sub>HS-PREPARE</sub>）</td><td>兩線都拉低，關閉 LP 驅動器</td><td><strong>打開 100Ω 差動終端</strong>，切到 HS 接收器</td></tr>
+  <tr><td>④ HS-0（T<sub>HS-ZERO</sub>）</td><td>打開 HS 差動驅動器，送出差動 0 一段時間</td><td>讓 HS 接收器穩定、等待同步碼</td></tr>
+  <tr><td>⑤ Sync</td><td>送出固定同步碼（sync sequence），標記 byte 邊界</td><td>比對到同步碼 → 知道資料從哪個 bit 開始</td></tr>
+  <tr><td>⑥ HS payload</td><td>連續送出畫素資料（每 bit 一個 UI）</td><td>用 clock lane 的 DDR 時脈取樣</td></tr>
+  <tr><td>⑦ EoT（T<sub>HS-TRAIL</sub>）</td><td>把<strong>最後一個 bit 的反相值</strong>撐住一段時間</td><td>看到「不再切換」→ 判定封包結束</td></tr>
+  <tr><td>⑧ 回 LP-11</td><td>關 HS 驅動器、開 LP 驅動器拉回 1.2V</td><td><strong>關閉終端電阻</strong>，回到 LP 監看</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「RX 的終端電阻是一直開著的」——錯！</strong>終端只在 HS 期間打開。想一想就通：如果 LP 期間也掛著 100Ω 差動終端，LP 驅動器（弱驅動、拉到 1.2V）根本拉不動，而且會白白燒電。這也是 debug 的一個切入點：如果 RX 終端「太晚開」，HS 前緣會因為線上突然沒有匹配而反射，SoT 附近的波形就會亂掉——用示波器看 T<sub>HS-PREPARE</sub>／T<sub>HS-ZERO</sub> 時序是否符合規格是標準檢查項目。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 860 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="430" y="26" text-anchor="middle" font-size="17" font-weight="bold" fill="#0f4c5c">D-PHY Lane 架構（上）與 LP→HS→LP 切換時序（下）</text>
+
+  <!-- ===== upper: lane architecture ===== -->
+  <!-- sensor box -->
+  <rect x="30" y="52" width="150" height="180" rx="12" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="105" y="80" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f4c5c">Image Sensor</text>
+  <text x="105" y="100" text-anchor="middle" font-size="12" fill="#374151">(TX)</text>
+  <!-- AP box -->
+  <rect x="680" y="52" width="150" height="180" rx="12" fill="#fdf6ec" stroke="#d97706" stroke-width="2"/>
+  <text x="755" y="80" text-anchor="middle" font-size="15" font-weight="bold" fill="#92400e">AP / SoC</text>
+  <text x="755" y="100" text-anchor="middle" font-size="12" fill="#374151">(RX)</text>
+  <!-- clock lane -->
+  <line x1="180" y1="120" x2="680" y2="120" stroke="#dc2626" stroke-width="3"/>
+  <line x1="180" y1="130" x2="680" y2="130" stroke="#dc2626" stroke-width="3" opacity="0.55"/>
+  <text x="430" y="112" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="bold">Clock lane（1 對差動：CLKp / CLKn，HS 為 DDR）</text>
+  <!-- data lanes -->
+  <line x1="180" y1="165" x2="680" y2="165" stroke="#0e7490" stroke-width="3"/>
+  <line x1="180" y1="175" x2="680" y2="175" stroke="#0e7490" stroke-width="3" opacity="0.55"/>
+  <text x="430" y="157" text-anchor="middle" font-size="13" fill="#0e7490" font-weight="bold">Data lane 0（Dp / Dn）</text>
+  <line x1="180" y1="205" x2="680" y2="205" stroke="#0e7490" stroke-width="3" stroke-dasharray="8 5"/>
+  <line x1="180" y1="215" x2="680" y2="215" stroke="#0e7490" stroke-width="3" opacity="0.55" stroke-dasharray="8 5"/>
+  <text x="430" y="199" text-anchor="middle" font-size="13" fill="#0e7490">Data lane 1…N-1（常見 N = 1／2／4）</text>
+  <!-- RX termination -->
+  <rect x="640" y="158" width="34" height="24" rx="4" fill="#fff" stroke="#15803d" stroke-width="2"/>
+  <text x="657" y="175" text-anchor="middle" font-size="11" fill="#15803d" font-weight="bold">100Ω</text>
+  <text x="620" y="250" text-anchor="middle" font-size="12" fill="#15803d">RX 差動終端（僅 HS 期間開啟）</text>
+  <line x1="640" y1="243" x2="655" y2="185" stroke="#15803d" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <!-- 100 ohm diff impedance note -->
+  <text x="330" y="250" text-anchor="middle" font-size="12" fill="#6b7280">走線／flex：100Ω 差動阻抗控制</text>
+
+  <!-- ===== lower: timing diagram ===== -->
+  <!-- axes -->
+  <line x1="70" y1="510" x2="830" y2="510" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="70" y1="510" x2="70" y2="300" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="52" y="330" text-anchor="end" font-size="12" fill="#6b7280">1.2V</text>
+  <text x="52" y="452" text-anchor="end" font-size="12" fill="#6b7280">~0.3V</text>
+  <text x="52" y="512" text-anchor="end" font-size="12" fill="#6b7280">0V</text>
+  <line x1="70" y1="325" x2="830" y2="325" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="70" y1="448" x2="830" y2="448" stroke="#e5e7eb" stroke-width="1"/>
+
+  <!-- Dp waveform (teal): LP-11 high, LP-01 low, LP-00 low, then HS toggling around 200mV, then trail, back to LP-11 -->
+  <polyline points="70,325 150,325 158,505 230,505 238,505"
+    fill="none" stroke="#0e7490" stroke-width="3"/>
+  <!-- Dn waveform (orange): LP-11 high, stays high through LP-01, drops at LP-00 -->
+  <polyline points="70,332 195,332 203,505 238,505"
+    fill="none" stroke="#d97706" stroke-width="3"/>
+  <!-- HS region: small swing differential around ~0.2V common mode (y~448 = 300mV, use 430..466 band) -->
+  <!-- Dp HS -->
+  <polyline points="238,466 300,466 300,430 330,430 330,466 360,466 360,430 375,430 375,466 390,466 390,430 405,430 405,466 420,466 420,430 450,430 450,466 480,466 480,430 510,430 510,466 540,466 540,430 570,430 570,466 620,466"
+    fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <!-- Dn HS (complement) -->
+  <polyline points="238,430 300,430 300,466 330,466 330,430 360,430 360,466 375,466 375,430 390,430 390,466 405,466 405,430 420,430 420,466 450,466 450,430 480,430 480,466 510,466 510,430 540,430 540,466 570,466 570,430 620,430"
+    fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <!-- EoT trail: hold inverted last bit then rise to LP-11 -->
+  <polyline points="620,466 700,466 708,325 830,325" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <polyline points="620,430 700,430 708,332 830,332" fill="none" stroke="#d97706" stroke-width="3"/>
+
+  <!-- stage separators + labels -->
+  <line x1="150" y1="300" x2="150" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="203" y1="300" x2="203" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="238" y1="300" x2="238" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="330" y1="300" x2="330" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="620" y1="300" x2="620" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <line x1="708" y1="300" x2="708" y2="510" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="110" y="295" text-anchor="middle" font-size="12" fill="#374151" font-weight="bold">LP-11</text>
+  <text x="176" y="295" text-anchor="middle" font-size="12" fill="#374151" font-weight="bold">LP-01</text>
+  <text x="220" y="295" text-anchor="middle" font-size="11" fill="#374151" font-weight="bold">LP-00</text>
+  <text x="284" y="295" text-anchor="middle" font-size="12" fill="#374151" font-weight="bold">HS-0+Sync</text>
+  <text x="475" y="295" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">HS payload（每 bit = 1 UI）</text>
+  <text x="664" y="295" text-anchor="middle" font-size="11" fill="#374151" font-weight="bold">HS-TRAIL</text>
+  <text x="769" y="295" text-anchor="middle" font-size="12" fill="#374151" font-weight="bold">LP-11</text>
+  <!-- timing param labels -->
+  <text x="176" y="530" text-anchor="middle" font-size="11" fill="#6b7280">T_LPX</text>
+  <text x="220" y="545" text-anchor="middle" font-size="11" fill="#6b7280">T_HS-PREPARE</text>
+  <text x="284" y="530" text-anchor="middle" font-size="11" fill="#6b7280">T_HS-ZERO</text>
+  <text x="664" y="530" text-anchor="middle" font-size="11" fill="#6b7280">T_HS-TRAIL</text>
+  <!-- legend -->
+  <rect x="90" y="365" width="14" height="4" fill="#0e7490"/><text x="110" y="371" font-size="12" fill="#374151">Dp</text>
+  <rect x="140" y="365" width="14" height="4" fill="#d97706"/><text x="160" y="371" font-size="12" fill="#374151">Dn</text>
+  <text x="430" y="415" text-anchor="middle" font-size="11" fill="#6b7280">HS 期間：小擺幅（差動約 200mV）、共模約 200mV，Dp/Dn 永遠互補</text>
+</svg>
+<figcaption>圖 1：上半是 lane 架構（1 clock + N data，RX 端 100Ω 差動終端只在 HS 期間開啟）；下半是單一 data lane 的 SoT→HS→EoT 電壓時序。注意 LP 是 1.2V 大擺幅、HS 是貼近地的小擺幅差動——同一對線、兩個世界。</figcaption>
+</figure>
+
+<h3>2.4 為什麼 HS 要用「小擺幅差動」？</h3>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>想在吵雜的夜市裡跟同伴溝通，有兩招：一是用力吼（大擺幅單端）——費力、而且你自己也變成噪音源；二是兩人靠很近、用「對嘴＋比手勢」的差分密語（小擺幅差動）——省力、旁人聽不到你們的內容、夜市的噪音對你們兩個的影響也一樣（會被相減抵消）。HS 選第二招。</p>
+</div>
+
+<p>原理上，小擺幅差動有三個好處：</p>
+<ol>
+  <li><strong>速度</strong>：擺幅小，驅動器把線上電壓「翻面」需要搬的電荷少，切換就快。從 200mV 翻到 −200mV，比從 0V 拉到 1.2V 快得多。</li>
+  <li><strong>抗噪</strong>：干擾（電源雜訊、鄰線串擾）通常同時打在 Dp 和 Dn 上（共模），RX 做的是「相減」，共模成分被抵消。</li>
+  <li><strong>低 EMI</strong>：Dp、Dn 電流方向相反、大小相等，遠場輻射互相抵消——前提是兩根線靠得夠近、夠對稱（這就是等長匹配與緊耦合布線的理由）。</li>
+</ol>
+
+<h2>3. 阻抗與終端：100Ω 這個數字的前世今生</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>高速訊號在走線上跑，就像水波在水道裡傳。水道寬度突然改變（阻抗不連續），波就會部分反彈回去；水道終點如果是一面牆（沒有終端電阻），波會整個反彈回來跟後面的波打架。<strong>「100Ω 差動阻抗＋RX 端 100Ω 終端」的組合，就是把整條水道做成寬度一致、終點是完美消波塊的設計</strong>——訊號到了終點被電阻「吃掉」，一點都不反彈。</p>
+</div>
+
+<h3>3.1 三個要對齊的 100Ω</h3>
+<p>一條健康的 HS 通道，有三個地方的阻抗必須互相對齊：</p>
+<ol>
+  <li><strong>TX 驅動器輸出阻抗</strong>：D-PHY 規格要求 HS TX 的單端輸出阻抗約 40～62.5Ω（差動約 80～125Ω），設計目標貼近單端 50Ω。</li>
+  <li><strong>通道（走線＋flex＋connector）</strong>：差動阻抗控制在 <strong>100Ω</strong>（即每根單端約 50Ω，緊耦合時單端目標會略高，讓差動落在 100Ω）。</li>
+  <li><strong>RX 終端</strong>：晶片內建 <strong>100Ω 差動終端</strong>（實作上常是兩顆 50Ω 串聯、中點接到共模電壓節點），規格允許範圍約 80～125Ω。</li>
+</ol>
+<p>三者一致 → 訊號從 TX 出發、在通道裡不反射、到 RX 被完全吸收。任何一段不一致，就會產生反射，反射疊回訊號上，就是吃掉眼圖的元凶之一。</p>
+
+<h3>3.2 HS 電位是怎麼「生」出來的？</h3>
+<p>一個直覺的簡化模型：HS TX 是一個<strong>電流模式驅動器</strong>，把一股固定電流（量級約 2mA）導向 Dp 或 Dn 的其中一邊。這股電流流過 RX 端的終端電阻，就在線上「壓」出電壓：</p>
+
+<div class="formula">
+  V<sub>OD</sub>（差動擺幅）≈ I<sub>HS</sub> × R<sub>term</sub> ≈ 2mA × 100Ω = 200mV（量級估算）
+</div>
+
+<p><strong>白話翻譯：</strong>HS 的 200mV 不是哪個穩壓器給的，而是「一股固定小電流 × 終端電阻」乘出來的。所以終端電阻不只是「消波塊」，它同時是「產生訊號電位的負載」——這就是為什麼沒開終端時，HS 波形會又大又醜（電流灌進高阻抗，電壓失控）。公式看不懂沒關係，記住結論：<strong>擺幅 = 電流 × 終端電阻，終端不對、擺幅就不對</strong>。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「差動線嘛，反正是相減，共模不重要」——錯！</strong>D-PHY 規格對 HS 共模電壓（約 200mV）與共模雜訊都有明確限制。共模跑掉的實害：① RX 差動接收器有共模輸入範圍，超出範圍增益會掉、甚至誤判；② 共模擾動不會在遠場抵消，是 <strong>EMI 的主要來源</strong>——flex 上 Dp/Dn 不等長造成的 skew，會把差動訊號「轉換」成共模（mode conversion），這是鏡頭 flex EMI 超標最常見的機制之一。</p>
+</div>
+
+<h2>4. 眼圖與 eye mask：通道品質的「健檢報告」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>眼圖是什麼？把示波器抓到的<strong>幾百萬個 bit 的波形，全部以時脈為基準疊在同一格畫面上</strong>——就像把一個路口 24 小時的縮時攝影疊成一張照片。車流（訊號切換）都乖乖走斑馬線外，中間就會留出一塊「永遠沒車的安全區」，形狀像一隻眼睛。<strong>眼睛開得越大，RX 越容易在正確的時間、正確的電位把 0/1 讀對。</strong></p>
+  <p><strong>Eye mask（眼罩）</strong>則是規格畫出的「禁建區」：一個多邊形，規定「任何波形軌跡都不准踩進來」。眼罩就像蓋房子的建築紅線——訊號軌跡只要碰到紅線，就是 fail。</p>
+</div>
+
+<h3>4.1 三個關鍵詞：UI、jitter、mask</h3>
+<ul>
+  <li><strong>UI（Unit Interval）</strong>：一個 bit 占用的時間，是眼圖的橫軸單位。UI = 1 ÷ 資料速率。例如 1 Gbps → UI = 1 ns；2.5 Gbps → UI = 400 ps。眼圖橫軸通常畫 1 個 UI 寬。</li>
+  <li><strong>Jitter（抖動）</strong>：訊號切換邊緣「該來的時間」跟「實際來的時間」之間的誤差。每個邊緣誤差都不一樣，疊圖之後邊緣就變成一團「毛毛的帶狀」——這團毛越寬，眼睛的左右兩角就被吃得越兇。Jitter 又分 <strong>Rj（隨機抖動</strong>，來自熱雜訊，高斯分布、理論上無界<strong>）</strong>與 <strong>Dj（確定性抖動</strong>，來自 ISI 碼間干擾、串擾、電源雜訊，有界<strong>）</strong>。</li>
+  <li><strong>垂直方向的侵蝕</strong>：損耗把擺幅磨小、反射與串擾讓高低位準變成一條「帶」，眼睛的上下就被壓扁。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 860 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="430" y="28" text-anchor="middle" font-size="17" font-weight="bold" fill="#0f4c5c">HS 差動訊號眼圖與 Eye Mask 示意（橫軸 1 UI）</text>
+  <!-- plot area -->
+  <rect x="90" y="60" width="680" height="330" fill="#fbfbfa" stroke="#9ca3af"/>
+  <!-- axis labels -->
+  <text x="90" y="415" text-anchor="middle" font-size="12" fill="#6b7280">0 UI</text>
+  <text x="430" y="415" text-anchor="middle" font-size="12" fill="#6b7280">0.5 UI</text>
+  <text x="770" y="415" text-anchor="middle" font-size="12" fill="#6b7280">1 UI</text>
+  <text x="80" y="105" text-anchor="end" font-size="12" fill="#6b7280">+V_OD</text>
+  <text x="80" y="230" text-anchor="end" font-size="12" fill="#6b7280">0（差動）</text>
+  <text x="80" y="360" text-anchor="end" font-size="12" fill="#6b7280">−V_OD</text>
+  <line x1="90" y1="225" x2="770" y2="225" stroke="#e5e7eb"/>
+  <line x1="430" y1="60" x2="430" y2="390" stroke="#e5e7eb"/>
+
+  <!-- eye traces: bundles of crossing curves (upper and lower rails + transitions) -->
+  <!-- rail bands -->
+  <path d="M90,95 C200,92 660,92 770,96" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.8"/>
+  <path d="M90,105 C230,100 630,101 770,107" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.55"/>
+  <path d="M90,115 C260,109 600,110 770,117" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.35"/>
+  <path d="M90,355 C200,358 660,358 770,354" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.8"/>
+  <path d="M90,345 C230,350 630,349 770,343" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.55"/>
+  <path d="M90,335 C260,341 600,340 770,333" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.35"/>
+  <!-- rising transitions (bundle) -->
+  <path d="M90,355 C250,350 300,110 430,100 C560,92 610,95 770,96" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.7"/>
+  <path d="M90,345 C260,345 320,120 450,108 C570,99 620,103 770,107" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.45"/>
+  <path d="M90,352 C240,352 285,118 415,104 C545,95 600,98 770,101" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.3"/>
+  <!-- falling transitions (bundle) -->
+  <path d="M90,95 C250,100 300,340 430,350 C560,358 610,356 770,354" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.7"/>
+  <path d="M90,105 C260,106 320,332 450,342 C570,351 620,349 770,345" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.45"/>
+  <path d="M90,99 C240,101 285,336 415,347 C545,356 600,354 770,350" fill="none" stroke="#0e7490" stroke-width="2" opacity="0.3"/>
+
+  <!-- eye mask polygon (hexagon) -->
+  <polygon points="260,225 350,145 510,145 600,225 510,305 350,305"
+    fill="#fee2e2" fill-opacity="0.75" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="430" y="220" text-anchor="middle" font-size="15" font-weight="bold" fill="#991b1b">Eye Mask</text>
+  <text x="430" y="242" text-anchor="middle" font-size="12" fill="#991b1b">波形軌跡禁止進入的區域</text>
+
+  <!-- jitter annotation at crossing -->
+  <line x1="182" y1="60" x2="182" y2="390" stroke="#b45309" stroke-dasharray="3 3" opacity="0.7"/>
+  <line x1="238" y1="60" x2="238" y2="390" stroke="#b45309" stroke-dasharray="3 3" opacity="0.7"/>
+  <line x1="182" y1="75" x2="238" y2="75" stroke="#b45309" stroke-width="2"/>
+  <text x="210" y="70" text-anchor="middle" font-size="12" fill="#b45309" font-weight="bold">jitter（邊緣帶寬）</text>
+
+  <!-- eye height / width arrows -->
+  <line x1="430" y1="145" x2="430" y2="305" stroke="#15803d" stroke-width="2"/>
+  <polygon points="430,145 425,155 435,155" fill="#15803d"/>
+  <polygon points="430,305 425,295 435,295" fill="#15803d"/>
+  <text x="452" y="285" font-size="12" fill="#15803d" font-weight="bold">眼高</text>
+  <line x1="260" y1="225" x2="600" y2="225" stroke="#15803d" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="530" y="218" font-size="12" fill="#15803d" font-weight="bold">眼寬</text>
+
+  <!-- annotations below -->
+  <text x="430" y="440" text-anchor="middle" font-size="13" fill="#374151">疊圖後：邊緣被 jitter 拉寬（左右吃角）、位準被損耗／反射壓扁（上下吃高）</text>
+  <text x="430" y="462" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="bold">判定標準：任何一條軌跡碰到 mask ＝ fail</text>
+</svg>
+<figcaption>圖 2：HS 差動眼圖示意。藍色是幾百萬個 bit 疊出的軌跡束；中央紅色六邊形是 eye mask（禁區）。jitter 把交叉點拉成一條「帶」侵蝕眼寬，損耗與反射壓縮眼高——通道所有毛病最後都會反映在這隻眼睛上。</figcaption>
+</figure>
+
+<h3>4.2 怎麼量？</h3>
+<ul>
+  <li><strong>工具</strong>：高頻寬示波器（頻寬建議 ≥ 訊號基頻的 3～5 倍）＋差動探棒，或用 MIPI 專用治具把 flex 訊號引出。量測點依規格定義在 RX 端（有些測試點要套 reference channel 模型）。</li>
+  <li><strong>觸發與疊圖</strong>：以 clock lane（或還原時脈）為基準，把大量 UI 疊加；現代示波器有 MIPI D-PHY 一鍵 compliance 套件，會自動套 mask 與量 jitter。</li>
+  <li><strong>注意 D-PHY 的特殊性</strong>：因為 lane 會在 LP/HS 之間切換，量 HS 眼圖時要正確 gate 出 HS burst 區段，不能把 LP 段疊進去（否則 1.2V 的 LP 波形會把整張眼圖毀掉）。</li>
+</ul>
+
+<h3>4.3 版本演進與速率（數字皆為量級參考）</h3>
+<table>
+  <tr><th>D-PHY 版本</th><th>每 lane 速率（約）</th><th>備註</th></tr>
+  <tr><td>v1.0／v1.1</td><td>約 1 ～ 1.5 Gbps</td><td>早期手機 camera 主流</td></tr>
+  <tr><td>v1.2</td><td>約 2.5 Gbps</td><td>加入通道等化相關強化</td></tr>
+  <tr><td>v2.x</td><td>約 4.5 Gbps 起，更高版本上看約 9 Gbps</td><td>高速率下引入更完整的等化與更嚴格通道規範</td></tr>
+</table>
+<p>速率翻倍的物理意義：<strong>UI 減半</strong>。v1.2 的 2.5 Gbps → UI = 400 ps；同樣 20 ps 的 jitter，在 1 Gbps 時只吃掉 2% UI，在 2.5 Gbps 時吃掉 5% UI——<strong>速度越快，同樣的髒東西殺傷力越大</strong>，這就是為什麼高版本規格對通道要求越來越嚴。</p>
+
+<h2>5. 數學推導：把幾個數字串起來</h2>
+<p>這一節把前面白話講過的東西用簡單數學再走一遍。<strong>公式看不懂可以先跳過，每條後面的白話翻譯與結論才是必須帶走的。</strong></p>
+
+<h3>5.1 UI 與速率</h3>
+<div class="formula">
+  UI = 1 / 資料速率；資料速率 = 2 × f<sub>clk</sub>（DDR）
+</div>
+<p><strong>白話翻譯：</strong>一個 bit 的「時間格子」就是速率的倒數；而因為 clock 兩個邊都取樣，資料速率是 clock 頻率的兩倍。例：clock 量到 1.25 GHz → 速率 2.5 Gbps → UI = 400 ps。面試時如果只給你 clock 頻率，記得 ×2。</p>
+
+<h3>5.2 頻寬需求粗估</h3>
+<div class="formula">
+  基頻（Nyquist）f₀ = 資料速率 / 2；　訊號含量頻寬 ≈ 0.35 / t<sub>r</sub>
+</div>
+<p><strong>白話翻譯：</strong>最壞情況的 0101 交替訊號，一個週期＝2 bit，所以基頻是速率的一半（2.5 Gbps → 1.25 GHz）。而邊緣有多快，頻譜就延伸到多高（t<sub>r</sub> = 100 ps → 約 3.5 GHz）。通道（flex＋connector＋走線）在這些頻率上的損耗與阻抗表現，直接決定眼圖長相。</p>
+
+<h3>5.3 反射量的估算</h3>
+<div class="formula">
+  反射係數 Γ = (Z₂ − Z₁) / (Z₂ + Z₁)
+</div>
+<p><strong>白話翻譯：</strong>阻抗從 Z₁ 撞到 Z₂，會有 Γ 比例的訊號被彈回去。例：flex 段差動阻抗只做到 85Ω，接到 100Ω 的板上走線：Γ = (100−85)/(100+85) ≈ +0.08，約 8% 的訊號能量在交界處來回亂竄。單看 8% 不大，但 flex 兩端各一個 connector、各一次不連續，多次反射疊加到 400 ps 的 UI 裡，眼圖就會明顯「長痘痘」。</p>
+
+<h3>5.4 Skew 與共模轉換</h3>
+<div class="formula">
+  Δt<sub>skew</sub> ≈ ΔL × 6.7 ps/mm（FR-4 量級）；skew 佔 UI 比例 = Δt<sub>skew</sub> / UI
+</div>
+<p><strong>白話翻譯：</strong>Dp 比 Dn 長 1 mm，兩根訊號就差約 6.7 ps。在 2.5 Gbps（UI = 400 ps）下，3 mm 的 pair 內不等長 ≈ 20 ps ≈ 5% UI——差動邊緣的這 20 ps 裡，兩根線「一高一低沒對齊」，這段能量就變成共模，一部分變成 EMI 輻射出去，一部分擠壓眼圖。<strong>結論：pair 內等長比 lane 間等長重要一個等級</strong>（lane 間 skew 可由 RX 的 deskew 或時序餘裕吸收，pair 內 skew 直接毀差動性）。</p>
+
+<h2>6. 實務案例：NB／手機鏡頭模組的 flex 戰場</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>鏡頭模組的 MIPI 訊號旅程像一趟跨縣市搬家：從 sensor 出發（模組內基板）→ 上貨車（極細的 flex 排線，NB 上還要穿過轉軸）→ 過收費站（板對板 connector）→ 走高速公路（主機板走線）→ 到 AP 家門口。<strong>每一次「換路面」都是阻抗不連續的風險點</strong>，而 flex 這段路又窄又長、還跟天線與電源線當鄰居。</p>
+</div>
+
+<h3>6.1 挑戰一：阻抗不連續</h3>
+<ul>
+  <li><strong>Flex 本體</strong>：flex 疊構薄、介質特性與硬板不同，要做到 100Ω 差動，線寬／線距／到參考層距離都要重新設計；成本壓力下 flex 常常只有單面參考層（microstrip），阻抗公差比硬板大。</li>
+  <li><strong>Connector 與過渡區</strong>：板對板 connector 的 pin、flex 補強板（stiffener）下方、hot bar 焊接區，都是阻抗突變熱點。對策：connector 選型看廠商的高速規格、pin assignment 讓每對差動旁邊有 ground pin、過渡區的參考層挖空／補償要跑模擬。</li>
+  <li><strong>NB 特有：轉軸（hinge）</strong>：camera 在螢幕上緣，MIPI 要穿過轉軸繞進主機——flex 更長（可達 20～30 cm 量級）、反覆彎折會讓阻抗隨機械應力漂移，還有斷線疲勞的可靠度問題。這是 NB camera 比手機 camera 更硬核的地方，<strong>面試時主動講這段是很好的差異化亮點</strong>。</li>
+</ul>
+
+<h3>6.2 挑戰二：長度匹配</h3>
+<ul>
+  <li><strong>Pair 內（intra-pair）</strong>：Dp/Dn 之間，目標通常抓在 ps 級（依速率換算，常見規則如 &lt; 5 mil～數 mil 或以 UI 百分比訂）。flex 上轉彎多、蛇形線空間小，是等長最難做的一段。</li>
+  <li><strong>Lane 間（inter-lane）＋ data 對 clock</strong>：規格對 data-to-clock skew 有明確要求（RX 取樣窗有限）。lane 間允許的 skew 比 pair 內鬆，但 flex 長度動輒十幾公分，累積誤差不可輕忽。</li>
+  <li><strong>實務招式</strong>：轉彎處用弧線或 45°、蛇形補償要「就近補」（在造成 skew 的轉彎附近補，而不是遠端補一大段）、flex 與硬板各自獨立滿足 pair 內等長。</li>
+</ul>
+
+<h3>6.3 挑戰三：EMI</h3>
+<ul>
+  <li><strong>受害者角色</strong>：flex 走線緊鄰 WiFi／WWAN 天線（NB 螢幕邊框正是天線區），天線發射時打進 MIPI 通道造成畫面雜訊（RFI desense 的反向問題）。</li>
+  <li><strong>加害者角色</strong>：MIPI HS 的諧波（例如 1.25 GHz clock 的諧波正好落在 GPS／WiFi 頻段）經由 flex 輻射，造成無線靈敏度下降（desense）。機制常是前面講的 skew → 共模轉換 → flex 當天線。</li>
+  <li><strong>對策工具箱</strong>：flex 加屏蔽層（EMI shielding film，代價是阻抗與彎折性要重算）、接地端接設計（shield 兩端低阻抗接地）、調整 MIPI clock 頻率避開無線頻段（spread spectrum 或 frequency plan）、connector 附近加共模濾波（common-mode choke，但高速率下要小心它吃眼圖）。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">帶走重點</span>
+  <p>Flex 段的 debug 優先順序：<strong>先量阻抗輪廓（TDR 看哪裡不連續）→ 再看 skew（差動轉共模）→ 最後看 EMI 共存</strong>。眼圖 fail 的根因九成藏在前兩項；EMI desense 則幾乎都是共模惹的禍。這個順序本身就是一個很好的面試答案骨架。</p>
+</div>
+
+<h2>7. 動手練習與詳解</h2>
+<p>拿紙筆算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1：某 sensor 的 D-PHY clock lane 量到 800 MHz，4 條 data lane。求每 lane 資料速率、UI、與總原始頻寬。</summary>
+<p><strong>解：</strong>HS clock 是 DDR，兩邊緣都取樣 → 每 lane 速率 = 2 × 800 MHz = <strong>1.6 Gbps</strong>。UI = 1/1.6 Gbps = <strong>625 ps</strong>。總原始頻寬 = 1.6 × 4 = <strong>6.4 Gbps</strong>（實際有效 payload 要再扣封包 header/footer 與 line/frame blanking）。<strong>常見陷阱：</strong>忘記 ×2。面試官很愛用這個小坑檢查你是否真的懂 DDR。</p>
+</details>
+
+<details>
+<summary>練習 2：flex 上 Dp 比 Dn 長 2 mm（flex 介質傳播延遲以約 6 ps/mm 估）。在 2.5 Gbps 下，這個 skew 佔多少 UI？會造成什麼後果？</summary>
+<p><strong>解：</strong>Δt = 2 mm × 6 ps/mm = <strong>12 ps</strong>。UI = 1/2.5 Gbps = 400 ps → skew 佔 12/400 = <strong>3% UI</strong>。後果：① 差動邊緣附近 Dp/Dn 不同步的區段產生<strong>共模突波</strong>（差動→共模轉換），成為 EMI 輻射源；② 等效上讓差動邊緣變慢、眼圖交叉點劣化。3% UI 單看不致命，但它是「每個邊緣都發生」的系統性誤差，且會與其他 Dj 直接相加——所以 pair 內等長要儘量壓到 1% UI 以下的量級。</p>
+</details>
+
+<details>
+<summary>練習 3：TDR 量測顯示 connector 處差動阻抗掉到 80Ω（走線是 100Ω）。求反射係數，並說明對眼圖的影響與兩個改善方向。</summary>
+<p><strong>解：</strong>Γ = (80−100)/(80+100) = −20/180 ≈ <strong>−0.11</strong>，約 11% 的入射波被反射（負號代表往低阻抗處反射極性反轉）。影響：反射波在「connector ↔ 另一個不連續點」之間來回，延遲若接近 UI 的整數倍，會恰好疊在後續 bit 的取樣點上形成 ISI，眼圖出現階梯狀塌陷或眼皮增厚。改善方向（任兩個）：① connector 落點的參考層做 anti-pad 挖空補償（降低過渡區寄生電容、把阻抗拉回來）；② 換高速規格 connector 或調整 pin assignment 增加 G-S-S-G 隔離；③ 縮短 stub／優化 flex 補強板下的疊構。</p>
+</details>
+
+<details>
+<summary>練習 4（觀念題）：為什麼 D-PHY 不乾脆全程用 HS 模式，連控制訊號也用 HS 傳，省掉整套 LP 電路？</summary>
+<p><strong>解：</strong>核心是<strong>功耗與使用情境</strong>。HS 模式的終端電阻上持續流著直流電流（約 2mA 量級 × 每對線），只要 lane 醒著就在燒電；camera 的流量是突發式的（frame 之間、待機、AE 收斂期間都沒有大量資料）。若全程 HS，這些空檔也在白白耗電——對手機/NB 這種以待機續航為命的產品不可接受。LP 模式用 CMOS 式驅動、不切換就近乎零功耗，正好拿來守夜與傳控制訊息；ULPS 更可以把 lane 睡到最深。<strong>加分延伸：</strong>這是「介面設計永遠在 速度 × 功耗 × 腳位數 三角中取捨」的經典案例——D-PHY 用「同一對線分時切換兩種模式」同時省了腳位與功耗，代價是 SoT/EoT 的切換 overhead 與更複雜的收發器設計。</p>
+</details>
+
+<details>
+<summary>練習 5（debug 情境題）：量產線上某批 NB 的 camera 偶發出現整條綠色橫紋（line corruption），實驗發現只在螢幕開合特定角度時出現。列出你的 debug 假設鏈。</summary>
+<p><strong>解：</strong>「特定開合角度」強烈指向<strong>穿過轉軸的 MIPI flex</strong>：① 首要假設：flex 反覆彎折造成微裂／阻抗隨角度變化 → 特定角度時某 lane 的眼圖 margin 掉到臨界 → 偶發 bit error → CSI-2 CRC 錯誤丟棄該行 → 影像處理補綠色或錯位。② 驗證：治具固定角度重現 → 讀 AP 端 CSI-2 錯誤計數器（ECC/CRC error count）是否隨角度上升；有計數就是實體層問題，沒有就往 sensor 電源/軟體查。③ 進一步定位：TDR 掃 flex 在不同角度下的阻抗輪廓、檢查 connector 接觸電阻、對比良品/不良品 flex 的彎折區截面。④ 對策：彎折區走線改中性層（neutral axis）佈局、加大彎折半徑、彎折區避免鍍通孔與焊點、必要時降 MIPI 速率增加 margin。這種「機構×電氣」交叉的故障是 NB camera 的日常，也是面試中展現系統觀的好素材。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>兩題實戰題，請先用英文口頭回答再展開參考答案。</p>
+
+<details>
+<summary>Q1: "Walk me through, electrically, what happens when a D-PHY data lane goes from idle to transmitting high-speed data."</summary>
+<p><strong>參考答案骨架：</strong>The lane idles in LP-11, where both wires sit at about 1.2 V driven by low-power CMOS drivers, and the receiver termination is disabled. To start an HS burst, the transmitter signals LP-01 then LP-00 — this bridge state tells the receiver to enable its 100-ohm differential termination and switch to the HS receiver. The TX then turns on its low-swing differential driver: a current-mode output develops roughly 200 mV of differential swing across the termination, centered on a common-mode of about 200 mV. It drives HS-0 for a defined time, sends a sync sequence so the receiver finds the byte boundary, then streams payload — the clock lane runs DDR, so the bit rate is twice the clock frequency. To end the burst, the TX holds the inversion of the last bit for the trail period, then returns to LP-11 and the receiver switches its termination off again.</p>
+<p><strong>加分點：</strong>主動補「why」——"The two modes exist because camera traffic is bursty: HS termination burns static current, so the lane drops back to unterminated LP mode between bursts to save power."（把電氣流程接回系統層取捨，正是 Apple/Google 想聽的層次。）</p>
+</details>
+
+<details>
+<summary>Q2: "Your D-PHY link fails the receiver eye mask at 2.5 Gbps. How do you debug it?"</summary>
+<p><strong>參考答案骨架：</strong>First I characterize <em>how</em> it fails: mask violation at the crossing (jitter-dominated) versus reduced eye height (loss/reflection-dominated) points to different root causes. For timing failures, I separate random from deterministic jitter — if Dj dominates and is data-dependent, I suspect ISI from impedance discontinuities, so I run a TDR along the channel: flex sections, board-to-board connectors, and stiffener regions are the usual suspects, and I check intra-pair skew, which converts differential energy into common mode. For amplitude failures, I check the termination path — whether the RX termination enables correctly at SoT — and channel loss at the Nyquist frequency, about 1.25 GHz here. I also verify the eye is gated on HS bursts only, since LP segments corrupt the measurement. If the channel is fundamentally marginal, mitigations include shortening or re-stacking the flex, compensating the connector transition, cleaning up skew, or as a last resort dropping the lane rate and adding lanes.</p>
+<p><strong>考點：</strong>測你有沒有「分類 → 假設 → 量測驗證 → 對策」的結構化 debug 思維，而不是背規格數字。能把 jitter 拆成 Rj/Dj 並對應到不同根因，是資深與否的分水嶺。</p>
+</details>
+
+<h2>9. Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：D-PHY 的 LP 與 HS 模式，各自的電壓型態與用途？</p>
+  <p class="a">A1：LP＝單端、擺幅 0～約 1.2V、低速（約 10 Mbps 量級）、無終端、近零靜態功耗，用於控制／escape／待機；HS＝差動、擺幅約 200mV、共模約 200mV、RX 端 100Ω 終端、數百 Mbps～數 Gbps，用於影像 payload。同一對線分時切換。</p>
+  <p class="q">Q2：D-PHY lane 架構與速率換算？</p>
+  <p class="a">A2：1 條 clock lane + N 條 data lane（常見 1/2/4），每 lane 一對差動線。HS clock 為 DDR：資料速率 = 2 × clock 頻率；UI = 1/資料速率。總頻寬 = 每 lane 速率 × N。</p>
+  <p class="q">Q3：SoT 流程的 LP 狀態順序？RX 終端何時開啟？</p>
+  <p class="a">A3：LP-11（stop）→ LP-01（請求）→ LP-00（bridge，RX 在此開啟 100Ω 差動終端）→ HS-0（T_HS-ZERO）→ sync sequence → HS payload。EoT：最後一 bit 反相撐 T_HS-TRAIL → 回 LP-11、終端關閉。</p>
+  <p class="q">Q4：HS 差動擺幅怎麼「產生」的？終端錯誤會怎樣？</p>
+  <p class="a">A4：電流模式 TX 把約 2mA 量級電流導過 RX 的 100Ω 終端：V_OD ≈ I × R ≈ 200mV。終端沒開或阻值偏差 → 擺幅失控／反射，眼圖崩壞；共模（約 200mV）超出 RX 範圍也會失效。</p>
+  <p class="q">Q5：眼圖三要素與 flex 三大實務挑戰？</p>
+  <p class="a">A5：眼圖：UI（橫軸格子）、jitter（Rj 隨機＋Dj 確定性，吃眼寬）、eye mask（禁區，碰到即 fail）。flex 挑戰：阻抗不連續（connector／補強板／轉軸彎折）、長度匹配（pair 內 skew → 共模轉換，最關鍵）、EMI（desense 加害者兼受害者）。</p>
+</div>
+
+<h2>10. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>MIPI Alliance D-PHY Specification</strong>（需會員資格；面試前至少把電氣參數表——V<sub>OD</sub>、V<sub>CMTX</sub>、Z<sub>ID</sub>、各項 T 時序——的量級記熟；公開的濃縮版可看各晶片商的 D-PHY 應用筆記）</li>
+  <li><strong>MIPI CSI-2 Specification 概觀</strong>：至少讀懂封包結構（packet header、ECC、CRC）與 virtual channel，才能把「實體層 bit error」與「協定層症狀」對起來。</li>
+  <li><strong>示波器廠商的 D-PHY 量測應用文件</strong>（Keysight／Tektronix／Rohde &amp; Schwarz 皆有）：實際的 compliance 測項清單、眼圖 gating 方法、jitter 分解實務——是把本課「量測」章節落地的最佳材料。</li>
+  <li><strong>Howard Johnson,《High-Speed Digital Design》</strong>：傳輸線、終端、串擾的經典地基，本課 100Ω 與反射的所有直覺都能在裡面找到嚴謹版。</li>
+  <li><strong>下一步專題預告</strong>：C-PHY（三線三相、更高每腳位效率）與 D-PHY 的比較——Apple 近年 sensor 介面常考兩者取捨。</li>
+</ul>
+
+<footer>
+  <span>專題先修 1｜MIPI D-PHY 電氣層</span>
+  <span class="progress-note">Camera HW EE 面試準備系列</span>
+</footer>
+
+</div>
+</body>
+</html>

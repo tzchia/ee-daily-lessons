@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 4｜高速線路 Layout 設計實戰守則</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 4｜高速線路 Layout 設計實戰守則</h1>
+  <div class="meta">預估學習時間：120 分鐘｜難度：★★★☆☆（把「照 guideline 畫」升級成「知道為什麼這樣畫」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這篇專題，你要能夠：</p>
+  <ol>
+    <li>拿到一張疊構表（stackup）就能判斷：哪幾層適合走高速訊號、每層的參考平面是誰、微帶線與帶狀線各自的取捨</li>
+    <li>用「回流路徑」的眼光看 layout——說出高頻回流電流走哪裡、為什麼跨分割（crossing a plane split）是高速設計的頭號死罪</li>
+    <li>講出差動對三大守則（等長、等距、對內 skew 控制）背後的物理，以及蛇行線（serpentine）補償的正確擺法與常見錯誤</li>
+    <li>解釋 via 的寄生電容/電感從哪來、stub 為什麼會造成特定頻率的凹陷、back-drill 在解決什麼</li>
+    <li>知道 3W rule 和 guard trace 各自「何時有效、何時是安慰劑」</li>
+    <li>對鏡頭模組小板與 flex 的地處理、彎折區設計、MIPI 阻抗控制說出一套完整邏輯</li>
+    <li>在 review layout 時帶著基本 DFM 意識，不畫出「電氣正確但做不出來」的板子</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼這篇是面試的兵家必爭之地？</h2>
+<p>你過去 5 年一定跟 layout 工程師合作過無數次：你開 constraint、他拉線、你 review。但 Apple / Google 的 camera HW 面試有一個固定戲碼：<strong>白板上畫一個疊構或一段走線，問你「這樣畫有什麼問題？」</strong>。這種題目沒辦法背 guideline 過關，因為面試官會追問每一條規則的「為什麼」：</p>
+<ul>
+  <li>Why can't this MIPI pair cross the plane split?（為什麼 MIPI 不能跨這條分割縫？）</li>
+  <li>Your serpentine is right at the mismatched bend — why is that better than putting it at the end?（蛇行線為什麼要貼著造成不等長的轉角補，而不是在線尾補？）</li>
+  <li>When would a guard trace actually make crosstalk worse?（guard trace 什麼情況反而讓串擾變糟？）</li>
+</ul>
+<p>這篇的任務就是把你「知其然」的 layout 經驗，全部補上「知其所以然」。貫穿全篇的主軸案例，就是你最熟的場景：<strong>NB 主機板上，camera 訊號從 flex connector 一路走到 SoC 的完整路徑</strong>。</p>
+
+<div class="card takeaway">
+  <span class="label">全篇一句話</span>
+  <p>高速 layout 所有規則，九成可以從同一個物理事實推出來：<strong>訊號是「走線＋參考平面＋中間介質」三位一體的電磁場結構，任何一環被破壞，阻抗就變、能量就漏</strong>。看不懂後面任何公式都沒關係，把這句話內化，你就贏過一半的候選人。</p>
+</div>
+
+<h2>1. 疊構規劃（Stackup）——高速設計的地基</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>疊構就像蓋大樓前的「樓層規劃」。訊號走線是住戶，參考平面（GND/電源銅面）是每層樓的<strong>地板</strong>。高速訊號這種嬌貴住戶有個怪癖：<strong>他走到哪，腳下必須隨時踩著一塊完整、連續的地板</strong>——因為他的「影子」（回流電流）就貼在地板上跟著他走。樓層規劃時如果讓高速住戶住在「地板破洞」或「沒有地板」的樓層，後面裝潢（layout）再怎麼努力都救不回來。<strong>疊構錯了，就是地基歪了。</strong></p>
+</div>
+
+<h3>1.1 訊號層與參考平面的配對原則</h3>
+<p>規劃疊構時，核心動作只有一個：<strong>幫每一個訊號層指定它的參考平面，而且優先指定 GND</strong>。常見 NB 主機板 8～10 層板的思路：</p>
+<ul>
+  <li><strong>每個高速訊號層至少緊鄰一個完整 GND 平面</strong>（相鄰、距離越近越好）。</li>
+  <li><strong>訊號層與參考平面之間不夾其他訊號層</strong>——中間隔了別的訊號，等於地板和住戶之間塞了別人家，回流耦合被破壞。</li>
+  <li><strong>電源平面也可以當參考</strong>，但前提是它是大片完整的銅面、且與 GND 之間有足夠的去耦電容把高頻「短路」回去。實務上能用 GND 就用 GND，少一層轉換少一份風險。</li>
+  <li><strong>兩個訊號層直接相鄰是大忌</strong>（沒有平面隔開），層間串擾（broadside coupling）會很嚴重；真的不得已，兩層走線方向互相垂直以減少耦合。</li>
+</ul>
+
+<h3>1.2 微帶線 vs 帶狀線：怎麼選？</h3>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p><strong>微帶線（microstrip）</strong>＝住頂樓露台的住戶：一面是地板（下方參考平面），一面露天（空氣）。優點是「上樓快」（不用鑽 via 就能接元件、訊號速度稍快、損耗略低），缺點是<strong>露天＝會被外面吵、也會吵到外面</strong>（EMI 輻射與接收都較強）。</p>
+  <p><strong>帶狀線（stripline）</strong>＝住在上下都有樓層夾著的中間層：上下兩面都是地板。優點是<strong>被包得密不透風</strong>（EMI 屏蔽好、串擾場型收斂），缺點是進出都要搭電梯（換層必經 via），而且整個電磁場都泡在板材裡，速度稍慢、介質損耗全額計入。</p>
+</div>
+
+<table>
+  <tr><th>比較項目</th><th>微帶線（外層）</th><th>帶狀線（內層）</th></tr>
+  <tr><td>參考平面</td><td>單面（下方一個）</td><td>雙面（上下各一）</td></tr>
+  <tr><td>傳播速度（FR-4）</td><td>較快，約 17～18 cm/ns（場一半在空氣）</td><td>約 15 cm/ns（場全在介質）</td></tr>
+  <tr><td>EMI 輻射/抗擾</td><td>較差（半開放）</td><td>好（被平面夾住）</td></tr>
+  <tr><td>串擾場型</td><td>遠端串擾（FEXT）明顯</td><td>均勻介質中 FEXT 理論上趨近零</td></tr>
+  <tr><td>換層需求</td><td>可不經 via 直接接表面元件</td><td>必經 via（引入 stub 問題）</td></tr>
+  <tr><td>阻抗對外界敏感度</td><td>受綠漆（solder mask）、濕度影響</td><td>穩定</td></tr>
+  <tr><td>典型用途</td><td>BGA 逃線（breakout）、短距離、天線饋線</td><td>長距離高速走線主體（PCIe、MIPI 長段）</td></tr>
+</table>
+
+<p>實務選擇邏輯：<strong>能走內層帶狀線就走內層</strong>，尤其是像 camera MIPI 這種要橫越大半張主機板、又緊鄰 WLAN 天線區的訊號；外層微帶線只保留給「從 connector / BGA 出來那一小段不得不走的距離」。</p>
+
+<h3>1.3 疊構剖面與回流路徑（含跨分割錯誤示範）</h3>
+
+<figure>
+<svg viewBox="0 0 780 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="390" y="26" text-anchor="middle" font-size="17" font-weight="bold" fill="#0f4c5c">疊構剖面：微帶線 / 帶狀線與回流電流的位置</text>
+
+  <!-- Stackup cross-section (left) -->
+  <!-- L1 top layer -->
+  <rect x="40" y="60" width="330" height="10" fill="#f59e0b"/>
+  <text x="382" y="70" font-size="12" fill="#374151">L1 訊號（外層）</text>
+  <!-- microstrip trace on L1 -->
+  <rect x="150" y="50" width="26" height="10" fill="#dc2626"/>
+  <text x="163" y="44" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">微帶線</text>
+  <!-- dielectric -->
+  <rect x="40" y="70" width="330" height="26" fill="#e5e7eb"/>
+  <text x="205" y="88" text-anchor="middle" font-size="11" fill="#6b7280">介質（prepreg）</text>
+  <!-- L2 GND -->
+  <rect x="40" y="96" width="330" height="12" fill="#0e7490"/>
+  <text x="382" y="106" font-size="12" fill="#0e7490" font-weight="bold">L2 GND 平面</text>
+  <!-- return current under microstrip -->
+  <rect x="146" y="96" width="34" height="12" fill="#22d3ee"/>
+  <text x="163" y="126" text-anchor="middle" font-size="11" fill="#0891b2">回流電流集中在正下方</text>
+  <!-- dielectric -->
+  <rect x="40" y="108" width="330" height="30" fill="#e5e7eb"/>
+  <!-- L3 stripline -->
+  <rect x="40" y="138" width="330" height="10" fill="#f59e0b" opacity="0.35"/>
+  <rect x="250" y="138" width="26" height="10" fill="#dc2626"/>
+  <text x="382" y="148" font-size="12" fill="#374151">L3 訊號（內層）</text>
+  <text x="263" y="163" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">帶狀線</text>
+  <!-- dielectric -->
+  <rect x="40" y="148" width="330" height="30" fill="#e5e7eb"/>
+  <!-- L4 GND -->
+  <rect x="40" y="178" width="330" height="12" fill="#0e7490"/>
+  <text x="382" y="188" font-size="12" fill="#0e7490" font-weight="bold">L4 GND 平面</text>
+  <rect x="246" y="178" width="34" height="12" fill="#22d3ee"/>
+  <!-- return also on L2 above stripline -->
+  <rect x="246" y="96" width="34" height="12" fill="#22d3ee" opacity="0.6"/>
+  <text x="90" y="205" font-size="11" fill="#0891b2">帶狀線的回流分佈在上下兩個平面</text>
+
+  <!-- field lines microstrip -->
+  <path d="M155,60 C150,75 152,90 152,96" stroke="#94a3b8" fill="none" stroke-dasharray="3 2"/>
+  <path d="M171,60 C176,75 174,90 174,96" stroke="#94a3b8" fill="none" stroke-dasharray="3 2"/>
+  <path d="M163,50 C130,30 120,55 118,70" stroke="#94a3b8" fill="none" stroke-dasharray="3 2"/>
+  <text x="105" y="34" font-size="10" fill="#94a3b8">場一半在空氣</text>
+
+  <!-- Right: top view of plane split crossing -->
+  <text x="590" y="60" text-anchor="middle" font-size="15" font-weight="bold" fill="#991b1b">俯視圖：跨分割（錯誤示範）</text>
+  <rect x="450" y="75" width="130" height="130" fill="#a7f3d0" stroke="#0e7490"/>
+  <rect x="600" y="75" width="130" height="130" fill="#fde68a" stroke="#b45309"/>
+  <text x="515" y="145" text-anchor="middle" font-size="12" fill="#065f46">GND 區 A</text>
+  <text x="665" y="145" text-anchor="middle" font-size="12" fill="#92400e">另一電源/地區 B</text>
+  <text x="590" y="222" text-anchor="middle" font-size="11" fill="#6b7280">平面上的分割縫（moat）</text>
+  <!-- gap -->
+  <rect x="580" y="75" width="20" height="130" fill="#fff"/>
+  <!-- signal trace crossing -->
+  <line x1="460" y1="105" x2="720" y2="105" stroke="#dc2626" stroke-width="4"/>
+  <text x="590" y="96" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="bold">訊號直接跨過縫 ✗</text>
+  <!-- return current detour -->
+  <path d="M560,115 C540,150 545,185 590,190 C640,185 645,150 620,115"
+        stroke="#0891b2" stroke-width="2.5" fill="none" stroke-dasharray="6 4"/>
+  <polygon points="620,115 610,124 622,127" fill="#0891b2"/>
+  <text x="590" y="178" text-anchor="middle" font-size="11" fill="#0891b2">回流被迫繞遠路 → 大迴路面積</text>
+
+  <!-- Bottom: consequence annotation -->
+  <rect x="60" y="250" width="660" height="120" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="390" y="278" text-anchor="middle" font-size="14" font-weight="bold" fill="#991b1b">跨分割的四重後果</text>
+  <text x="90" y="304" font-size="13" fill="#374151">① 阻抗突變 → 反射、眼圖劣化　　② 迴路面積暴增 → EMI 輻射天線</text>
+  <text x="90" y="330" font-size="13" fill="#374151">③ 回流繞路與鄰線共用 → 串擾激增　　④ 縫隙兩端電位差 → 共模雜訊注入</text>
+  <text x="90" y="356" font-size="13" fill="#0e7490" font-weight="bold">正解：改走別層繞開分割；不得已時在跨越點旁放 stitching 電容給回流搭橋</text>
+
+  <!-- Bottom-most: side view of return path with via transition -->
+  <text x="390" y="405" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f4c5c">側視圖：訊號換層時，回流也要「跟著換層」</text>
+  <rect x="80" y="430" width="620" height="8" fill="#0e7490"/>
+  <text x="710" y="438" font-size="11" fill="#0e7490">GND L2</text>
+  <rect x="80" y="490" width="620" height="8" fill="#0e7490"/>
+  <text x="710" y="498" font-size="11" fill="#0e7490">GND L5</text>
+  <!-- signal path -->
+  <line x1="100" y1="420" x2="380" y2="420" stroke="#dc2626" stroke-width="3.5"/>
+  <line x1="380" y1="420" x2="380" y2="506" stroke="#dc2626" stroke-width="3.5"/>
+  <line x1="380" y1="506" x2="660" y2="506" stroke="#dc2626" stroke-width="3.5"/>
+  <circle cx="380" cy="420" r="5" fill="#dc2626"/>
+  <text x="240" y="414" text-anchor="middle" font-size="12" fill="#dc2626">訊號在 L1</text>
+  <text x="520" y="524" text-anchor="middle" font-size="12" fill="#dc2626">換到 L6 繼續走</text>
+  <text x="398" y="466" font-size="12" fill="#dc2626">訊號 via</text>
+  <!-- return via -->
+  <line x1="420" y1="434" x2="420" y2="494" stroke="#0891b2" stroke-width="3.5"/>
+  <text x="440" y="466" font-size="12" fill="#0891b2" font-weight="bold">GND 回流 via（緊鄰擺放！）</text>
+  <!-- return current arrows -->
+  <path d="M110,436 L372,436" stroke="#22d3ee" stroke-width="2" stroke-dasharray="5 3"/>
+  <path d="M428,492 L650,492" stroke="#22d3ee" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="200" y="454" font-size="11" fill="#0891b2">回流貼著 L2 平面走</text>
+  <text x="560" y="482" font-size="11" fill="#0891b2">回流轉到 L5 平面繼續貼著走</text>
+</svg>
+<figcaption>圖 1：上左＝疊構剖面（微帶線回流集中在正下方平面；帶狀線回流分佈上下兩面）；上右＝跨分割錯誤示範（回流被迫繞路）；下＝訊號換層時要在旁邊補 GND via 給回流「搭電梯」。</figcaption>
+</figure>
+
+<h2>2. 回流路徑思維——高速 layout 的第一性原理</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>電流永遠是一個<strong>封閉迴圈</strong>：去程走訊號線，回程走參考平面。低頻時，回流像下班的機車騎士——哪條路「電阻最小（最直）」就走哪條，會抄捷徑直線穿過整個平面。高頻時，回流卻像被磁鐵吸住一樣，<strong>緊緊貼在訊號線正下方、跟著訊號線的形狀亦步亦趨</strong>——因為這樣走「阻抗最小」（迴路面積最小＝電感最小）。</p>
+  <p>所以看高速 layout 時，你眼中不能只有那條紅色的走線，要想像<strong>每條走線下方都拖著一條看不見的影子</strong>。所有跨分割、挖空、換層的問題，本質都是「影子被卡住了」。</p>
+</div>
+
+<h3>2.1 原理：低頻走電阻最小、高頻走阻抗最小</h3>
+<p>回流電流在平面上的分佈，由整條路徑的阻抗 Z = R + jωL 決定：</p>
+<ul>
+  <li><strong>低頻（約 kHz 量級以下）</strong>：ωL 可忽略，Z ≈ R，回流走「幾何最短直線」。</li>
+  <li><strong>高頻（約 MHz 量級以上）</strong>：ωL 主宰，回流會自動選擇「迴路電感 L 最小」的路徑——也就是緊貼訊號線正下方，讓去程與回程磁場互相抵消。頻率越高，回流電流的分佈越窄、越集中在走線正下方。</li>
+</ul>
+
+<h3>2.2 跨分割的後果（面試必考）</h3>
+<p>當訊號線跨過參考平面上的一條分割縫（split / moat），影子被縫切斷，回流被迫繞到縫的盡頭或找最近的 stitching 電容過橋。後果有四（對應圖 1 右上）：</p>
+<ol>
+  <li><strong>阻抗突變</strong>：跨縫那一段等於「沒有參考平面的走線」，局部阻抗飆高 → 反射。</li>
+  <li><strong>迴路面積暴增</strong>：迴路電感上升，邊緣被拖慢，且這個大迴圈就是一支高效的環形天線 → EMI。</li>
+  <li><strong>串擾激增</strong>：繞路的回流會流經其他訊號的「地盤」，等於強迫不相干的訊號共用回流 → 彼此耦合。</li>
+  <li><strong>共模雜訊</strong>：縫隙兩側平面存在高頻電位差，跨越的訊號被注入共模成分——對差動訊號來說就是 EMI 與 RX 共模餘裕的殺手。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「差動訊號自帶回流，所以跨分割沒關係」——只對一半，錯的那一半會害死你。</strong>差動對確實有一部分回流在兩線之間互相抵消，但實務 PCB 差動對的耦合是「弱耦合」（線距通常大於線寬到介質的距離），<strong>多數回流仍然走參考平面</strong>。跨分割時阻抗一樣會跳、共模一樣會爆。MIPI、USB、PCIe 全部適用：<strong>差動對照樣不准跨分割</strong>。</p>
+</div>
+
+<h3>2.3 換層時的回流 via</h3>
+<p>訊號從 L1 經 via 換到 L6，它的影子也要從 L2 平面換到 L5 平面。如果兩個平面同為 GND，回流靠的是<strong>你在訊號 via 旁邊放的 GND stitching via</strong>；如果一個是 GND 一個是電源，回流得靠附近的去耦電容「跳層」。守則：</p>
+<ul>
+  <li>每個高速訊號 via 旁（理想 0.5 mm 量級內、越近越好）放至少一個 GND via；差動對則在對稱位置放 1～2 個。</li>
+  <li>換層前後盡量參考「同一張網」（GND→GND），避免 GND→電源這種要靠電容過橋的轉換。</li>
+</ul>
+
+<h2>3. 差動對走線——等長、等距、skew 與 serpentine</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>差動對是一對「跳雙人舞的舞者」：接收端只看兩人的<strong>相對動作</strong>（電壓差），不看絕對位置。這種設計天生抗噪——外面的干擾（觀眾丟東西）同時打到兩個人身上，相對動作不變，訊號無損。但前提是<strong>兩人必須完美同步</strong>：</p>
+  <ul>
+    <li><strong>等長</strong>＝兩人腳程一樣，同時到終點。一人先到（skew），兩人的「差」就開始亂掉，一部分差模能量變成共模能量。</li>
+    <li><strong>等距（固定間距）</strong>＝兩人手牽手的距離固定。忽遠忽近，差動阻抗就忽高忽低。</li>
+    <li><strong>對稱</strong>＝兩人經過的地形（via、轉角、換層）要一模一樣，不然受到的「待遇差」直接變成 skew 與共模。</li>
+  </ul>
+</div>
+
+<h3>3.1 三大守則的物理</h3>
+<table>
+  <tr><th>守則</th><th>破壞後的直接後果</th><th>典型目標（量級）</th></tr>
+  <tr><td>對內等長（intra-pair）</td><td>P/N skew → 差模轉共模（mode conversion）→ EMI 上升、眼圖交叉點偏移、接收端共模餘裕被吃掉</td><td>MIPI D-PHY 對內常見目標約 ±0.1 mm～±0.15 mm 量級（依平台 guideline）</td></tr>
+  <tr><td>固定間距、耦合一致</td><td>差動阻抗（常見 90Ω 或 100Ω，MIPI 平台各有規定）沿線漂移 → 反射</td><td>間距變動段長度越短越好；漸變優於突變</td></tr>
+  <tr><td>對間等長（inter-pair / lane-to-lane）</td><td>lane 之間 skew → 由介面的 deskew 能力吸收，餘裕變小</td><td>比對內寬鬆一個量級（依規格）</td></tr>
+</table>
+<p>注意優先順序：<strong>對內 skew 最嚴、其次差動阻抗連續性、對間等長最寬鬆</strong>。面試很愛考你排這個優先序。</p>
+
+<h3>3.2 serpentine（蛇行線）的正確用法</h3>
+<p>等長靠蛇行線補，但補的位置與形狀大有學問：</p>
+<ul>
+  <li><strong>就地補償</strong>：skew 在哪裡產生（通常是轉彎——內側線比外側線短），就在<strong>離該處最近的地方</strong>補回來。錯誤做法是讓 skew 累積一整段、到線尾才一次補——中間那整段兩線相位不對齊，差模能量已經在沿路轉成共模、輻射掉了。</li>
+  <li><strong>小振幅、緩過渡</strong>：蛇行凸出的高度不要太大，且蛇行段離另一條線太近會產生額外耦合，讓「電氣長度」的補償失真（自耦合讓蛇行段等效延遲小於幾何長度）。</li>
+  <li><strong>45° 或圓弧轉角</strong>：直角轉角在轉角處線寬等效變寬（局部電容增加、阻抗下降），高速訊號用 45° 兩段式或圓弧。</li>
+  <li><strong>via 對稱</strong>：P/N 兩線的 via 數量、位置、換層點必須鏡像對稱——一條打 2 個 via、另一條打 3 個，就是白送 skew 加阻抗不對稱。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 780 520" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="390" y="26" text-anchor="middle" font-size="17" font-weight="bold" fill="#0f4c5c">差動對走線規則圖解</text>
+
+  <!-- Section A: bend skew + local compensation -->
+  <text x="30" y="58" font-size="14" font-weight="bold" fill="#155e75">A. 轉彎產生 skew → 「就地」用蛇行線補償</text>
+  <!-- correct example -->
+  <text x="180" y="82" text-anchor="middle" font-size="13" fill="#15803d" font-weight="bold">✓ 正確：緊貼轉角後就補</text>
+  <path d="M40,150 L120,150 L170,100 L230,100 L242,88 L254,100 L266,88 L278,100 L360,100"
+        fill="none" stroke="#0e7490" stroke-width="3"/>
+  <path d="M40,170 L128,170 L178,120 L360,120" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="258" y="80" text-anchor="middle" font-size="11" fill="#0e7490">內側線就地蛇行補長</text>
+  <circle cx="150" cy="128" r="26" fill="none" stroke="#b45309" stroke-dasharray="4 3"/>
+  <text x="120" y="196" font-size="11" fill="#b45309">轉角：內側較短、外側較長</text>
+
+  <!-- wrong example -->
+  <text x="590" y="82" text-anchor="middle" font-size="13" fill="#dc2626" font-weight="bold">✗ 錯誤：拖到線尾才補</text>
+  <path d="M450,150 L530,150 L580,100 L640,100 L652,88 L664,100 L676,88 L688,100 L700,88 L712,100 L750,100"
+        fill="none" stroke="#0e7490" stroke-width="3"/>
+  <path d="M450,170 L538,170 L588,120 L750,120" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <line x1="600" y1="108" x2="640" y2="108" stroke="#b45309" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <text x="618" y="140" text-anchor="middle" font-size="11" fill="#b45309">這一段 P/N 相位不齊</text>
+  <text x="618" y="155" text-anchor="middle" font-size="11" fill="#b45309">一路轉成共模輻射</text>
+
+  <!-- Section B: spacing rules -->
+  <text x="30" y="240" font-size="14" font-weight="bold" fill="#155e75">B. 間距守則：對內距離 s 固定、對外距離拉開</text>
+  <line x1="60" y1="280" x2="360" y2="280" stroke="#0e7490" stroke-width="4"/>
+  <line x1="60" y1="300" x2="360" y2="300" stroke="#dc2626" stroke-width="4"/>
+  <line x1="60" y1="360" x2="360" y2="360" stroke="#6b7280" stroke-width="4"/>
+  <line x1="40" y1="280" x2="40" y2="300" stroke="#374151" stroke-width="1.5"/>
+  <text x="30" y="295" text-anchor="end" font-size="12" fill="#374151">s</text>
+  <line x1="380" y1="300" x2="380" y2="360" stroke="#374151" stroke-width="1.5"/>
+  <text x="392" y="335" font-size="12" fill="#374151">≥ 3W（到鄰近訊號）</text>
+  <text x="210" y="270" text-anchor="middle" font-size="11" fill="#0e7490">差動對（間距 s 全程固定）</text>
+  <text x="210" y="352" text-anchor="middle" font-size="11" fill="#6b7280">鄰近的其他訊號（aggressor）</text>
+
+  <!-- Section C: via symmetry -->
+  <text x="450" y="240" font-size="14" font-weight="bold" fill="#155e75">C. via 對稱＋回流 via</text>
+  <!-- P/N traces going to vias -->
+  <line x1="470" y1="285" x2="580" y2="285" stroke="#0e7490" stroke-width="4"/>
+  <line x1="470" y1="315" x2="580" y2="315" stroke="#dc2626" stroke-width="4"/>
+  <circle cx="592" cy="285" r="9" fill="#0e7490"/>
+  <circle cx="592" cy="315" r="9" fill="#dc2626"/>
+  <line x1="604" y1="285" x2="720" y2="285" stroke="#0e7490" stroke-width="4" stroke-dasharray="7 4"/>
+  <line x1="604" y1="315" x2="720" y2="315" stroke="#dc2626" stroke-width="4" stroke-dasharray="7 4"/>
+  <text x="662" y="270" text-anchor="middle" font-size="11" fill="#6b7280">（虛線＝換到內層）</text>
+  <!-- GND vias symmetric -->
+  <circle cx="592" cy="255" r="7" fill="none" stroke="#15803d" stroke-width="2.5"/>
+  <circle cx="592" cy="345" r="7" fill="none" stroke="#15803d" stroke-width="2.5"/>
+  <text x="622" y="250" font-size="11" fill="#15803d">GND 回流 via（上下對稱）</text>
+  <text x="592" y="376" text-anchor="middle" font-size="11" fill="#374151">P/N via 同位置、同層數 → 零附加 skew</text>
+
+  <!-- Section D: serpentine geometry -->
+  <text x="30" y="420" font-size="14" font-weight="bold" fill="#155e75">D. 蛇行線幾何：小振幅、間距足夠、45° 過渡</text>
+  <path d="M60,480 L110,480 L130,455 L150,455 L170,480 L190,480 L210,455 L230,455 L250,480 L330,480"
+        fill="none" stroke="#0e7490" stroke-width="3"/>
+  <line x1="130" y1="500" x2="150" y2="500" stroke="#374151" stroke-width="1.5"/>
+  <text x="140" y="516" text-anchor="middle" font-size="11" fill="#374151">凸起間距不足 → 自耦合，補償失真</text>
+  <line x1="345" y1="455" x2="345" y2="480" stroke="#374151" stroke-width="1.5"/>
+  <text x="358" y="472" font-size="11" fill="#374151">振幅盡量小（約 3W 內為佳、依 guideline）</text>
+  <path d="M480,480 L560,480 L585,455" fill="none" stroke="#15803d" stroke-width="3"/>
+  <path d="M620,480 L700,480 L700,455" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="540" y="505" font-size="11" fill="#15803d">✓ 45°/圓弧轉角</text>
+  <text x="668" y="505" font-size="11" fill="#dc2626">✗ 直角（局部阻抗下降）</text>
+</svg>
+<figcaption>圖 2：差動對四大實戰守則——(A) skew 就地補償 vs 錯誤的線尾補償；(B) 對內間距固定、對外拉開 3W；(C) via 鏡像對稱＋GND 回流 via；(D) 蛇行線幾何細節。</figcaption>
+</figure>
+
+<h2>4. via 與 stub——垂直方向的隱形殺手</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>走線是高速公路，via 是「立體交流道」。問題是這個交流道天生蓋得不標準：<strong>桶身（barrel）像一小段電感、頂底的焊盤（pad）與周圍反焊盤（antipad）之間像一小顆電容</strong>——訊號每過一個 via 就被迫過一次「減速丘」。更糟的是：如果你只從 L1 走到 L3，但 via 是鑽穿全板的通孔，L3 以下那段沒用到的桶身就是 <strong>stub（死路）</strong>——訊號會分一份能量衝進死路、撞牆反彈回來，跟主訊號打架。特定頻率下（死路長度剛好是四分之一波長），反彈回來的波正好完全反相，訊號在那個頻率被<strong>整個抵消</strong>——這就是頻域上著名的 stub 諧振凹陷。</p>
+</div>
+
+<h3>4.1 via 的寄生模型</h3>
+<ul>
+  <li><strong>寄生電感</strong>：來自桶身這段垂直電流路徑，量級約 0.5 nH/mm 上下（依幾何而定）。一個 1.6 mm 通孔 via 約零點幾 nH 到 1 nH 量級。</li>
+  <li><strong>寄生電容</strong>：來自 pad 與各層平面 antipad 邊緣的耦合，量級約零點幾 pF。pad 越大、antipad 越小、層數越多，電容越大。</li>
+  <li>兩者合起來，一個未優化的 via 對高速訊號就是一個低通＋阻抗不連續點。優化手段：縮小 pad、加大 antipad、移除非連接層的 NFP（non-functional pad）、旁邊配 GND via 形成類同軸結構。</li>
+</ul>
+
+<h3>4.2 stub 與 back-drill</h3>
+<p>stub 的諧振（四分之一波長）頻率：</p>
+<div class="formula">
+  f<sub>null</sub> ≈ c / (4 × L<sub>stub</sub> × √Dk)
+</div>
+<p><strong>白話翻譯：</strong>死路越長，出事的頻率越低。公式看不懂沒關係，記住結論：<strong>stub 長度和「訊號會在哪個頻率被吃掉」成反比</strong>。例：stub 1 mm、Dk≈4 → f<sub>null</sub> ≈ 3×10⁸/(4×0.001×2) ≈ 37.5 GHz（量級），對 2.5 Gbps MIPI 無感；stub 若達 5 mm，凹陷降到約 7.5 GHz，開始威脅更高速的介面。</p>
+<p>對策依成本排序：</p>
+<ol>
+  <li><strong>選層避 stub</strong>：讓高速訊號換到「靠近 via 末端」的層（例如從 L1 換到 L8 而不是 L3），天然把 stub 縮到最短——不用錢，NB 主機板最常用。</li>
+  <li><strong>back-drill（背鑽）</strong>：電鍍完成後從板背面用稍大的鑽頭把沒用到的桶身鑽掉，留下極短殘 stub（約 0.2 mm 量級）。加工序、加錢，伺服器/高速板常見；一般 NB 板上 MIPI 速率通常靠選層就能解。</li>
+  <li><strong>盲孔/埋孔（HDI）</strong>：直接不製造 stub，但整體板價更高——手機板、高密度 camera 模組小板反而因 HDI 製程本來就要用，順帶解掉 stub 問題。</li>
+</ol>
+
+<h2>5. 間距規則——3W rule 與 guard trace 的真相</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>串擾像隔壁桌講話的音量：距離拉開一點，音量下降得非常快（耦合大致隨距離平方衰減）。<strong>3W rule</strong> 就是「桌距拉到桌寬三倍，基本聽不到」的經驗法則。而 <strong>guard trace</strong>（在兩條線中間塞一條接地的隔音牆）呢？——隔音牆要有效，<strong>必須每隔一小段就打樁固定到地基（密集 GND via）</strong>；沒打樁的隔音牆會自己共振，反而把噪音「傳話」給另一邊，比不放還糟。</p>
+</div>
+
+<h3>5.1 3W rule</h3>
+<p>內容：兩條走線<strong>中心距 ≥ 3 倍線寬</strong>時，耦合串擾大致降到可接受量級（常說降到約原本緊鄰時的一小部分；要更嚴格的類比/敏感訊號用 5W）。它背後的物理是：微帶線的電磁場強度離開走線後快速衰減，衰減尺度由「走線到參考平面的高度 h」決定——所以更本質的說法其實是「<strong>間距相對於 h 才是關鍵</strong>」，3W 只是把它翻成好記的口訣（一般疊構下 W 與 h 同量級，所以口訣堪用）。</p>
+<div class="card takeaway">
+  <span class="label">重點</span>
+  <p>降串擾最有效的兩招，第一是<strong>拉開間距</strong>，第二是<strong>把訊號層壓得離參考平面更近（縮小 h）</strong>——h 縮小，場被收得更緊，同樣間距下串擾大幅下降。疊構階段就決定了串擾體質，這又回到第 1 節：地基。</p>
+</div>
+
+<h3>5.2 guard trace 何時有效？</h3>
+<ul>
+  <li><strong>有效條件</strong>：guard trace 兩端接地＋<strong>沿線密集打 GND via</strong>（via 間距遠小於最高關心頻率的波長，經驗上約 λ/10 以內）。這時它等於把兩條線之間的電場「攔截入地」。</li>
+  <li><strong>反效果條件</strong>：只有兩端接地、中間沒 via 的長 guard trace，本身是一條會諧振的傳輸線，諧振頻率附近反而<strong>增強</strong>耦合。</li>
+  <li><strong>務實判斷</strong>：如果空間夠放一條 guard trace＋兩側間距，其實直接把那個空間拿來「拉開到 5W」通常一樣好、還省 via。guard trace 真正的甜蜜點是<strong>類比小訊號旁邊有吵鬧鄰居、又沒空間拉距離</strong>時（例如鏡頭模組小板上 VCM 驅動線與 sensor 類比電源相鄰）。</li>
+</ul>
+
+<h2>6. 電源與接地——分割地的迷思與鏡頭模組小板實務</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>老一輩教「類比地和數位地要切開，避免數位噪音污染類比」。這就像為了不讓吵鬧的鄰居吵到你，把兩戶之間的<strong>走廊地板鋸斷</strong>——結果所有要跨戶送貨的人（跨域訊號的回流）都被迫跳過裂縫，摔得亂七八糟。現代主流做法是：<strong>一整塊完整的地，用「擺位分區」代替「切割」</strong>——把吵的元件和安靜的元件分區擺放，讓各自的回流自然待在自己區域，而不是物理上鋸開地板。</p>
+</div>
+
+<h3>6.1 分割地的迷思</h3>
+<ul>
+  <li>切割 GND 只有在極少數情況合理（例如安規隔離、特定混合訊號晶片 datasheet 明確要求的星狀單點接地），且切割後<strong>絕不允許任何訊號跨縫</strong>。</li>
+  <li>大多數「切了地之後 EMI/噪音變好」的都市傳說，實際上是切割「順便」擋掉了某條不該存在的回流路徑——同樣效果用擺位與走線紀律就能達成，還不用承擔跨縫風險。</li>
+  <li>回到第一性原理：<strong>雜訊耦合的根源是共用回流路徑</strong>。回流天生就貼著自己的訊號線走（第 2 節），只要擺位分區＋高速線不亂穿，完整地平面本身就是最好的隔離。</li>
+</ul>
+
+<h3>6.2 鏡頭模組小板的地處理</h3>
+<p>Camera 模組小板（sensor board）的特殊性：面積極小、上面同時住著<strong>類比域（sensor 像素陣列/PLL 類比電源）、數位域（MIPI TX、I2C）、功率域（VCM/OIS 驅動，動輒上百 mA 的脈衝電流）</strong>。實務守則：</p>
+<ul>
+  <li><strong>一塊完整地</strong>，不切割；用擺位把 VCM 驅動迴路壓在自己的角落、迴路面積最小化。</li>
+  <li>sensor 的類比電源（如 AVDD）去耦電容<strong>緊貼 sensor 腳</strong>，回流迴圈以 mm 計。</li>
+  <li>MIPI 對從 sensor 出腳到 connector 全程有完整 GND 參考，模組端與主機板端的 GND 靠 connector 上<strong>足夠多且分散的 GND pin</strong> 銜接——connector 的 GND pin 就是 MIPI 回流的必經之路，pin 分配時要讓每對高速訊號附近都有 GND pin（後面案例會再講）。</li>
+</ul>
+
+<h2>7. Flex / Rigid-flex 特殊考量</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>flex 是「可以彎的板子」，但代價是它又薄又軟：疊構層數少（常見 1～3 層）、介質是 PI（聚醯亞胺，Dk 約 3.2～3.5 量級）、銅箔薄。在 flex 上做阻抗控制，就像在吊橋上蓋高速公路——做得到，但每個參數都比水泥地（rigid 板）更斤斤計較。</p>
+</div>
+
+<h3>7.1 flex 上走 MIPI 的阻抗控制</h3>
+<ul>
+  <li><strong>參考平面通常只有一面</strong>（微帶線結構），且為了保持柔軟度，那一面常用<strong>網狀銅（cross-hatch / mesh ground）</strong>而不是實心銅。網目大小直接影響阻抗與屏蔽：網目越大越軟、但阻抗越高越不穩。走 MIPI 的區段，網目要夠密（開孔尺寸遠小於訊號上升邊緣的空間長度），或乾脆該區改實心銅。</li>
+  <li><strong>阻抗公差先天較大</strong>：PI 薄膜厚度、膠層厚度、網狀地的等效性，讓 flex 阻抗控制公差通常比 rigid 板寬（rigid 常見 ±10%，flex 可能要接受更寬或用更貴的工法）。設計時把阻抗不連續預算多留一點給 flex 段。</li>
+  <li><strong>差動對在 flex 上照樣要等長等距</strong>，而且 flex 常常又細又長（例如 NB 轉軸過線），是全路徑中損耗與串擾的重災區——線寬、對距在 flex 上反而要更寬鬆地給。</li>
+</ul>
+
+<h3>7.2 彎折區（bending zone）守則</h3>
+<ul>
+  <li><strong>彎折區絕不放 via、不放零件、不換線寬</strong>：彎折時銅箔承受反覆應力，via 的電鍍桶身是應力集中點，彎幾次就微裂 → 間歇性斷路（這種 debug 你可能親身痛過：彎到某角度 camera 就掉線）。</li>
+  <li>走線方向<strong>垂直於彎折軸</strong>；多條線在彎折區錯開（staggered）避免同一截面全是銅。</li>
+  <li>動態彎折（反覆開闔，如 NB 轉軸）比一次性成形彎折要求嚴苛得多：更大彎折半徑（經驗上一次性約 6～10 倍板厚、動態要求更高，量級依廠商規範）、避免該區有任何不對稱應力點。</li>
+  <li>rigid-flex 的<strong>rigid/flex 交界處</strong>是另一個應力集中帶：交界線附近同樣避 via、避焊盤，並保持走線垂直穿越交界。</li>
+</ul>
+
+<h2>8. DFM 基本意識——電氣正確也要做得出來</h2>
+<p>Review layout 時，除了電氣，還要問「板廠做不做得出來、良率多少、貴不貴」：</p>
+<ul>
+  <li><strong>線寬/線距下限</strong>：一般 NB 主機板量產常見約 3/3 mil（75/75 µm）量級起跳，更細要 HDI 製程，貴。你算出來的阻抗要求 2 mil 線寬？回去改疊構，不是逼板廠。</li>
+  <li><strong>via 種類與成本階梯</strong>：通孔 &lt; 背鑽 &lt; 盲埋孔/任意層 HDI。每往右一步都是錢和交期。</li>
+  <li><strong>阻抗公差</strong>：標準製程約 ±10%；要 ±7% 或更嚴，板廠要挑料、加測試 coupon，成本上升。設計餘裕要涵蓋公差，不要把 spec 壓在公差邊緣。</li>
+  <li><strong>銅厚與蝕刻因子</strong>：外層銅經電鍍後變厚、蝕刻出來的截面是梯形不是矩形——阻抗模擬時用板廠實際參數，不要用教科書理想矩形。</li>
+  <li><strong>零件與 keep-out</strong>：connector 附近的鎖附孔、屏蔽罩焊接區、測試點（test point）都要預留——高速線上加測試點本身就是一個 stub，位置與形式（例如用極小 pad 或乾脆靠 connector 端量測）要跟 SI 一起權衡。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「SI 最佳解＝好設計」——不一定。</strong>工程是取捨：為了 0.5 dB 的損耗改善把整板升級成 HDI，讓 BOM 成本上升、二供板廠消失，這在量產型 NB 產品是壞決策。面試官（尤其 Apple）很愛聽你講「我在 SI 與成本/良率之間怎麼取捨」——這是資深與菜鳥的分水嶺。</p>
+</div>
+
+<h2>9. 數學推導——把幾個關鍵公式的來龍去脈補上</h2>
+<p>（提醒：公式看不懂可以先跳過，每條後面都有白話翻譯，懂結論就好。）</p>
+
+<h3>9.1 特性阻抗與幾何的關係（定性推導）</h3>
+<p>傳輸線的特性阻抗由單位長度電感 L 與電容 C 決定：</p>
+<div class="formula">
+  Z₀ = √(L / C)
+</div>
+<p><strong>白話翻譯：</strong>走線「存磁場的能力」除以「存電場的能力」，開根號就是阻抗。所以：</p>
+<ul>
+  <li>走線<strong>離參考平面越近</strong>（h 變小）→ 電容 C 變大 → Z₀ 下降。</li>
+  <li>走線<strong>越寬</strong>（W 變大）→ C 變大 → Z₀ 下降。</li>
+  <li>介質 <strong>Dk 越高</strong> → C 變大 → Z₀ 下降。</li>
+</ul>
+<p>這就是為什麼 via 的大 pad（多出來的電容）讓局部阻抗<strong>下降</strong>、跨分割（參考平面消失，C 驟減）讓局部阻抗<strong>飆高</strong>——同一條公式解釋兩個相反方向的毛病。工程上實際算阻抗用場解器（field solver），經典的 IPC 近似式（如微帶線 Z₀ ≈ 87/√(Dk+1.41) × ln(5.98h/(0.8W+t))）只適合抓量級，別背細節、背趨勢。</p>
+
+<h3>9.2 skew 與共模轉換</h3>
+<p>差動訊號 V<sub>diff</sub> = V<sub>P</sub> − V<sub>N</sub>。若 N 比 P 晚到 Δt（skew），在邊緣切換期間兩者不再互補，產生共模成分。粗略估計，當 Δt 遠小於上升時間 t<sub>r</sub> 時：</p>
+<div class="formula">
+  共模擾動幅度 ≈ (Δt / t<sub>r</sub>) × (V<sub>swing</sub> / 2)　（量級估計）
+</div>
+<p><strong>白話翻譯：</strong>skew 占上升時間的比例，就是差動訊號「漏」成共模的比例。MIPI D-PHY HS 邊緣約 100 ps 量級，若 layout 造成 1 mm 不等長（約 6～7 ps），漏出的共模約是擺幅的百分之幾——看似小，但共模是 EMI 的高效輻射源，而且會累積。這就是對內等長要求壓到 0.1 mm 量級的原因。</p>
+
+<h3>9.3 stub 諧振頻率</h3>
+<div class="formula">
+  f<sub>null</sub> = c / (4 · L<sub>stub</sub> · √Dk)　（四分之一波長諧振）
+</div>
+<p><strong>推導直覺：</strong>訊號進入 stub、走到開路末端反射（開路反射係數 +1）、走回來，共走了 2 × L<sub>stub</sub>。當這個來回時間剛好等於半個週期，反射波與主波<strong>反相疊加</strong>，該頻率能量被抵消。「來回＝半週期」換算成長度就是「stub＝四分之一波長」。</p>
+<p><strong>白話翻譯：</strong>死路的長度決定哪個頻率被吃掉；死路越短，被吃掉的頻率越高、離你的訊號頻段越遠、越安全。</p>
+
+<h3>9.4 串擾與間距（趨勢式）</h3>
+<p>微帶線近端串擾係數的常用趨勢近似：</p>
+<div class="formula">
+  串擾比例 ∝ 1 / [1 + (s/h)²]　（s＝線距，h＝線到參考平面高度）
+</div>
+<p><strong>白話翻譯：</strong>串擾由「間距 s 和高度 h 的比值」決定——把 s 拉大或把 h 壓小都有效，而且是平方級的快速衰減。3W rule 只是這條式子在典型疊構下的口訣化。</p>
+
+<h2>10. 實務案例：NB camera 訊號從 connector 到 SoC 的完整路徑</h2>
+<p>把全篇串起來。場景：NB 上蓋的 camera 模組（MIPI CSI-2，D-PHY 2 lane＋clock lane），訊號經 flex 下到主機板 connector，再橫越主機板走到 SoC。我們沿路徑逐站檢查：</p>
+
+<h3>10.1 路徑分段與各段重點</h3>
+<table>
+  <tr><th>路段</th><th>結構</th><th>Layout 重點（對應章節）</th></tr>
+  <tr><td>① 模組小板（sensor board）</td><td>HDI 小板或 rigid-flex 的 rigid 端</td><td>完整地不切割、AVDD 去耦緊貼、VCM 迴路壓角落（§6.2）；HDI 天然無 stub（§4.2）</td></tr>
+  <tr><td>② flex 過轉軸段</td><td>2～3 層 flex、網狀地</td><td>MIPI 段網狀地加密或實心化（§7.1）；彎折區無 via、走線垂直彎折軸（§7.2）；對內等長照管</td></tr>
+  <tr><td>③ 主機板 connector</td><td>板對板或 FPC connector</td><td>GND pin 緊鄰每對高速 pin——connector 是回流的瓶頸；接頭正下方主機板保持完整 GND，不要在接頭下方開電源分割（§2）</td></tr>
+  <tr><td>④ connector 逃線區（breakout）</td><td>L1 微帶線，短距</td><td>密集區間距做不到 3W 沒關係——耦合長度短；一出逃線區立刻恢復間距與阻抗（§5）</td></tr>
+  <tr><td>⑤ 主機板長途段</td><td>換層到內層帶狀線</td><td>換層 via 旁放 GND 回流 via、P/N via 對稱（§2.3、§3.2）；選層讓 stub 最短（§4.2）；全程檢查參考平面連續、不跨任何電源分割（§2.2）；與 WLAN 走線/天線區保持距離＋帶狀線屏蔽優勢（§1.2）</td></tr>
+  <tr><td>⑥ SoC breakout</td><td>BGA 區微帶/短帶狀線</td><td>BGA 下 via 陣列密、antipad 蠶食參考平面——確認 MIPI 進 BGA 那幾排下方平面沒被 antipad 連成大空洞（§1、§4）；對內 skew 在此做最後收斂，蛇行就地補（§3.2）</td></tr>
+</table>
+
+<h3>10.2 三個「你可能真的遇過」的 debug 情境重演</h3>
+<ul>
+  <li><strong>情境 A：EMI 掃描在某頻段超標，關 camera 就過。</strong>典型根因排查順序：flex 網狀地太疏（§7.1）→ 主機板段某處 MIPI 跨了電源分割（§2.2）→ 換層處缺回流 via（§2.3）。共同物理：回流迴路面積變大 → 環形天線。</li>
+  <li><strong>情境 B：蓋子開闔到特定角度，camera 間歇掉線。</strong>先懷疑彎折區機械問題：flex 彎折區內有 via 或線寬突變（§7.2）、彎折半徑不足、或 connector 附近應力。電氣量測會看到阻抗在彎折時瞬變。</li>
+  <li><strong>情境 C：高溫測試下 MIPI 誤碼率上升。</strong>板材 Dk/Df 隨溫度變化＋損耗上升，原本壓在邊緣的眼圖餘裕被吃光——回頭檢討設計餘裕是否被「connector 逃線區的阻抗突變＋via stub＋flex 段公差」層層預支（§4、§7、§8 的餘裕預算觀念）。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">案例總結</span>
+  <p>整條路徑的思考框架就一句：<strong>從 sensor 焊球到 SoC 焊球，訊號與它的回流影子必須「手牽手、不分離」地走完全程</strong>；每一個結構轉換點（板→flex→connector→板→via→BGA）都是潛在的「分離點」，layout review 就是逐點檢查有沒有把影子弄丟。</p>
+</div>
+
+<h2>11. 動手練習與詳解</h2>
+<p>先自己想，再展開解答。</p>
+
+<details>
+<summary>練習 1：一個疊構是 L1 訊號 / L2 GND / L3 訊號 / L4 電源 / L5 訊號 / L6 GND。哪一層走高速訊號最危險？為什麼？</summary>
+<p><strong>解：</strong>L5 相對安全（緊鄰 L6 GND）；L1 安全（緊鄰 L2 GND）。<strong>L3 最危險</strong>：它的參考只能靠 L2 GND（距離較遠、中間視疊構可能還隔著介質厚層）或 L4 電源。若參考 L4 電源，回流要靠電源—地之間的去耦電容轉換；更糟的是 L4 電源層通常被切成多塊電源島，走 L3 的訊號極易跨分割。若不得不用 L3，守則是：走線全程對準 L4 上「同一塊完整電源島」或改讓 L2 GND 當主參考（把 L2–L3 介質做薄），並嚴查跨分割。</p>
+</details>
+
+<details>
+<summary>練習 2：MIPI 差動對在轉角後內側線短了 0.9 mm。請估算 skew（FR-4 內層），並說明蛇行補償該加在哪裡、大概多長。</summary>
+<p><strong>解：</strong>帶狀線約 15 cm/ns ≈ 6.7 ps/mm，0.9 mm ≈ <strong>6 ps 的 skew</strong>。對 t_r ≈ 100 ps 的 D-PHY HS 邊緣，這已是 6% 量級的差模轉共模來源，要補。補償位置：<strong>緊貼該轉角之後、在較短的內側線上就地蛇行</strong>，幾何長度補約 0.9 mm（實務因蛇行自耦合，等效電氣長度略小於幾何長度，等長報表以電氣長度或實測為準）。錯誤做法：拖到 SoC 端才補——中間整段共模已經產生並輻射。</p>
+</details>
+
+<details>
+<summary>練習 3：一條高速訊號從 L1 經通孔 via 換到 L3，板厚 1.6 mm，L3 深度約 0.4 mm。請估 stub 長度與諧振頻率（Dk≈4），並給兩個對策。</summary>
+<p><strong>解：</strong>stub ≈ 1.6 − 0.4 = <strong>1.2 mm</strong>。f_null ≈ c/(4·L·√Dk) = 3×10⁸ / (4 × 1.2×10⁻³ × 2) ≈ <strong>約 31 GHz</strong>。對 2.5 Gbps 的 MIPI（基頻 1.25 GHz，主要能量在 10 GHz 內）影響有限；但對 PCIe Gen5（16 GHz 量級的頻寬需求）就危險。對策：① 改換到深層（如 L8 附近）把 stub 縮短——免費；② back-drill 把殘 stub 鑽到約 0.2 mm 量級——加工費。加分：③ HDI 盲孔。</p>
+</details>
+
+<details>
+<summary>練習 4：同事在敏感類比線與時脈線之間加了一條 guard trace，只在兩端接地，長 40 mm。時脈諧波到 1 GHz 都有能量。這條 guard trace 有效嗎？</summary>
+<p><strong>解：</strong><strong>大概率無效甚至有害。</strong>1 GHz 在 FR-4 波長約 15 cm，λ/10 ≈ 15 mm——guard trace 上的接地 via 間距必須小於這個量級，40 mm 只靠兩端接地，中段對高頻而言是「浮」的，會像傳輸線一樣諧振（40 mm 的半波諧振約 1.9 GHz、四分之一波約 0.9 GHz——正好落在關心頻段！），反而把耦合放大。修正：沿線每 5～10 mm 打一個 GND via；或直接刪掉 guard trace，把空間拿來把兩線間距拉到 5W。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念整合題）：為什麼「camera flex 的 connector 上 GND pin 的數量與位置」會影響 MIPI 的 SI 與 EMI？</summary>
+<p><strong>解：</strong>connector 是回流路徑上的<strong>強制收縮點</strong>：板上回流原本攤在寬闊平面上、貼著訊號走，到了 connector 只能擠進幾根 GND pin。若 GND pin 少或離高速 pin 遠，回流被迫繞路 → 局部迴路電感增大 → 阻抗突變（SI：反射、眼圖劣化）＋迴路面積增大（EMI：輻射）＋多對訊號共用同幾根 GND pin（串擾＋共地耦合）。守則：pin assignment 階段就讓<strong>每對 MIPI 差動 pin 緊鄰至少一根 GND pin</strong>，理想成 G-S-S-G 排列。這題把 §2（回流）、§5（串擾）、§6（共地）全部串起來——面試遇到 pin 定義題就用這套邏輯。</p>
+</details>
+
+<h2>12. 面試怎麼考</h2>
+<p>白板題實錄風格，先試著用英文口頭回答再展開。</p>
+
+<details>
+<summary>Q1: "Here's a 6-layer stackup. Your MIPI CSI lanes route on layer 3, and the layer-4 power plane below is split into three power islands. What problems do you expect, and how would you fix them?"</summary>
+<p><strong>參考答案骨架：</strong>The high-frequency return current follows directly underneath the signal to minimize loop inductance. If layer 4 is my reference and it's split into islands, every time a lane crosses a split, the return current must detour. That causes four problems: an impedance discontinuity and reflections, a larger current loop that radiates EMI, return current spreading into other circuits' areas which increases crosstalk, and common-mode noise injected into the differential pair. My preferred fix is to re-reference the lanes to a solid ground: either thin the dielectric between layer 3 and the layer-2 ground so ground becomes the dominant reference, or reroute the lanes so they stay over one continuous island. Stitching capacitors across the split are only a last-resort band-aid — they have mounting inductance and only help over a limited frequency range.</p>
+<p><strong>加分點：</strong>主動補一句取捨——"If the schedule allows, the cleanest fix is at the stackup level, because routing discipline can't fully compensate for a bad reference-plane assignment."</p>
+</details>
+
+<details>
+<summary>Q2: "Your intra-pair length matching spec is ±0.1 mm. The layout engineer added all the serpentine compensation right before the SoC ball. The report shows the pair matched. Ship it?"</summary>
+<p><strong>參考答案骨架：</strong>No — the matching report only proves total lengths are equal, not that the pair stays phase-aligned along the route. Skew is generated locally, at bends and asymmetric vias. If it accumulates for several centimeters before being compensated at the very end, that entire stretch carries differential-to-common-mode conversion: the common-mode energy radiates as EMI and eats into the receiver's common-mode margin, and adding length at the end doesn't undo it. The correct practice is to compensate immediately after each skew source — matching should be maintained continuously, not just at the endpoints. I'd also check that the P and N vias are symmetric, since a via mismatch adds both skew and an impedance imbalance that no serpentine can fix.</p>
+<p><strong>考點：</strong>分辨「報表等長」與「沿線相位對齊」是資深 SI 素養的試金石；答得出 mode conversion 這個詞並解釋清楚，直接加分。</p>
+</details>
+
+<h2>13. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：高頻回流電流走哪裡？為什麼？</p>
+  <p class="a">A1：緊貼訊號線正下方的參考平面。因為高頻下阻抗由電感主宰，回流自動選「迴路面積（電感）最小」的路徑；頻率越高分佈越集中。低頻才走電阻最小的直線捷徑。</p>
+  <p class="q">Q2：訊號跨參考平面分割的四大後果？</p>
+  <p class="a">A2：① 阻抗突變→反射；② 迴路面積暴增→EMI 輻射；③ 回流繞路侵入他人區域→串擾；④ 縫兩側電位差→共模雜訊注入。差動對照樣適用（多數回流仍在平面上）。</p>
+  <p class="q">Q3：微帶線 vs 帶狀線的三個關鍵差異？</p>
+  <p class="a">A3：參考平面單面 vs 雙面；速度約 17～18 vs 15 cm/ns（FR-4）；EMI/串擾表現微帶較差、帶狀線被平面夾住較佳。長途高速走內層帶狀線，外層只留給不得不走的 breakout。</p>
+  <p class="q">Q4：via stub 諧振頻率公式與 back-drill 目的？</p>
+  <p class="a">A4：f_null ≈ c/(4·L_stub·√Dk)，stub 為四分之一波長時反射反相抵消訊號。back-drill 用較大鑽頭把未使用的桶身鑽除，殘 stub 縮到約 0.2 mm 量級，把凹陷推到遠高於訊號頻段。免費替代方案：選層讓訊號換到 via 末端附近的層。</p>
+  <p class="q">Q5：serpentine 補償的第一守則？guard trace 的有效條件？</p>
+  <p class="a">A5：serpentine——skew 在哪產生就在哪「就地」補，不可拖到線尾（沿途已發生差模轉共模）。guard trace——必須沿線密集打 GND via（間距約 λ/10 內）才有效；只兩端接地的長 guard trace 會自我諧振反而加劇耦合。</p>
+</div>
+
+<h2>14. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>Eric Bogatin,《Signal and Power Integrity — Simplified》</strong>：第 7～9 章（傳輸線與回流路徑）是本篇 §1～§2 的完整理論版，Bogatin 的「return current 思維」是業界面試的共同語言。</li>
+  <li><strong>Howard Johnson,《High-Speed Digital Design: A Handbook of Black Magic》</strong>：老書但 §5（串擾）與 guard trace 的實測數據至今仍被引用；讀它學「工程師的估算法」。</li>
+  <li><strong>Henry Ott,《Electromagnetic Compatibility Engineering》</strong>：第 16～17 章講混合訊號接地，是「分割地迷思」的權威闢謠來源。</li>
+  <li><strong>MIPI D-PHY 規格書（會員可得）＋各 SoC 平台的 layout guideline</strong>：把本篇的「為什麼」對照平台 guideline 的「數字」，練習反向解讀每條規則的物理來源——這正是面試的出題方式。</li>
+  <li><strong>IPC-2223（flex 設計規範）</strong>：彎折半徑、彎折區規則的正式出處；報數字時記得標註「依 IPC 與板廠規範」。</li>
+  <li>動手建議：找一份你做過的舊案 layout，用本篇 §10 的表格逐段自我 review 一次，把發現的問題寫成英文一頁筆記——這份筆記就是你面試時最好的 war story 素材。</li>
+</ul>
+
+<footer>
+  <span>專題先修 4｜高速線路 Layout 設計實戰守則</span>
+  <span class="progress-note">Camera HW EE 面試準備系列</span>
+</footer>
+
+</div>
+</body>
+</html>

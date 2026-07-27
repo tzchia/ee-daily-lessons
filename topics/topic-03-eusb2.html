@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專題 3｜eUSB2——為什麼 USB 也要「降壓」進 SoC 時代</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">專題先修｜Camera HW EE</div>
+  <h1>專題 3｜eUSB2——為什麼 USB 也要「降壓」進 SoC 時代</h1>
+  <div class="meta">預估學習時間：100 分鐘｜難度：★★★☆☆（介面演進＋SI＋bring-up 實戰）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完這篇專題，你要能夠：</p>
+  <ol>
+    <li>說出 eUSB2 誕生的根本原因：先進製程 SoC 的 I/O 耐壓下降，3.3V 的傳統 USB2 訊號變得「不友善」</li>
+    <li>分清楚 eUSB2 的兩種工作模式——<strong>native mode</strong>（晶片對晶片、板內短距）與 <strong>repeater mode</strong>（經 repeater 轉回標準 USB2 接外部裝置）——並畫出兩種拓撲</li>
+    <li>解釋 eUSB2 repeater 在做什麼、選型時要看哪些指標（延遲、eye 品質、模式支援、ESD）</li>
+    <li>講出 eUSB2 板內走線與傳統 USB2 差動 90Ω 走線在 SI 上的異同</li>
+    <li>列出至少三個 eUSB2 bring-up 的常見陷阱（模式設定、方向切換、squelch），並知道怎麼 debug</li>
+  </ol>
+</div>
+
+<h2>0. 為什麼你現在必須懂 eUSB2？</h2>
+<p>你過去 5 年在 NB 主機板上畫的 USB2，大概是這樣：SoC/PCH 出來一對 D+/D−，控 90Ω 差動阻抗，拉去 Type-A 或 Type-C 接頭，中間頂多加 ESD 元件和 common-mode choke，收工。</p>
+<p>但從近幾年開始（尤其是 ARM 架構 NB 平台，以及愈來越多先進製程 x86 SoC），你打開平台設計指南會發現：<strong>SoC 出來的不再是 USB2，而是一個叫 eUSB2 的東西</strong>，而且旁邊多了一顆你以前沒看過的小晶片——eUSB2 repeater。更貼近你背景的是：<strong>NB 內建 camera（webcam/IR camera）幾乎都是 USB2 介面的 sensor 模組</strong>，在 eUSB2 平台上，這條 camera 的 USB 路徑要怎麼接、要不要過 repeater、bring-up 出問題怎麼切 debug，正是 camera HW 面試會考的系統整合題。</p>
+<p>這篇專題把 eUSB2「為什麼存在、電氣上改了什麼、板子上怎麼畫、bring-up 怎麼踩雷」一次講完。</p>
+
+<h2>1. 誕生背景：先進製程與 3.3V 的世代衝突</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>把 SoC 想成一棟愈蓋愈精緻的現代大樓，裡面的「電梯門」（電晶體的氧化層）為了追求速度與省電，做得愈來愈薄、愈來愈嬌貴——只能承受愈來愈低的電壓。而 USB2 是 1990 年代末定下的老規矩，它敲門的力道是 3.3V，像一個習慣用力拍鐵門的老鄰居。以前大樓的門是厚鐵門（厚氧化層 I/O），拍就拍吧；現在的門是精緻玻璃門，再用 3.3V 去拍，<strong>不是門壞掉，就是得在門口特別加裝一層厚重的防撞門（特殊高壓 I/O 元件）——又占地、又貴、又拖慢整棟樓的施工</strong>。</p>
+  <p>eUSB2 的邏輯很直接：既然大樓內部都講「小聲的話」（約 1V），那 USB 進大樓時也改講小聲的話；真的要跟外面世界（USB 隨身碟、外接裝置）溝通時，在大樓門口請一位「翻譯兼擴音員」（repeater）把小聲的話轉回標準 USB2 的音量。</p>
+</div>
+
+<h3>1.1 原理：I/O 耐壓為什麼一直掉？</h3>
+<p>CMOS 製程微縮時，電晶體的閘極氧化層厚度 t<sub>ox</sub> 跟著縮薄。氧化層能承受的電場強度 E 有物理上限（超過就會 TDDB 崩潰、劣化），而電場約等於電壓除以厚度：</p>
+
+<div class="formula">
+  E ≈ V / t<sub>ox</sub>　→　t<sub>ox</sub> 縮小，可承受的 V 就必須跟著縮小
+</div>
+
+<p><strong>白話翻譯：</strong>氧化層愈薄，同樣電壓下「單位厚度吃到的電壓」愈大，就愈容易被打穿。所以先進製程的原生（thin-oxide）電晶體只能吃約 1V 上下的電壓。公式看不懂沒關係，記住結論：<strong>製程愈先進，晶片原生能承受的電壓愈低</strong>。</p>
+<p>那以前 3.3V 的 USB2 是怎麼活下來的？答案是晶圓廠會另外提供「厚氧化層（thick-oxide）高壓 I/O 元件」，專門做 3.3V 介面。但在先進節點（例如 10nm 以下量級）維持這種高壓元件的代價愈來愈高：</p>
+<ul>
+  <li><strong>面積代價</strong>：高壓 I/O 元件與其 ESD 結構占的面積，沒辦法跟著邏輯電路一起微縮，在寸土寸金的先進製程 die 上愈顯突兀。</li>
+  <li><strong>製程代價</strong>：多一層厚氧化層就是多光罩、多製程步驟，有些先進節點甚至乾脆不再提供 3.3V 原生元件，得用疊接（cascode）等電路技巧硬湊，速度與可靠度都打折。</li>
+  <li><strong>功耗代價</strong>：訊號切換功耗正比於 V²（第 5 節推導），3.3V 對比 1V 是約十倍的差距。</li>
+</ul>
+
+<h3>1.2 等一下——USB2 高速模式不是本來就只有 400mV 嗎？</h3>
+<p>這是理解 eUSB2 最重要、也最容易被講錯的一個細節。傳統 USB2 其實是「多種訊號準位的混合體」：</p>
+<ul>
+  <li><strong>HS（High-Speed，480 Mbps）資料傳輸</strong>：電流模驅動，差動擺幅約 400 mV——這部分本來就是低擺幅，不是問題主角。</li>
+  <li><strong>FS/LS（12 / 1.5 Mbps）訊號、以及所有「協定雜務」</strong>：連線偵測的 pull-up、reset（SE0）、chirp 交握、resume、disconnect 偵測……這些通通建立在 <strong>3.3V 單端準位</strong>之上。</li>
+</ul>
+<p>也就是說，就算裝置永遠跑 HS，<strong>PHY 的接腳仍必須能承受並產生 3.3V</strong>，因為列舉（enumeration）和各種狀態切換都靠 3.3V 準位語言。這就是先進製程 SoC 的痛點：為了那些「雜務」，整個 USB2 PHY 都得用高壓元件蓋。</p>
+<p>eUSB2（Embedded USB2，USB-IF 於約 2018 年發布的 USB 2.0 補充規範）的解法：<strong>把所有訊號——資料與協定雜務——全部壓進約 1.0V 或 1.2V 的低壓 I/O 域</strong>，原本靠 3.3V 類比準位表達的狀態，改用低壓準位與控制訊息（control message）重新定義。傳輸速率維持與 USB2 相同：LS 1.5 Mbps、FS 12 Mbps、HS 480 Mbps，<strong>協定層完全不變</strong>，改的只有實體層的「電壓語言」。訊號腳位也從 D+/D− 改名為 <strong>eD+/eD−</strong>。</p>
+
+<div class="card takeaway">
+  <span class="label">關鍵結論</span>
+  <p>eUSB2 ＝「協定不變、速率不變（480 Mbps 上限不變）、電壓全面降到約 1.0V/1.2V 的板內版 USB2」。它<strong>不是更快的 USB</strong>，而是<strong>對先進製程更友善的 USB</strong>。所有外部接頭（Type-A/Type-C）上的訊號仍然是傳統 USB2——eUSB2 只存在於板子內部。</p>
+</div>
+
+<h2>2. 電氣特性：低擺幅世界長什麼樣</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>傳統 USB2 的 FS/LS 像在操場上用喊的（0 到 3.3V 大聲喊），eUSB2 像在圖書館裡講悄悄話（0 到約 1V）。講悄悄話省力（省電、對晶片溫柔），但缺點也很直白：<strong>悄悄話傳不遠、也更怕吵</strong>——所以 eUSB2 被定位成「板內短距離」介面，出了板子見到線材與接頭，就得請 repeater 轉回大嗓門。</p>
+</div>
+
+<h3>2.1 訊號擺幅對比圖</h3>
+
+<figure>
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">傳統 USB2 vs eUSB2：訊號擺幅對比（示意）</text>
+
+  <!-- left panel: legacy USB2 -->
+  <text x="195" y="52" text-anchor="middle" font-size="14" font-weight="bold" fill="#991b1b">傳統 USB2（D+/D−）</text>
+  <line x1="55" y1="290" x2="345" y2="290" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="55" y1="290" x2="55" y2="60" stroke="#9ca3af" stroke-width="1.5"/>
+  <!-- 3.3V ref line -->
+  <line x1="55" y1="90" x2="345" y2="90" stroke="#dc2626" stroke-dasharray="5 4" stroke-width="1"/>
+  <text x="50" y="94" text-anchor="end" font-size="12" fill="#dc2626">3.3V</text>
+  <text x="50" y="294" text-anchor="end" font-size="12" fill="#6b7280">0V</text>
+  <!-- FS waveform 0..3.3V -->
+  <polyline points="65,286 95,286 100,92 140,92 145,286 185,286 190,92 230,92 235,286 265,286"
+    fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="165" y="130" text-anchor="middle" font-size="12" fill="#dc2626">FS/LS 與協定交握：0↔3.3V 全擺幅</text>
+  <!-- HS small swing around 0 -->
+  <line x1="55" y1="272" x2="345" y2="272" stroke="#b45309" stroke-dasharray="3 3" stroke-width="1"/>
+  <text x="350" y="276" font-size="11" fill="#b45309">約0.4V</text>
+  <polyline points="270,286 276,272 282,286 288,272 294,286 300,272 306,286 312,272 318,286 324,272 330,286"
+    fill="none" stroke="#b45309" stroke-width="2"/>
+  <text x="300" y="315" text-anchor="middle" font-size="12" fill="#b45309">HS 資料：約400mV</text>
+  <text x="160" y="315" text-anchor="middle" font-size="12" fill="#6b7280">PHY 接腳必須承受 3.3V</text>
+
+  <!-- right panel: eUSB2 -->
+  <text x="565" y="52" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">eUSB2（eD+/eD−）</text>
+  <line x1="430" y1="290" x2="720" y2="290" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="430" y1="290" x2="430" y2="60" stroke="#9ca3af" stroke-width="1.5"/>
+  <!-- 3.3V ghost line for scale -->
+  <line x1="430" y1="90" x2="720" y2="90" stroke="#d1d5db" stroke-dasharray="5 4" stroke-width="1"/>
+  <text x="725" y="94" font-size="11" fill="#9ca3af">(3.3V 參考)</text>
+  <!-- ~1.0V line -->
+  <line x1="430" y1="230" x2="720" y2="230" stroke="#0e7490" stroke-dasharray="5 4" stroke-width="1"/>
+  <text x="425" y="234" text-anchor="end" font-size="12" fill="#0e7490">約1.0V</text>
+  <text x="425" y="294" text-anchor="end" font-size="12" fill="#6b7280">0V</text>
+  <!-- low swing FS-like waveform 0..1V -->
+  <polyline points="440,286 470,286 474,232 514,232 518,286 558,286 562,232 602,232 606,286 636,286"
+    fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="540" y="212" text-anchor="middle" font-size="12" fill="#0e7490">所有交握/FS/LS：0↔約1.0V（或1.2V）</text>
+  <!-- HS small swing -->
+  <polyline points="642,286 648,274 654,286 660,274 666,286 672,274 678,286 684,274 690,286"
+    fill="none" stroke="#155e75" stroke-width="2"/>
+  <text x="668" y="315" text-anchor="middle" font-size="12" fill="#155e75">HS：低擺幅</text>
+  <text x="535" y="315" text-anchor="middle" font-size="12" fill="#15803d">全程不超過 I/O 電壓 → 免高壓元件</text>
+</svg>
+<figcaption>圖 1：左邊是傳統 USB2——HS 資料本來就小聲，但協定交握全靠 3.3V；右邊是 eUSB2——把所有訊號壓進約 1.0V/1.2V 的低壓域，SoC 從此不需要 3.3V 耐壓 I/O。（擺幅為示意，精確準位以 eUSB2 規範與元件 datasheet 為準。）</figcaption>
+</figure>
+
+<h3>2.2 傳統 USB2 vs eUSB2 比較表</h3>
+<table>
+  <tr><th>項目</th><th>傳統 USB2</th><th>eUSB2</th></tr>
+  <tr><td>協定 / 速率</td><td>LS 1.5M / FS 12M / HS 480 Mbps</td><td>完全相同（LS/FS/HS，上限 480 Mbps）</td></tr>
+  <tr><td>訊號腳位</td><td>D+ / D−</td><td>eD+ / eD−</td></tr>
+  <tr><td>I/O 電壓域</td><td>FS/LS 與協定交握：3.3V；HS 差動擺幅約 400 mV</td><td>全部訊號約 1.0V（部分平台選 1.2V）；HS 為低擺幅差動</td></tr>
+  <tr><td>連線/狀態表達</td><td>3.3V pull-up、SE0、chirp 等類比準位語言</td><td>低壓準位＋控制訊息（control message）重新定義</td></tr>
+  <tr><td>傳輸距離定位</td><td>板內＋線材，可出機殼（約 5 m 級線材）</td><td>僅板內短距（cm 量級），不直接接線材/接頭</td></tr>
+  <tr><td>外部接頭</td><td>Type-A / Type-C / micro-B 等</td><td>無——要接外部裝置必須經 repeater 轉回 USB2</td></tr>
+  <tr><td>差動阻抗（layout）</td><td>90Ω 差動（業界慣例）</td><td>差動走線，目標阻抗依廠商 layout guide（常見約 85～90Ω，以 datasheet 為準）</td></tr>
+  <tr><td>ESD 環境</td><td>接頭直接面對使用者，需系統級 ESD（IEC 61000-4-2）防護</td><td>板內訊號，ESD 壓力小；系統級 ESD 由 repeater 的 USB2 側承擔</td></tr>
+  <tr><td>對 SoC 製程</td><td>需 3.3V 耐壓 I/O（厚氧化層元件）</td><td>原生低壓元件即可，面積/功耗/成本友善</td></tr>
+  <tr><td>典型應用</td><td>外接埠、傳統平台</td><td>先進製程 SoC 平台：板內 camera、modem、感測器 hub；經 repeater 接外部埠</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「eUSB2 是新一代更快的 USB」——錯。</strong>速率上限仍是 480 Mbps，跟 2000 年的 USB 2.0 一樣。它解決的是「電壓世代衝突」，不是頻寬。面試時把這點講清楚（What problem does eUSB2 solve? → I/O voltage compatibility with advanced process nodes, not speed），立刻顯得你懂本質。</p>
+</div>
+
+<h2>3. 兩種模式：native mode vs repeater mode</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>回到大樓比喻：<strong>native mode</strong> 是「大樓裡的兩個住戶直接講悄悄話」——SoC 和另一顆同樣支援 eUSB2 的晶片（例如未來的 camera 模組、modem）在板內短距直連，全程低壓，乾淨省電。<strong>repeater mode</strong> 則是「住戶要跟大樓外的訪客講話」——訪客（USB 隨身碟、滑鼠、外接裝置）只聽得懂傳統 USB2 的大嗓門，所以門口站一位 repeater：對內講悄悄話、對外喊 3.3V，<strong>即時雙向翻譯</strong>。</p>
+</div>
+
+<h3>3.1 拓撲圖</h3>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">eUSB2 兩種拓撲：native mode 與 repeater mode</text>
+
+  <!-- ===== Native mode row ===== -->
+  <text x="40" y="66" font-size="14" font-weight="bold" fill="#15803d">① Native mode（晶片對晶片、板內短距、全程低壓）</text>
+  <rect x="40" y="84" width="170" height="80" rx="10" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="125" y="116" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">SoC</text>
+  <text x="125" y="138" text-anchor="middle" font-size="12" fill="#374151">eUSB2 PHY（約1.0V）</text>
+  <rect x="420" y="84" width="190" height="80" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="2"/>
+  <text x="515" y="112" text-anchor="middle" font-size="13" font-weight="bold" fill="#166534">eUSB2 周邊晶片</text>
+  <text x="515" y="132" text-anchor="middle" font-size="12" fill="#374151">（camera / modem /</text>
+  <text x="515" y="150" text-anchor="middle" font-size="12" fill="#374151">sensor hub…）</text>
+  <line x1="210" y1="114" x2="420" y2="114" stroke="#0e7490" stroke-width="3"/>
+  <line x1="210" y1="134" x2="420" y2="134" stroke="#0e7490" stroke-width="3"/>
+  <text x="315" y="104" text-anchor="middle" font-size="12" fill="#0e7490">eD+/eD−（板內差動、cm 量級）</text>
+  <text x="315" y="158" text-anchor="middle" font-size="12" fill="#15803d">不需要 repeater、不出板</text>
+
+  <!-- ===== Repeater mode row ===== -->
+  <text x="40" y="216" font-size="14" font-weight="bold" fill="#b45309">② Repeater mode（經 repeater 轉回標準 USB2 接外部裝置）</text>
+  <rect x="40" y="236" width="150" height="80" rx="10" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="115" y="268" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">SoC</text>
+  <text x="115" y="290" text-anchor="middle" font-size="12" fill="#374151">eUSB2 PHY</text>
+  <rect x="300" y="236" width="160" height="80" rx="10" fill="#fdf6ec" stroke="#d97706" stroke-width="2"/>
+  <text x="380" y="264" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400e">eUSB2 repeater</text>
+  <text x="380" y="284" text-anchor="middle" font-size="12" fill="#374151">準位轉換＋整形</text>
+  <text x="380" y="302" text-anchor="middle" font-size="12" fill="#374151">（雙向、即時）</text>
+  <rect x="570" y="236" width="150" height="80" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="645" y="264" text-anchor="middle" font-size="13" font-weight="bold" fill="#991b1b">Type-A / Type-C</text>
+  <text x="645" y="284" text-anchor="middle" font-size="12" fill="#374151">接頭 → 外部裝置</text>
+  <text x="645" y="302" text-anchor="middle" font-size="12" fill="#374151">（隨身碟、鏡頭…）</text>
+  <line x1="190" y1="262" x2="300" y2="262" stroke="#0e7490" stroke-width="3"/>
+  <line x1="190" y1="286" x2="300" y2="286" stroke="#0e7490" stroke-width="3"/>
+  <text x="245" y="252" text-anchor="middle" font-size="12" fill="#0e7490">eD+/eD−</text>
+  <text x="245" y="332" text-anchor="middle" font-size="11" fill="#0e7490">約1.0V 低壓域</text>
+  <line x1="460" y1="262" x2="570" y2="262" stroke="#dc2626" stroke-width="3"/>
+  <line x1="460" y1="286" x2="570" y2="286" stroke="#dc2626" stroke-width="3"/>
+  <text x="515" y="252" text-anchor="middle" font-size="12" fill="#dc2626">D+/D−</text>
+  <text x="515" y="332" text-anchor="middle" font-size="11" fill="#dc2626">標準 USB2（3.3V 域）＋ESD/choke</text>
+  <line x1="245" y1="268" x2="245" y2="320" stroke="none"/>
+
+  <!-- bottom note -->
+  <rect x="90" y="352" width="580" height="36" rx="8" fill="#f3f4f6" stroke="#6b7280"/>
+  <text x="380" y="376" text-anchor="middle" font-size="13" fill="#374151">原則：repeater 儘量靠近接頭端，讓 3.3V 高壓域走線最短、低壓 eUSB2 走長段</text>
+</svg>
+<figcaption>圖 2：上排 native mode——SoC 與支援 eUSB2 的周邊晶片直連，全程低壓；下排 repeater mode——repeater 是低壓域與 3.3V 域的邊界，通常擺在靠近接頭處。</figcaption>
+</figure>
+
+<h3>3.2 兩種模式的取捨</h3>
+<table>
+  <tr><th></th><th>Native mode</th><th>Repeater mode</th></tr>
+  <tr><td>對接對象</td><td>同樣支援 eUSB2 的晶片</td><td>任何傳統 USB2 裝置（經接頭）</td></tr>
+  <tr><td>BOM</td><td>不需 repeater，省一顆料</td><td>每個外部埠約多一顆 repeater</td></tr>
+  <tr><td>距離</td><td>板內短距（cm 量級，依 layout guide）</td><td>eUSB2 段板內＋USB2 段可接線材</td></tr>
+  <tr><td>功耗</td><td>最低（全程低壓）</td><td>多 repeater 本身功耗與 3.3V 段功耗</td></tr>
+  <tr><td>生態現況</td><td>支援 eUSB2 的周邊晶片仍在增加中</td><td>相容既有所有 USB2 生態，是目前 NB 上的主流用法</td></tr>
+</table>
+
+<h2>4. Repeater 的角色與選型考量</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>repeater 不是「翻譯機」那種要把整句話聽完再翻的角色——那樣延遲太大。它更像<strong>同步口譯</strong>：一個 bit 進來、幾乎同時就以另一種音量出去，兩邊方向都要能翻，而且要自己判斷「現在是誰在講話」。所以評價一位好口譯的標準，就是 repeater 的選型標準：<strong>翻得快（延遲低）、翻得清楚（eye 品質好）、不會把咳嗽聲當成講話（squelch 判斷正確）</strong>。</p>
+</div>
+
+<h3>4.1 repeater 在做什麼</h3>
+<p>eUSB2 repeater 是一顆<strong>雙向、位元級透明（bit-level transparent）</strong>的準位轉換器，主要工作：</p>
+<ul>
+  <li><strong>準位轉換</strong>：eUSB2 低壓訊號 ↔ 傳統 USB2 訊號（FS/LS 的 3.3V 準位、HS 的電流模差動），包含所有協定狀態（reset、chirp、suspend/resume、disconnect）的雙向對應。</li>
+  <li><strong>訊號整形（re-drive）</strong>：重新驅動邊緣，補償走線損耗，讓接頭端 eye 合格。</li>
+  <li><strong>方向管理</strong>：USB2 是半雙工，同一對線上兩邊輪流講話。repeater 必須即時偵測目前傳輸方向並切換自己的驅動方向。</li>
+  <li><strong>接收 host 端的設定</strong>：eUSB2 定義了經由 eD+/eD− 傳送的控制訊息機制，SoC 可透過它設定/查詢 repeater（角色、模式等），部分料件也提供 I2C 或 strap 腳設定。</li>
+</ul>
+
+<h3>4.2 選型 checklist</h3>
+<table>
+  <tr><th>指標</th><th>為什麼重要</th><th>看什麼</th></tr>
+  <tr><td>傳播延遲（latency）</td><td>USB2 協定有來回時序預算（例如封包間 turnaround）；repeater 的延遲會吃掉預算，規範對 repeater 延遲有上限（ns 量級）</td><td>datasheet 的 HS/FS 傳播延遲；鏈路上有幾顆 repeater（規範對級聯數量有限制）</td></tr>
+  <tr><td>Eye 品質</td><td>接頭端要過 USB2 HS eye mask（near-end/far-end templates）；repeater 輸出的 jitter 疊加、擺幅、邊緣速率直接決定過不過電測</td><td>輸出 jitter 疊加量、eye diagram 實測資料、是否提供輸出擺幅/等化微調</td></tr>
+  <tr><td>Squelch / disconnect 門檻</td><td>HS idle 與有訊號之間靠振幅門檻（squelch）判斷；門檻不對→誤觸發或漏訊號（第 8 節詳述）</td><td>squelch 門檻規格與遲滯（hysteresis）、disconnect 偵測支援</td></tr>
+  <tr><td>模式/角色支援</td><td>host port、device port、DRD（雙角色）行為不同；Type-C 埠要能配合 CC 邏輯換方向</td><td>是否支援 host/device/dual-role、設定介面（control message / I2C / strap）</td></tr>
+  <tr><td>ESD 與防護</td><td>repeater 的 USB2 側面對接頭，是系統級 ESD 第一線之一</td><td>USB2 側 IEC 61000-4-2 等級；是否仍需外加 TVS</td></tr>
+  <tr><td>電源與封裝</td><td>需要低壓（約1.0V/1.2V）與 3.3V 兩組電源；NB 板上空間緊</td><td>電源腳配置、上電順序要求、封裝大小、待機功耗（S0ix/suspend 電流）</td></tr>
+</table>
+
+<p>市面上的例子（僅供認識料件生態，選型以當案平台 AVL 為準）：TI TUSB2E11 / TUSB2E221、NXP PTN3222 等單埠/雙埠 eUSB2 repeater。平台廠（Qualcomm、Intel 等）的設計指南通常會直接給建議料表。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「repeater 跟 redriver 一樣，只是放大訊號」——不精確。</strong>傳統 USB2 redriver（例如訊號調理晶片）輸入輸出是同一種電壓語言，只做整形；eUSB2 repeater 是<strong>跨電壓域的協定狀態轉換器</strong>，它必須理解 USB2 的線路狀態（chirp、SE0、idle…）才能正確翻譯，複雜度高一個層次。面試被問「repeater vs redriver」時，抓住「準位/狀態轉換 vs 純訊號整形」這條主軸。</p>
+</div>
+
+<h2>5. 數學推導：降壓到底省了什麼？</h2>
+<p>這節有兩個小推導。<strong>公式看不懂可以先跳過，每段後面的白話翻譯與結論才是必帶走的。</strong></p>
+
+<h3>5.1 切換功耗：V² 的威力</h3>
+<p>對一條負載電容為 C 的單端訊號線，每秒切換 f 次、擺幅 V，動態功耗：</p>
+
+<div class="formula">
+  P = C × V² × f
+</div>
+
+<p>固定 C 與 f，比較 3.3V 與 1.0V 兩種擺幅：</p>
+
+<div class="formula">
+  P<sub>eUSB2</sub> / P<sub>USB2-FS</sub> = (1.0 / 3.3)² ≈ 0.092　→　約省 91%
+</div>
+
+<p><strong>白話翻譯：</strong>電壓降到 1/3.3，功耗不是降 1/3.3，而是降它的<strong>平方</strong>——只剩下不到一成。這對 FS/LS 訊號與所有 3.3V 協定交握的功耗是十倍級的改善（HS 資料段本來就是低擺幅電流模，改善幅度另計）。這也是手機/NB 這種吃電池的產品積極導入 eUSB2 的原因之一。</p>
+
+<h3>5.2 複習：傳統 USB2 HS 的 400 mV 是怎麼來的</h3>
+<p>傳統 USB2 HS 是電流模驅動：發送端灌約 17.78 mA 的電流到訊號線上，而線的兩端各有 45Ω 對地端接（發送端與接收端各一），兩個 45Ω 並聯：</p>
+
+<div class="formula">
+  R<sub>eff</sub> = 45Ω ∥ 45Ω = 22.5Ω　；　V = I × R = 17.78 mA × 22.5Ω ≈ 400 mV
+</div>
+
+<p><strong>白話翻譯：</strong>HS 模式的 400 mV 不是隨便訂的，是「固定電流 × 兩端端接電阻並聯」自然算出來的。這條公式同時解釋了為什麼 USB2 HS 走線要控 90Ω 差動（單端各約 45Ω，與端接匹配）。eUSB2 的 HS 同樣是低擺幅差動，但準位與端接細節依 eUSB2 規範重新定義——工程上你要記的是：<strong>兩者 HS 都是「低擺幅、需要阻抗受控的差動對」，SI 設計思路一致</strong>。</p>
+
+<h3>5.3 雜訊裕度：降壓的代價</h3>
+<p>擺幅縮小，雜訊裕度（noise margin）跟著縮。粗略地說，若判斷門檻設在擺幅中點，單端雜訊裕度約為擺幅的一半：</p>
+
+<div class="formula">
+  NM ≈ V<sub>swing</sub> / 2　→　3.3V 系統約 1.65V；1.0V 系統約 0.5V
+</div>
+
+<p><strong>白話翻譯：</strong>以前有 1.6V 量級的本錢容忍地彈跳、串擾、耦合雜訊，現在只剩 0.5V 量級。這就是為什麼 eUSB2 被限制在「板內短距」——距離短、環境可控，悄悄話才不會被吵散。也是為什麼 eUSB2 走線的參考平面完整性、與雜訊源（DC-DC、時脈）的隔離，比以前的 USB2 FS 走線更需要認真對待。</p>
+
+<h2>6. 訊號完整性：eUSB2 走線 vs 傳統 USB2 差動 90Ω</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>你可以把這節總結成一句話：<strong>「畫法八成像，心態完全不同。」</strong>畫法像——都是差動對、控阻抗、等長、包地；心態不同——傳統 USB2 走線的終點是「面對全世界的接頭」（要扛 ESD、線材、使用者的各種粗暴），eUSB2 走線的終點永遠在自家板子上（環境可控，但雜訊本錢變薄）。</p>
+</div>
+
+<h3>6.1 layout 對照</h3>
+<table>
+  <tr><th>設計項目</th><th>傳統 USB2（D+/D−）</th><th>eUSB2（eD+/eD−）</th></tr>
+  <tr><td>差動阻抗</td><td>90Ω ±10%（業界慣例）</td><td>依 SoC/repeater layout guide，常見約 85～90Ω；以 datasheet 為準</td></tr>
+  <tr><td>對內等長（intra-pair skew）</td><td>嚴格（HS 480 Mbps，等長 mil 級要求）</td><td>同樣嚴格——HS 速率相同，skew 要求同級</td></tr>
+  <tr><td>走線長度</td><td>可較長（到接頭、甚至經 daughter board）</td><td>刻意短：SoC→repeater 或 SoC→周邊晶片，cm 量級（依 guide，常見上限約 10 cm 量級）</td></tr>
+  <tr><td>雜訊裕度</td><td>FS/LS 段裕度大（3.3V）</td><td>全程低壓，裕度小 → 更忌諱跨分割、與 switcher 並行</td></tr>
+  <tr><td>ESD / choke</td><td>接頭端必配 TVS，常配 common-mode choke</td><td>板內段通常不需系統級 ESD；TVS/choke 移到 repeater 的 USB2 側（接頭端）</td></tr>
+  <tr><td>AC 耦合電容</td><td>USB2 為 DC 耦合，不加串聯電容</td><td>同為 DC 耦合；勿因「長得像高速差動」就習慣性地加 AC cap（會破壞準位語言）</td></tr>
+</table>
+<p>上表倒數第一列再強調一次，因為真的有人踩過：USB2 家族（含 eUSB2）的線路狀態是用<strong>直流準位</strong>表達的（idle、SE0、pull-up 偵測…），<strong>串聯 AC 耦合電容會直接毀掉協定</strong>，這點跟 PCIe/USB3 的 AC 耦合習慣完全相反。</p>
+
+<h3>6.2 回流與參考平面</h3>
+<p>eUSB2 HS 邊緣速率與傳統 USB2 HS 同級（ns 以下量級），依專題 Day 1 的 1/6 法則，板內幾公分的走線已是不折不扣的傳輸線：完整參考平面、避免跨切割、via 換層時給回流 via，這些基本功一項都不能少。差別在於<strong>犯錯的懲罰變重了</strong>——同樣一個跨分割造成的共模雜訊，在 3.3V FS 訊號上可能無感，在約 1V 的 eUSB2 準位語言上就可能造成狀態誤判（例如被當成 squelch 事件）。</p>
+
+<h2>7. 實務案例：NB 主機板上的 eUSB2</h2>
+
+<h3>7.1 典型拓撲：SoC → repeater → Type-A / Type-C</h3>
+<p>一片採用 eUSB2 SoC 的 NB 主機板，USB2 相關的佈局長這樣（對照圖 2 下排）：</p>
+<ol>
+  <li><strong>SoC 端</strong>：每個 USB2 埠一對 eD+/eD−，走低壓差動出來。</li>
+  <li><strong>eUSB2 段</strong>：板內差動走線（cm 量級）拉到 repeater。這段路徑上避開 DC-DC、背光驅動等雜訊源；不放 ESD、不放 choke。</li>
+  <li><strong>repeater</strong>：儘量<strong>靠近接頭端</strong>放（讓 3.3V 高壓域最短、也讓 repeater 輸出到接頭的 USB2 段短而乾淨，eye 好過）。需要低壓與 3.3V 兩組電源，注意上電順序與 enable 時序。</li>
+  <li><strong>USB2 段</strong>：repeater 到 Type-A/Type-C 接頭，照傳統 USB2 規矩：90Ω 差動、接頭端 TVS、必要時 common-mode choke。</li>
+  <li><strong>Type-C 的額外課題</strong>：Type-C 的 D+/D− 在接頭上有 A 面/B 面兩組（正反插），USB2 通常直接把兩組 D+/D− 併接在板上（HS 訊號 stub 效應需注意走線處理），repeater 本身不管正反插，但整埠的 CC/PD 邏輯要跟 repeater 的電源/enable 協調。</li>
+</ol>
+
+<h3>7.2 你的主場：camera 內部 USB sensor</h3>
+<p>NB 的內建 camera（RGB webcam、IR camera for Windows Hello）絕大多數是 <strong>UVC over USB2</strong> 的模組：sensor＋ISP/bridge 晶片，透過板內 USB2 接到 SoC。在 eUSB2 平台上，這條路徑有兩種接法：</p>
+<ul>
+  <li><strong>接法 A（現況主流）</strong>：camera 模組仍是傳統 USB2 → SoC 的該埠必須經 repeater 轉換。repeater 放主機板側，USB2 訊號經板對板連接器＋螢幕轉軸的同軸線/細線束上去到面板端的 camera 模組。轉軸線束長、環境雜訊多，這段 USB2 的 SI 與 EMI（尤其對 WiFi 天線的干擾，天線就在螢幕邊框）是 camera HW 工程師的日常戰場。</li>
+  <li><strong>接法 B（生態成熟後）</strong>：camera 模組本身支援 eUSB2（native mode 直連）。省一顆 repeater、省功耗；但低壓訊號要穿過轉軸線束，雜訊裕度是挑戰，可行性取決於線束長度與屏蔽品質——這正是「native mode 定位為板內短距」在系統層的體現，面試聊到這裡就是展現系統 sense 的好機會。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">帶去面試的一句話</span>
+  <p>“On an eUSB2-based platform, the internal USB camera is one of the first things you have to re-architect: you decide where the repeater sits, how the legacy USB2 segment survives the hinge harness, and how squelch margins hold up against panel-side noise.”——把 eUSB2、repeater、camera、SI 四件事串在一句話裡，這就是 camera HW EE 的視角。</p>
+</div>
+
+<h3>7.3 電源與待機</h3>
+<p>NB 很在乎 S0ix/suspend 的待機電流。repeater 是「每個埠多一顆」的料，它的 suspend 電流乘上埠數會直接反映在待機功耗上；另外 wake（remote wakeup、connect 事件）路徑要確認 repeater 在低功耗狀態下仍能正確轉發，否則會出現「suspend 之後插入裝置沒反應」這種很難第一時間想到 repeater 頭上的 bug。</p>
+
+<h2>8. 常見 bring-up 陷阱</h2>
+
+<div class="card intuition">
+  <span class="label">白話版比喻</span>
+  <p>eUSB2 bring-up 的坑，多半不是「線畫錯」，而是「口譯員沒進入狀況」：他不知道今天要翻哪種場合（<strong>模式設定錯</strong>）、搞不清楚現在誰在講話（<strong>方向切換出錯</strong>）、或是把背景雜音當成有人發言（<strong>squelch 誤判</strong>）。debug 的核心手法就一招：<strong>拿示波器同時看 repeater 的兩側</strong>，看訊號死在哪一邊、還是在翻譯的過程中變形。</p>
+</div>
+
+<h3>8.1 陷阱一：模式/角色設定錯誤</h3>
+<ul>
+  <li>repeater 有 host port / device port（有些還有 dual-role）之分，經 strap 腳、I2C 或 eUSB2 控制訊息設定。<strong>設反了的症狀</strong>：裝置插入完全無反應，或 enumeration 卡在 reset/chirp 階段。</li>
+  <li>SoC 端也要設定：這個 PHY 埠是 native mode 還是 repeater mode，往往在 firmware/ACPI/device tree 層設定。<strong>硬體對、軟體設錯</strong>是新平台第一輪 bring-up 的高頻事故——先跟 BIOS/driver 的同事對表，再拿烙鐵。</li>
+  <li>strap 腳注意上電取樣時序：strap 電阻接對了，但該腳同時被其他電路拉住、或上電順序讓取樣時刻準位不對，一樣讀錯。</li>
+</ul>
+
+<h3>8.2 陷阱二：方向切換（direction switching）</h3>
+<ul>
+  <li>USB2 半雙工，host 講完換 device 講，中間的 turnaround 時間很短。repeater 必須在這個空檔內偵測方向並掉頭。<strong>症狀</strong>：偶發 CRC error、封包遺失、大量 retry 導致實測 throughput 遠低於預期、或特定裝置（回應特別快的）不相容。</li>
+  <li>級聯限制：規範對一條鏈路上的 repeater 數量有限制（延遲預算），板上若「eUSB2 repeater＋傳統 USB redriver/hub」疊疊樂，時序預算要重新算。</li>
+  <li>debug 手法：雙通道差動探棒同看兩側，對齊同一個封包交界，量 repeater 的實際 turnaround 行為；換不同速度等級的裝置（LS/FS/HS 各一）交叉測試。</li>
+</ul>
+
+<h3>8.3 陷阱三：squelch 門檻</h3>
+<ul>
+  <li>HS 模式下，「線上沒訊號（idle）」和「有訊號」是用<strong>振幅門檻（squelch threshold）</strong>區分的：差動振幅低於門檻視為 idle。擺幅本來就低的世界裡，這個門檻的裕度很敏感。</li>
+  <li><strong>訊號被磨小</strong>（走線太長、損耗大、阻抗不連續吃掉振幅）→ 有效訊號跌到門檻附近 → repeater/PHY 間歇性「聽不見」，症狀是偶發斷線、裝置反覆 re-enumerate。</li>
+  <li><strong>雜訊被放大</strong>（跨分割、switcher 耦合、地彈）→ idle 時雜訊超過門檻 → 被誤判為訊號，症狀是奇怪的假封包錯誤、無故喚醒。</li>
+  <li>debug 手法：量 repeater 輸入端的實際差動振幅 vs datasheet 的 squelch 規格，算裕度；用 eye 測試（USB2 electrical compliance）驗收接頭端品質。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">綜合 checklist（貼在工作站前）</span>
+  <ol>
+    <li>SoC 該埠的 native/repeater 模式設定（firmware）＝板上實際拓撲？</li>
+    <li>repeater 的角色（host/device）strap/暫存器讀回來是對的嗎？</li>
+    <li>兩組電源（低壓/3.3V）順序與 enable 時序符合 datasheet？</li>
+    <li>eUSB2 段沒有誤加 AC 耦合電容、ESD 件放在 USB2 側？</li>
+    <li>LS/FS/HS 三種裝置都測過？suspend/resume、remote wake 測過？</li>
+    <li>接頭端 eye/compliance 過？repeater 輸入端振幅對 squelch 門檻有裕度？</li>
+  </ol>
+</div>
+
+<h2>9. 動手練習與詳解</h2>
+<p>先自己想/算，再展開解答。</p>
+
+<details>
+<summary>練習 1（觀念）：為什麼 USB2 HS 資料明明只有約 400 mV 擺幅，先進製程 SoC 還是養不起傳統 USB2 PHY？</summary>
+<p><strong>解：</strong>因為 3.3V 不是出現在 HS 資料上，而是出現在<strong>協定雜務</strong>上：連線偵測 pull-up、FS/LS 訊號、SE0/reset、chirp 交握、suspend/resume 等線路狀態全部以 3.3V 準位定義。PHY 接腳必須能產生並承受 3.3V，所以整個 PHY 都得用厚氧化層高壓元件蓋——面積大、製程貴、部分先進節點甚至不提供。eUSB2 就是把這些準位語言全部重新定義進約 1.0V/1.2V 低壓域，讓 PHY 可以用原生低壓元件實作。</p>
+</details>
+
+<details>
+<summary>練習 2（計算）：某控制訊號負載 C = 10 pF、切換率 f = 12 MHz。分別用 3.3V 與 1.0V 擺幅驅動，動態功耗各多少？省幾成？</summary>
+<p><strong>解：</strong>P = CV²f。<br>
+3.3V：P = 10p × 3.3² × 12M = 10p × 10.89 × 12M ≈ <strong>1.31 mW</strong>。<br>
+1.0V：P = 10p × 1.0² × 12M = <strong>0.12 mW</strong>。<br>
+比值 = (1.0/3.3)² ≈ 0.092，<strong>約省 91%</strong>。重點不是絕對值（單線 mW 級看似小），而是 V² 的縮放規律——電壓砍 3.3 倍，功耗砍約 11 倍，這在多埠、加上整顆 PHY 偏壓電路後就是可觀的平台功耗差異。</p>
+</details>
+
+<details>
+<summary>練習 3（計算＋SI）：傳統 USB2 HS 發送端灌 17.78 mA，兩端各 45Ω 對地端接。(a) 求單端擺幅。(b) 為什麼走線要 90Ω 差動？(c) 若接收端端接飄成 55Ω，擺幅變多少？</summary>
+<p><strong>解：</strong><br>
+(a) R<sub>eff</sub> = 45∥45 = 22.5Ω，V = 17.78 mA × 22.5Ω ≈ <strong>400 mV</strong>。<br>
+(b) 每條單線的環境阻抗約 45Ω，差動對即 2×45 = 90Ω；走線做成 90Ω 差動才與源/負載端接匹配，反射最小。<br>
+(c) R<sub>eff</sub> = 45∥55 = 24.75Ω，V ≈ 17.78 mA × 24.75Ω ≈ <strong>440 mV</strong>——擺幅偏高約 10%，同時匹配變差會產生反射，eye 的 overshoot 與 jitter 都會變差。這題順便示範：電流模驅動下，「端接電阻」直接決定擺幅。</p>
+</details>
+
+<details>
+<summary>練習 4（debug 情境）：eUSB2 平台，外接隨身碟在 HS 下偶發斷線並 re-enumerate；換到另一個埠正常。給出三個最可疑的方向與驗證方法。</summary>
+<p><strong>解：</strong>「特定埠偶發斷線」典型三疑犯：<br>
+① <strong>squelch 裕度不足</strong>：該埠 repeater→接頭或 SoC→repeater 段損耗/阻抗不連續較大，HS 振幅貼近 squelch 門檻。驗證：差動探棒量 repeater 輸入端振幅，對照 datasheet 門檻算裕度；跑接頭端 eye compliance。<br>
+② <strong>雜訊耦合</strong>：該埠走線經過 DC-DC 或跨分割，idle 期雜訊間歇超過門檻造成誤判。驗證：量 idle 期差動/共模雜訊；比對兩個埠的 layout 差異；讓可疑雜訊源（背光、充電）開關看故障率是否相關。<br>
+③ <strong>repeater 供電/時序</strong>：該埠 repeater 的電源漣波大或 enable/上電順序邊緣性違規。驗證：量 repeater 兩組電源漣波與上電波形；交叉換料（把好埠的 repeater 換過來）分離「料 vs 板」。<br>
+加分思路：故障是否與溫度、與系統負載（進 S0ix 前後）相關，可再縮小範圍。</p>
+</details>
+
+<details>
+<summary>練習 5（系統設計）：新 NB 案子，SoC 只出 eUSB2。板上需求：兩個 Type-A、一個 Type-C（僅 USB2 給 touch 周邊用）、一個內建 camera 模組（傳統 USB2 UVC）。請畫出/描述拓撲，並指出哪裡「有機會」省掉 repeater。</summary>
+<p><strong>解：</strong>四個埠都接傳統 USB2 對象，所以基本盤是<strong>四顆（或雙埠料兩顆）repeater</strong>：每個 Type-A 一路 SoC→repeater→接頭（TVS/choke 在接頭側）；Type-C 一路同樣經 repeater，D+/D− 於接頭 A/B 面併接；camera 一路 SoC→repeater→板對板/轉軸線束→camera 模組。<strong>省 repeater 的機會</strong>：(1) 若 camera 模組供應商有支援 eUSB2 的 bridge/sensor 方案，camera 這路可改 native mode 直連——但要評估轉軸線束長度與屏蔽是否撐得住低壓訊號的雜訊裕度；(2) 用雙埠 repeater（如 TUSB2E221 級料）合併兩個 Type-A，省面積與 BOM 條目。不可省的：面對外部接頭的埠一定要有 repeater，因為外部世界只講傳統 USB2。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>eUSB2 是近年新平台的熱門追問點，尤其會從你熟的 camera/USB 經驗切入。先自己用英文講一遍再展開。</p>
+
+<details>
+<summary>Q1: "What is eUSB2, and why did the industry introduce it when USB 2.0 has worked fine for 20 years?"</summary>
+<p><strong>參考答案骨架：</strong>eUSB2 is a USB-IF supplement to USB 2.0 that keeps the protocol and data rates identical — up to 480 Mbps — but moves all signaling into a low-voltage I/O domain, around 1.0 or 1.2 volts. The motivation is process scaling: legacy USB 2.0 relies on 3.3-volt levels for full-speed/low-speed signaling and for protocol states like connect detection, reset, and chirp. Advanced-node SoCs can't tolerate 3.3 volts on thin-oxide devices, so supporting legacy USB2 forces expensive thick-oxide I/O that doesn't scale in area or cost. eUSB2 redefines those states at low voltage, so the PHY can be built entirely from native low-voltage devices. It's an on-board, short-reach interface: to talk to any external USB2 device you go through an eUSB2 repeater that translates back to legacy 3.3-volt signaling near the connector. So the one-line answer: it solves a voltage-compatibility problem, not a bandwidth problem.</p>
+<p><strong>加分點：</strong>主動補一句 V² 功耗："As a bonus, dynamic power scales with V-squared, so the signaling power for the 3.3-volt portions drops by roughly an order of magnitude."</p>
+</details>
+
+<details>
+<summary>Q2: "You're bringing up a new laptop where the internal USB camera intermittently disconnects. The SoC uses eUSB2 with a repeater. Walk me through your debug approach."</summary>
+<p><strong>參考答案骨架：</strong>First I'd characterize the failure: which speed mode, how often, correlation with temperature, system power states, or noisy loads like the display backlight — the camera path crosses the hinge harness, so it's exposed. Then I'd split the link at the repeater, since it's the boundary between the low-voltage eUSB2 domain and the legacy USB2 domain. With differential probes on both sides I'd check where the signal degrades: on the eUSB2 side I'd verify amplitude margin against the squelch threshold and look for noise coupling during idle; on the legacy side I'd run the USB2 eye/compliance test at the module end of the harness. In parallel I'd verify the boring-but-common suspects: repeater mode and port-role configuration, strap sampling at power-up, supply sequencing and ripple on both rails, and suspend/resume behavior — intermittent re-enumeration often traces back to marginal squelch or a repeater that mishandles resume. Cross-swapping the repeater or routing the camera to a known-good port separates a component issue from a board issue.</p>
+<p><strong>考點：</strong>看你會不會「在 repeater 這個域邊界切一刀」的系統性 debug 思維，以及是否知道 squelch/模式設定這些 eUSB2 特有的故障模式。</p>
+</details>
+
+<h2>11. Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：eUSB2 解決什麼問題？速率有變嗎？</p>
+  <p class="a">A1：解決先進製程 SoC 的 I/O 耐壓問題——傳統 USB2 的 FS/LS 與協定交握依賴 3.3V 準位，thin-oxide 元件吃不消。eUSB2 把所有訊號壓進約 1.0V/1.2V 低壓域；協定與速率不變（LS/FS/HS，上限 480 Mbps）。</p>
+  <p class="q">Q2：native mode 與 repeater mode 的差別？</p>
+  <p class="a">A2：native mode＝SoC 與支援 eUSB2 的晶片板內短距直連，全程低壓、免 repeater；repeater mode＝經 eUSB2 repeater 轉回傳統 3.3V USB2，用於接外部接頭/傳統裝置。repeater 儘量靠近接頭端放。</p>
+  <p class="q">Q3：eUSB2 repeater 選型看哪些指標？</p>
+  <p class="a">A3：傳播延遲（吃協定 turnaround 預算，ns 量級上限）、輸出 eye 品質/jitter 疊加、squelch 與 disconnect 門檻、角色/模式支援（host/device/DRD、設定介面）、USB2 側 ESD 等級、雙電源時序與待機功耗。</p>
+  <p class="q">Q4：傳統 USB2 HS 的 400 mV 怎麼來的？走線為何 90Ω 差動？</p>
+  <p class="a">A4：電流模驅動 17.78 mA × (45Ω∥45Ω＝22.5Ω) ≈ 400 mV。單線環境阻抗約 45Ω，差動即 90Ω，走線照做才匹配。eUSB2 HS 同為低擺幅差動，SI 思路一致。</p>
+  <p class="q">Q5：eUSB2 bring-up 三大陷阱？</p>
+  <p class="a">A5：①模式/角色設定錯（SoC firmware 的 native/repeater 設定、repeater 的 host/device strap 與取樣時序）；②方向切換——半雙工 turnaround 內 repeater 要即時換向，出錯→偶發 CRC/retry；③squelch——訊號被磨小跌破門檻或 idle 雜訊超過門檻，症狀是偶發斷線/re-enumerate。另記：USB2 家族全程 DC 耦合，嚴禁串 AC 電容。</p>
+</div>
+
+<h2>12. 延伸閱讀指引</h2>
+<ul>
+  <li><strong>USB-IF《eUSB2 (Embedded USB2) Supplement to the USB 2.0 Specification》</strong>：一手規範。建議精讀章節：電氣參數表（準位定義）、repeater 章（延遲與級聯限制）、control message 機制。準位與時序的精確數字一律以此為準。</li>
+  <li><strong>USB 2.0 Specification 第 7 章（Electrical）</strong>：複習傳統 USB2 的 3.3V 準位語言、HS 電流模驅動與 squelch 定義——懂舊的才懂 eUSB2 改了什麼。</li>
+  <li><strong>repeater datasheet 與 layout guide</strong>（TI TUSB2E11/TUSB2E221、NXP PTN3222 等）：看實務參數怎麼開（延遲、squelch、電源時序），layout guide 的走線建議直接可用於當案 checklist。</li>
+  <li><strong>平台設計指南</strong>（Qualcomm/Intel 等 NB 平台的 USB 章節）：看實際拓撲建議、repeater 擺位與 AVL。</li>
+  <li><strong>動手作業</strong>：找一份 eUSB2 repeater 的 datasheet，把它的 squelch 門檻、HS 傳播延遲、suspend 電流三個數字抄下來，對照本文第 4、8 節，寫 200 字的「這顆料我會/不會選，因為…」。</li>
+</ul>
+
+<footer>
+  <span>專題先修 3｜eUSB2</span>
+  <span class="progress-note">專題先修系列｜Camera HW EE</span>
+</footer>
+
+</div>
+</body>
+</html>

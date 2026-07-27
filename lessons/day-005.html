@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 5｜微帶線與帶狀線——幾何如何決定 Z₀</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 5 天</div>
+  <h1>Day 5：微帶線與帶狀線——幾何如何決定 Z₀</h1>
+  <div class="meta">2026-07-28（二）｜預估學習時間：90 分鐘｜難度：★★★☆☆（公式偏多，但只要抓到手感數字就夠用）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天的課，你要能夠：</p>
+  <ol>
+    <li>用估算式在紙上算出微帶線／帶狀線的 Z₀（面試白板等級的準度）</li>
+    <li>背下兩個手感數字：<strong>FR-4 微帶線 50 Ω → 線寬約 2 倍介質厚度（W ≈ 2H）</strong>；帶狀線同 Z₀ 需要更細的線或更厚的介質</li>
+    <li>拿到一張 stackup（疊構）表，知道每一欄在講什麼、哪些欄位是你該盯的、哪些要跟板廠吵</li>
+    <li>解釋為什麼同一張板、同樣 50 Ω，L1 和 L3 的線寬不一樣</li>
+    <li>說出 Z₀ 的三大不確定來源（Dk、蝕刻、層厚公差）與各自的量級</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：昨天拿到方向盤，今天裝上刻度</h2>
+<p>Day 4 我們推導了 Z₀ = √(L′/C′)，並且建立了「方向盤」：<strong>線寬 W 變寬或介質厚度 H 變薄 → C′ 變大 → Z₀ 變低；Dk 變大 → Z₀ 變低且訊號變慢</strong>。但方向盤只告訴你往哪轉，沒告訴你轉多少。今天補上刻度：給你能在白板上手算的估算式、能直接套用的手感比例，以及最重要的實務技能——<strong>看懂並挑戰板廠給你的疊構表</strong>。因為在真實工作裡，你不會自己解馬克士威方程式，你會做的是：開出阻抗規格 → 板廠回一張疊構表 → 你判斷合不合理 → 量產後用 TDR coupon 驗證。今天教的就是中間那步的判斷力。</p>
+
+<h2>1. 直覺：露天道路 vs 地下隧道</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（看懂這段，今天就成功一半）</span>
+  <p>PCB 上控阻抗走線只有兩大基本款。<strong>微帶線（microstrip）</strong>是走在板子最外層的線：下面是介質和參考平面，上面是空氣——像一條「露天道路」，電場一半泡在板材裡、一半飄在空氣中。<strong>帶狀線（stripline）</strong>是埋在內層的線：上下都被參考平面夾住——像一條「地下隧道」，電場 100% 關在介質裡。</p>
+  <p>這個差別導出今天所有結論：<strong>隧道（帶狀線）的電場被上下兩個平面「雙面吸住」，同樣的線寬會產生更多電容 C′</strong>。而 Day 4 說過 C′ 越大 Z₀ 越低——所以帶狀線要湊到同樣的 50 Ω，只有兩條路：<strong>把線變細（降 C′），或把介質變厚（讓平面離遠一點）</strong>。這就是「同一張板、同樣 50 Ω、不同層線寬不同」的全部原因。</p>
+  <p>另外，露天道路的訊號有一半場在空氣（Dk = 1）裡跑，所以<strong>微帶線比較快</strong>（FR-4 上約 18 cm/ns），隧道全程在介質裡，<strong>帶狀線較慢</strong>（約 15 cm/ns）但屏蔽好、對外串擾與 EMI 小。這也是為什麼時脈與高速差動常被要求走內層。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">三種控阻抗結構的剖面與電場分布（示意）</text>
+  <!-- Microstrip -->
+  <text x="140" y="56" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">微帶線（外層）</text>
+  <text x="140" y="74" text-anchor="middle" font-size="11" fill="#6b7280">場一半在空氣・約 18 cm/ns</text>
+  <rect x="40" y="120" width="200" height="46" fill="#e0f2f7" stroke="#93c5fd"/>
+  <rect x="112" y="106" width="56" height="14" fill="#d97706" stroke="#b45309"/>
+  <rect x="40" y="166" width="200" height="12" fill="#374151"/>
+  <!-- E field lines microstrip: into dielectric + fringing into air -->
+  <path d="M126,120 C120,140 122,155 126,164" stroke="#0e7490" fill="none" stroke-width="1.3"/>
+  <path d="M140,120 L140,164" stroke="#0e7490" fill="none" stroke-width="1.3"/>
+  <path d="M154,120 C160,140 158,155 154,164" stroke="#0e7490" fill="none" stroke-width="1.3"/>
+  <path d="M112,110 C86,96 70,130 84,164" stroke="#60a5fa" fill="none" stroke-width="1.3" stroke-dasharray="4 3"/>
+  <path d="M168,110 C194,96 210,130 196,164" stroke="#60a5fa" fill="none" stroke-width="1.3" stroke-dasharray="4 3"/>
+  <text x="60" y="100" font-size="10" fill="#60a5fa">場飄進空氣</text>
+  <text x="140" y="196" text-anchor="middle" font-size="11" fill="#6b7280">單一參考面（下方）</text>
+  <!-- Stripline -->
+  <text x="380" y="56" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">帶狀線（內層）</text>
+  <text x="380" y="74" text-anchor="middle" font-size="11" fill="#6b7280">場全在介質・約 15 cm/ns</text>
+  <rect x="280" y="96" width="200" height="12" fill="#374151"/>
+  <rect x="280" y="108" width="200" height="70" fill="#e0f2f7" stroke="#93c5fd"/>
+  <rect x="352" y="136" width="56" height="12" fill="#d97706" stroke="#b45309"/>
+  <rect x="280" y="178" width="200" height="12" fill="#374151"/>
+  <!-- field lines up and down -->
+  <path d="M366,136 L366,110" stroke="#0e7490" stroke-width="1.3"/>
+  <path d="M380,136 L380,110" stroke="#0e7490" stroke-width="1.3"/>
+  <path d="M394,136 L394,110" stroke="#0e7490" stroke-width="1.3"/>
+  <path d="M366,148 L366,176" stroke="#0e7490" stroke-width="1.3"/>
+  <path d="M380,148 L380,176" stroke="#0e7490" stroke-width="1.3"/>
+  <path d="M394,148 L394,176" stroke="#0e7490" stroke-width="1.3"/>
+  <text x="380" y="206" text-anchor="middle" font-size="11" fill="#6b7280">上下雙參考面「雙面吸電場」→ C′ 較大</text>
+  <!-- Embedded microstrip / flex -->
+  <text x="620" y="56" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">flex 常見結構</text>
+  <text x="620" y="74" text-anchor="middle" font-size="11" fill="#6b7280">PI 薄膜＋覆蓋膜（coverlay）</text>
+  <rect x="520" y="104" width="200" height="16" fill="#fde68a" stroke="#d97706" opacity="0.6"/>
+  <text x="732" y="116" font-size="10" fill="#b45309" text-anchor="start"></text>
+  <rect x="592" y="120" width="56" height="10" fill="#d97706" stroke="#b45309"/>
+  <rect x="520" y="130" width="200" height="30" fill="#fef3c7" stroke="#d97706"/>
+  <rect x="520" y="160" width="200" height="10" fill="#374151"/>
+  <text x="620" y="188" text-anchor="middle" font-size="11" fill="#6b7280">介質僅數十 µm 量級 → 公差極敏感</text>
+  <text x="620" y="99" text-anchor="middle" font-size="10" fill="#b45309">coverlay（也是介質，會拉低 Z₀）</text>
+  <!-- bottom summary -->
+  <text x="380" y="250" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">同樣 50 Ω：微帶線 W ≈ 2H（手感）｜帶狀線要更細的線或更厚的介質</text>
+  <text x="380" y="274" text-anchor="middle" font-size="12" fill="#6b7280">微帶線：快、好改（外層可刮線飛線）、但對外輻射與串擾較大</text>
+  <text x="380" y="294" text-anchor="middle" font-size="12" fill="#6b7280">帶狀線：慢一點、藏在內層難 rework、但屏蔽好——時脈與高速差動的首選</text>
+  <text x="380" y="322" text-anchor="middle" font-size="11" fill="#9ca3af">Perfect Timing II Ch.6：時脈走線應盡量留在同一層，換層的 via 會劣化訊號品質</text>
+</svg>
+<figcaption>圖 1：微帶線（露天）、帶狀線（隧道）、與鏡頭模組 flex 常見的薄介質結構。注意 flex 的 coverlay 蓋在線上方——它也是介質，會把「露天」變「半露天」，Z₀ 因此再掉一點，估算時不能忽略。</figcaption>
+</figure>
+
+<h2>2. 微帶線估算式：87 和 1.41 是哪裡冒出來的？</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（公式看不懂可以先跳過，懂這段就好）</span>
+  <p>結論先講：微帶線的 Z₀ 由三個尺寸決定——線寬 W、介質厚 H、銅厚 T——加上板材的 Dk。公式長得嚇人，但骨架只有一句話：<strong>Z₀ 正比於 ln(H/W)</strong>。ln（自然對數）是一種「越調越沒感覺」的函數：W/H 改 10%，Z₀ 只動幾 %。這是好消息（製造有點誤差不會爆炸）也是壞消息（想大幅改 Z₀，線寬要改很多）。你只要記得「對數關係、鈍刀慢磨」，公式忘了都無所謂。</p>
+</div>
+
+<p>業界最常被引用的微帶線估算式（出自 IPC 設計指南體系，適用範圍約 0.1 &lt; W/H &lt; 2、Dk 1～15）：</p>
+<div class="formula">
+  Z₀ ≈ [87 / √(Dk + 1.41)] × ln[ 5.98·H / (0.8·W + T) ]　（單位一致即可，常用 mil）
+</div>
+<p><em>白話翻譯：分子那坨 87/√(Dk+1.41) 是「這塊板材的基礎費率」，後面 ln(...) 是「幾何倍率」——H 越大（離平面越遠）倍率越高，W 或 T 越大（線越寬越厚）倍率越低。</em></p>
+
+<h3>2.1 拆解這條公式（面試加分的深度）</h3>
+<ul>
+  <li><strong>1.41 的由來：</strong>微帶線的場一半在空氣、一半在介質，所以訊號感受到的是「等效介電常數 Dk_eff」，一個常用近似是 <strong>Dk_eff ≈ 0.475·Dk + 0.67</strong>。把它塞回傳輸線通式 Z₀ ∝ 1/√Dk_eff，係數整理後就變成 √(Dk + 1.41)——因為 0.67/0.475 ≈ 1.41。<strong>1.41 不是魔法數字，是「一半場在空氣」的數學化身</strong>。</li>
+  <li><strong>傳播速度跟著 Dk_eff 走：</strong>v = c/√Dk_eff。FR-4 取 Dk ≈ 4.2 → Dk_eff ≈ 2.7 → v ≈ 30/1.64 ≈ <strong>約 18 cm/ns</strong>——這就是 Day 1、Day 4 說「外層走線比較快」的數學來源。</li>
+  <li><strong>0.8W + T：</strong>銅厚 T 不是免費的——走線側壁對平面也有電場，等效上讓線「變寬了一點」。1 oz 銅約 1.4 mil（35 µm）、0.5 oz 約 0.7 mil（此為銅箔標稱值；外層經電鍍後會更厚，實際值以板廠製程為準）。</li>
+</ul>
+
+<h3>2.2 手感數字：50 Ω 微帶線 → W ≈ 2H</h3>
+<p>把 Z₀ = 50、Dk = 4.2 代入反解：87/√5.61 ≈ 36.7，需要 ln(...) = 50/36.7 ≈ 1.36，即 5.98H/(0.8W+T) ≈ 3.9 → <strong>0.8W + T ≈ 1.53H</strong>。忽略 T，得 <strong>W ≈ 1.9H ≈ 2H</strong>。</p>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>FR-4 外層微帶線 50 Ω：線寬約等於 2 倍介質厚度（W ≈ 2H）。</strong>例如 prepreg 3 mil → 線寬約 6 mil 量級；prepreg 2.7 mil → 線寬約 5 mil 量級。看到疊構表上外層 50 Ω 線寬，先心算 W/H 是不是 2 附近——不是的話，要嘛板廠用了不一樣的 Dk，要嘛有 solder mask／鍍銅修正，要嘛表打錯了。這一招讓你 10 秒鐘 sanity check 一張疊構表。</p>
+</div>
+
+<h2>3. 帶狀線估算式：為什麼內層線又細又難養</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>帶狀線被上下兩個平面夾住，電容是「雙面計費」。所以同樣 50 Ω，帶狀線的線要比微帶線細、或者介質總厚度要更厚。實務痛點：內層介質每加厚一分，整張板就變厚變貴，所以 SI 工程師永遠在「線寬不能細過製程極限」和「板厚不能超過機構規格」之間走鋼索——NB 主機板尤其如此，整機厚度是用 0.1 mm 在搶的。</p>
+</div>
+
+<p>對稱帶狀線（線在兩平面正中間）的常用估算式（適用約 W/B &lt; 0.35、T/B &lt; 0.25）：</p>
+<div class="formula">
+  Z₀ ≈ [60 / √Dk] × ln[ 1.9·B / (0.8·W + T) ]　（B = 上下參考平面間的總介質厚度）
+</div>
+<p><em>白話翻譯：跟微帶線同一個骨架——基礎費率 × ln(幾何倍率)。差別有二：(1) 60/√Dk 沒有 +1.41，因為場 100% 在介質裡，沒有空氣折扣；(2) 幾何用 B（兩平面的總距離）而不是 H。</em></p>
+<p>反解 50 Ω、Dk 4.2：60/√4.2 ≈ 29.3，需要 ln(...) ≈ 1.71 → 1.9B/(0.8W+T) ≈ 5.5 → <strong>0.8W + T ≈ 0.35B</strong>，即 <strong>W ≈ 0.4B 量級</strong>。對照微帶線的 W ≈ 2H 你會發現：<strong>帶狀線要用掉約 2.5 倍線寬的介質總厚度才能養出同一條 50 Ω</strong>——這就是內層線寬總是比外層細的數學根源。</p>
+
+<figure>
+<svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Z₀ 對幾何是「對數鈍刀」：W/H 要改很多，Z₀ 才動一點</text>
+  <!-- axes -->
+  <line x1="90" y1="270" x2="700" y2="270" stroke="#374151" stroke-width="2"/>
+  <line x1="90" y1="270" x2="90" y2="60" stroke="#374151" stroke-width="2"/>
+  <text x="395" y="300" text-anchor="middle" font-size="13" fill="#374151">W / H（線寬 ÷ 介質厚度）</text>
+  <text x="46" y="160" text-anchor="middle" font-size="13" fill="#374151" transform="rotate(-90 46 160)">Z₀（Ω）</text>
+  <!-- y ticks -->
+  <text x="82" y="94" text-anchor="end" font-size="11" fill="#6b7280">80</text>
+  <text x="82" y="144" text-anchor="end" font-size="11" fill="#6b7280">65</text>
+  <text x="82" y="194" text-anchor="end" font-size="11" fill="#6b7280">50</text>
+  <text x="82" y="244" text-anchor="end" font-size="11" fill="#6b7280">35</text>
+  <line x1="86" y1="90" x2="94" y2="90" stroke="#374151"/>
+  <line x1="86" y1="140" x2="94" y2="140" stroke="#374151"/>
+  <line x1="86" y1="190" x2="94" y2="190" stroke="#374151"/>
+  <line x1="86" y1="240" x2="94" y2="240" stroke="#374151"/>
+  <!-- x ticks -->
+  <text x="170" y="288" text-anchor="middle" font-size="11" fill="#6b7280">0.5</text>
+  <text x="300" y="288" text-anchor="middle" font-size="11" fill="#6b7280">1.0</text>
+  <text x="430" y="288" text-anchor="middle" font-size="11" fill="#6b7280">1.5</text>
+  <text x="560" y="288" text-anchor="middle" font-size="11" fill="#6b7280">2.0</text>
+  <text x="690" y="288" text-anchor="middle" font-size="11" fill="#6b7280">2.5</text>
+  <!-- microstrip curve (log-like decreasing), qualitative -->
+  <path d="M120,80 C200,125 300,158 430,180 C540,196 640,207 700,213" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="200" y="105" font-size="13" fill="#0e7490" font-weight="bold">微帶線（FR-4，示意）</text>
+  <!-- 50 ohm point -->
+  <circle cx="548" cy="192" r="6" fill="#dc2626"/>
+  <line x1="548" y1="192" x2="548" y2="270" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <line x1="90" y1="192" x2="548" y2="192" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <text x="560" y="182" font-size="12" fill="#dc2626" font-weight="bold">50 Ω @ W/H ≈ 2（手感點）</text>
+  <!-- sensitivity annotation -->
+  <rect x="120" y="215" width="290" height="72" rx="8" fill="#fdf6ec" stroke="#d97706"/>
+  <text x="132" y="236" font-size="12" fill="#b45309" font-weight="bold">鈍刀效應（對數關係）：</text>
+  <text x="132" y="256" font-size="12" fill="#78350f">・線寬差 10% → Z₀ 只動約 3～4%（約值）</text>
+  <text x="132" y="276" font-size="12" fill="#78350f">・所以蝕刻公差 ±0.5 mil 通常還救得回來</text>
+</svg>
+<figcaption>圖 2：Z₀ 隨 W/H 的變化是對數曲線（示意，非精算值）。W/H 越大曲線越平——想從 50 Ω 改到 45 Ω，線寬要加的比直覺多。反過來說，這條「鈍刀」也保護了你：製造公差不會被線性放大。</figcaption>
+</figure>
+
+<h2>4. Dk 不是一個數字，是一段範圍——Perfect Timing II 的忠告</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>你算 Z₀ 時代入的 Dk = 4.2，其實是個「大概值」。真實的 Dk 會隨<strong>頻率</strong>變（頻率越高越低）、隨<strong>板廠配方</strong>變、甚至隨<strong>樹脂與玻纖的比例</strong>變。所以資深工程師開規格從來不說「Z₀ = 50.0 Ω」，而是「50 Ω ±10%」，並且用 TDR coupon 驗收結果、而不是驗收計算書。</p>
+</div>
+
+<p>Perfect Timing II Ch.6 給了一張介電常數表，重點摘錄（2002 年資料）：</p>
+<table>
+  <tr><th>板材</th><th>Dk @ 1 MHz</th><th>Dk @ 300 MHz</th></tr>
+  <tr><td>FR-4（Tetra Functional）</td><td>4.2 – 4.6</td><td>4.0 – 4.3</td></tr>
+  <tr><td>FR-4（Hi-Grade Multifunctional）</td><td>4.2 – 4.6</td><td>4.1 – 4.4</td></tr>
+  <tr><td>Polyimide（硬板積層板）</td><td>4.2 – 4.6</td><td>4.1 – 4.3</td></tr>
+  <tr><td>BT</td><td>3.6 – 4.1</td><td>3.55 – 4.0</td></tr>
+</table>
+<p>三個必須內化的觀念：</p>
+<ol>
+  <li><strong>Dk 隨頻率下降</strong>，而且同一種材料就有 ±5% 左右的批次範圍。書中直言：「務必向板廠確認精確的 Dk 值，因為不同板廠使用不同的環氧配方」（Perfect Timing II Ch.6）。</li>
+  <li><strong>層厚公差是百分比遊戲</strong>：Ch.6 的經典數字——層間距 10 mil 時，1 mil 的製造變異就是 10%；20 mil 時同樣 1 mil 只有 5%。<strong>疊構越薄，Z₀ 對公差越敏感</strong>。這對只有幾十 µm 介質的 camera flex 是加倍殘酷的現實。</li>
+  <li><strong>2002 年的表要上修</strong>：這張表沒有涵蓋現代低損耗板材（如 Megtron、I-Speed 等，Dk 約 3.x 量級且對頻率更平坦），量測頻率也只到 300 MHz；現代高速設計看的是 GHz 頻段的 Dk/Df 曲線，需向板廠索取實測報告。另外注意：表中 Polyimide 是「硬板」積層板的數據；<strong>鏡頭模組 flex 用的無膠系 PI 薄膜疊構，業界常見等效 Dk 約 3.2–3.5 量級</strong>（依膜系與 coverlay 而異，以供應商數據為準），兩者不可混用。</li>
+</ol>
+
+<h3>4.1 疊構表上其他吃掉你 Z₀ 的小偷</h3>
+<ul>
+  <li><strong>蝕刻梯形：</strong>蝕刻是從銅面往下咬，走線剖面不是長方形而是<strong>上窄下寬的梯形</strong>。板廠疊構表通常標示的是設計線寬（或同時標出蝕刻後的頂寬/底寬），field solver 會用梯形去精算——這是你手算和板廠報告差個 1～2 Ω 的常見原因。</li>
+  <li><strong>Solder mask（綠漆）：</strong>外層微帶線鋪上綠漆後，原本「露天」的那半邊空氣多了一層 Dk 約 3～4 的薄膜 → C′ 增加 → <strong>Z₀ 掉約 1～3 Ω 量級</strong>。所以疊構表會分「bare（無漆）」與「with solder mask」兩個值，驗收要對齊條件。</li>
+  <li><strong>玻纖編織效應（fiber weave）：</strong>FR-4 是玻璃纖維布＋樹脂，玻纖 Dk 約 6、樹脂約 3——走線剛好騎在纖維束上或騎在樹脂窗上，局部 Dk 不同。對 50 Ω 單端影響小，對高速差動對的相位差（skew）是知名地雷（週 4 差動專題細講）。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">理想模型 vs 製造現實：三個吃掉 Z₀ 的小偷</text>
+  <!-- ideal -->
+  <text x="160" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">① 你手算的模型</text>
+  <rect x="60" y="100" width="200" height="50" fill="#e0f2f7" stroke="#93c5fd"/>
+  <rect x="130" y="84" width="60" height="16" fill="#d97706" stroke="#b45309"/>
+  <rect x="60" y="150" width="200" height="12" fill="#374151"/>
+  <text x="160" y="186" text-anchor="middle" font-size="12" fill="#6b7280">長方形剖面・露天・Dk 固定</text>
+  <!-- reality: trapezoid + mask -->
+  <text x="560" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">② 板廠做出來的現實</text>
+  <!-- solder mask conformal -->
+  <path d="M460,100 L520,100 L528,84 L592,84 L600,100 L660,100 L660,110 L460,110 Z" fill="#16a34a" opacity="0.35"/>
+  <text x="672" y="96" font-size="11" fill="#16a34a" font-weight="bold">綠漆</text>
+  <rect x="460" y="110" width="200" height="46" fill="#e0f2f7" stroke="#93c5fd"/>
+  <!-- trapezoid trace: top narrower -->
+  <polygon points="536,88 584,88 596,110 524,110" fill="#d97706" stroke="#b45309"/>
+  <rect x="460" y="156" width="200" height="12" fill="#374151"/>
+  <text x="560" y="132" text-anchor="middle" font-size="11" fill="#0e7490">介質厚度有 ±0.5～1 mil 量級公差</text>
+  <text x="560" y="192" text-anchor="middle" font-size="12" fill="#6b7280">梯形剖面（上窄下寬）・蓋綠漆・Dk 隨批次/頻率浮動</text>
+  <!-- arrows list -->
+  <rect x="60" y="216" width="640" height="70" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="80" y="240" font-size="12.5" fill="#991b1b" font-weight="bold">結果：Z₀ 天生是「範圍」不是「一個數」——</text>
+  <text x="80" y="262" font-size="12.5" fill="#7f1d1d">Dk 批次浮動（±5% 量級）＋ 層厚公差（薄介質最傷：10 mil 差 1 mil = 10%，PT2 Ch.6）＋ 蝕刻/綠漆（各 1～3 Ω 量級）</text>
+  <text x="80" y="280" font-size="12.5" fill="#7f1d1d">→ 業界慣例 ±10% 為標準公差、±5% 加價；驗收看 TDR coupon 實測，不看計算書</text>
+</svg>
+<figcaption>圖 3：手算模型與製造現實的差距。這不是要你放棄手算——手算給你「量級與方向」的判斷力，精確值交給板廠的 field solver 與出貨 TDR 報告。兩邊對不上時，你手上的估算式就是抓出「誰在唬你」的測謊器。</figcaption>
+</figure>
+
+<h2>5. 實戰：一張 stackup 表該怎麼讀</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>疊構表就是這張板子的「身分證＋食譜」：從上到下列出每一層是什麼（銅或介質）、多厚、什麼材料，然後附一張阻抗表說「哪一層的多寬的線＝多少 Ω」。你要練的不是把它背下來，而是<strong>拿到 30 秒內找出三個關鍵欄位：參考層是誰、Dk 用多少、公差給幾 %</strong>。</p>
+</div>
+
+<p>下面是一張典型 8 層 NB 主機板疊構的<strong>示意</strong>（數字為教學用約值，非任何實際料號）：</p>
+<table>
+  <tr><th>層</th><th>類型</th><th>介質厚（mil，約）</th><th>50 Ω 單端線寬（mil，約）</th><th>100 Ω 差動 W/S（mil，約）</th></tr>
+  <tr><td>L1</td><td>微帶線（參考 L2 GND）</td><td>H ≈ 3.0（prepreg）</td><td>約 5.5</td><td>約 4.0 / 6.0</td></tr>
+  <tr><td>L3</td><td>帶狀線（參考 L2 / L4）</td><td>上下合計 B ≈ 12</td><td>約 4.5</td><td>約 3.5 / 7.0</td></tr>
+  <tr><td>L6</td><td>帶狀線（參考 L5 / L7）</td><td>上下合計 B ≈ 12</td><td>約 4.5</td><td>約 3.5 / 7.0</td></tr>
+  <tr><td>L8</td><td>微帶線（參考 L7 GND）</td><td>H ≈ 3.0</td><td>約 5.5</td><td>約 4.0 / 6.0</td></tr>
+</table>
+<p>讀表要點（也是你跟 SI／板廠開會的檢查清單）：</p>
+<ol>
+  <li><strong>參考層是誰？</strong>阻抗只有在「走線＋指定參考平面」成對時才成立。若表上寫 L3 參考 L2/L4，而 L4 其實是被切得破破爛爛的電源層——這張阻抗表就是小說。Perfect Timing II Ch.6 明講：電源平面要「充分旁路後」才能當參考平面，且<strong>一條走線不要中途換參考面</strong>（一下看 GND、一下看電源平面），換面處就是阻抗不連續、就是反射源。</li>
+  <li><strong>Dk 標在哪個頻率？</strong>看到「Dk = 4.2」要追問：1 MHz 還是 1 GHz 的值？（第 4 節的表告訴你這可以差 5% 以上。）現代做法是要求板廠提供設計頻段的 Dk/Df。</li>
+  <li><strong>公差幾 %、怎麼驗？</strong>±10% 是業界標準、±5% 要加錢。驗收方式應寫明「以板邊 impedance coupon 之 TDR 實測為準」，並確認 coupon 的走線幾何與真實訊號層一致。</li>
+  <li><strong>阻抗值是含綠漆還是裸板？</strong>外層微帶線兩者差 1～3 Ω 量級，驗收條件要對齊。</li>
+  <li><strong>同 Z₀ 不同層線寬不同是正常的</strong>——現在你知道為什麼：外層 W ≈ 2H 的微帶線邏輯、內層被雙平面夾的帶狀線邏輯，本來就是兩套幾何。反而「每一層線寬都一樣」的疊構表才可疑。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「換層走線，線寬照舊」——高速線換層的隱形殺手。</strong>Layout 工程師把一條 MIPI 差動從 L1 換到 L3 繼續走，忘了每層的 100 Ω 線寬/間距組合不同，於是 L3 那段其實是 8x Ω 或 11x Ω 量級的異型段。更糟的是這種錯 DRC 不一定抓得到（線寬規則各層若沒分開設定就放行）。復盤時 TDR 一打，換層點附近一個阻抗台階清清楚楚。<strong>正確做法：每一層的控阻抗線寬規則在 CAD 裡分層設定，換層自動換寬。</strong>另外記住 Perfect Timing II Ch.6 的忠告：時脈訊號盡量留在同一層，via 本身（電感為主）就會劣化訊號品質——能不換層就不換層。</p>
+</div>
+
+<h3>5.1 順手撿一個 PI 觀念：平面本身就是電容</h3>
+<p>疊構表上還藏著一個之後（週 7–8 PDN）會大放異彩的參數：<strong>電源平面與地平面的間距</strong>。Perfect Timing II Ch.6 給了平面電容公式與實例：C = 0.225 · Dk · A / t（A 為面積 in²、t 為間距 in）——10×10 吋、Dk 4.1、間距 5 mil 的一對平面，電容約 18,450 pF，即<strong>約 184 pF/in²</strong>。這層「免費的高頻電容」雖然遠不夠當全部的旁路，但 Ch.6 建議應該最大化利用（平面間距越小越好）。先把這個數字放進口袋，週 8 講去耦策略時它會回來。</p>
+
+<h2>6. 實務案例：把今天的觀念接回你的工作</h2>
+<ul>
+  <li><strong>NB 主機板：客戶要求整機再薄 0.2 mm。</strong>機構砍板厚 → 疊構全部重排 → 每層介質變薄 → 同樣 50 Ω 每層線寬全部要重算變細；而且第 4 節說過，介質越薄公差百分比越大（PT2 Ch.6 的 10 mil/1 mil = 10% 邏輯），阻抗達標率下降、板價上升。<strong>「砍板厚」從來不是機構自己的事，是 SI＋採購＋製造的連鎖題</strong>——會議上能把這條鏈講清楚的人，就是加分的人。</li>
+  <li><strong>鏡頭模組 flex 的 100 Ω 差動：</strong>flex 介質只有幾十 µm 量級，等於把 PT2 Ch.6 的公差百分比遊戲開到地獄難度：同樣 ±0.3 mil 的介質變異，在硬板上是 3%、在 flex 上可能是 10% 以上量級。再加上 coverlay 貼合的厚度與氣泡變異——這就是為什麼 camera flex 的阻抗管控要做進料 TDR 抽驗，而且模組廠換 coverlay 供應商屬於要重新送樣驗證的工程變更（ECN），不是「等效替代」。</li>
+  <li><strong>「面試白板題」原型：</strong>Apple／Google 面試很愛丟一張疊構表叫你 sanity check。用今天的三板斧：(1) 外層 W/H ≈ 2 → 50 Ω 合理性；(2) 內層線寬應比外層細；(3) 追問 Dk 頻率、公差、參考層完整性。三句話講完，面試官就知道你是真的天天在跟板廠打交道的人。</li>
+</ul>
+
+<h2>7. 動手練習</h2>
+<p>拿紙筆和計算機（手機即可），算完再展開詳解。今天的計算就是白板面試的等級。</p>
+
+<details>
+<summary>練習 1：外層微帶線，Dk = 4.2、H = 4 mil、W = 6 mil、T = 0.6 mil。用估算式求 Z₀。</summary>
+<p><strong>解：</strong>基礎費率 = 87/√(4.2+1.41) = 87/√5.61 ≈ 87/2.37 ≈ 36.7。幾何倍率 = ln[5.98×4 / (0.8×6+0.6)] = ln[23.92/5.4] = ln 4.43 ≈ 1.49。Z₀ ≈ 36.7 × 1.49 ≈ <strong>約 55 Ω</strong>。比 50 Ω 高——因為 W/H = 1.5，小於手感值 2（線太細）。順手驗證手感：要壓回 50 Ω 需 0.8W+T ≈ 1.53H = 6.12 → W ≈ (6.12−0.6)/0.8 ≈ <strong>6.9 mil</strong>，果然 W/H ≈ 1.7～2 量級。</p>
+</details>
+
+<details>
+<summary>練習 2：同一層（H = 4 mil、T = 0.6 mil、Dk = 4.2），板廠說蝕刻公差 ±0.5 mil。W 從 6.9 mil 掉到 6.4 mil 時 Z₀ 變多少？這說明了什麼？</summary>
+<p><strong>解：</strong>W = 6.4 → 0.8×6.4+0.6 = 5.72 → ln(23.92/5.72) = ln 4.18 ≈ 1.43 → Z₀ ≈ 36.7×1.43 ≈ <strong>約 52.5 Ω</strong>。線寬少了約 7%，Z₀ 只動了約 5%（50→52.5）——這就是圖 2 的「對數鈍刀」：<strong>公差不會被線性放大，±0.5 mil 蝕刻變異大約吃掉 2～3 Ω</strong>，還在 ±10% 規格內。但注意：蝕刻、Dk、層厚三個誤差源是同時存在的，最壞情況會疊加——所以 ±10% 公差其實沒有想像中寬裕。</p>
+</details>
+
+<details>
+<summary>練習 3：內層對稱帶狀線，Dk = 4.2、上下平面總間距 B = 12 mil、T = 0.6 mil。求 50 Ω 需要的線寬，並與練習 1 的外層比較。</summary>
+<p><strong>解：</strong>60/√4.2 ≈ 29.3，需 ln(...) = 50/29.3 ≈ 1.71 → 1.9×12/(0.8W+0.6) = e^1.71 ≈ 5.5 → 0.8W+0.6 = 22.8/5.5 ≈ 4.15 → W ≈ (4.15−0.6)/0.8 ≈ <strong>約 4.4 mil</strong>。比較：外層 50 Ω 要約 6.9 mil（H = 4 mil），內層即使給了 12 mil 的介質總厚，50 Ω 也只能養出 4.4 mil 的細線——<strong>雙參考面的「雙面計費」名不虛傳</strong>。這就是疊構表上內層線寬總是比外層細的原因，也是內層走線對蝕刻公差百分比更敏感的原因（線越細，同樣 ±0.5 mil 佔比越大）。</p>
+</details>
+
+<details>
+<summary>練習 4（Perfect Timing II Ch.6 實戰）：你的板子用 FR-4（Tetra Functional）。低頻量測（1 MHz）Dk 上限 4.6，高速訊號實際感受（取 300 MHz 值下限）Dk 4.0。同一條微帶線，兩種 Dk 算出的 Z₀ 差幾 %？這對開規格有什麼啟示？</summary>
+<p><strong>解：</strong>微帶線 Z₀ ∝ 1/√(Dk+1.41)。Dk = 4.6：√6.01 ≈ 2.45；Dk = 4.0：√5.41 ≈ 2.33。Z₀ 比值 = 2.45/2.33 ≈ 1.053 → <strong>約 5% 的差異，純粹來自「你用哪個頻率的 Dk 查表」</strong>。啟示：(1) 開 ±5% 阻抗規格前先想清楚——光 Dk 的頻率離散就吃掉一半預算；(2) 跟板廠對規格時必須指明 Dk 的量測頻率與方法（PT2 Ch.6：「務必向板廠確認精確 Dk」）；(3) 2002 年的表只到 300 MHz，現代 GHz 級設計要索取更高頻的材料實測數據。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念題）：為什麼微帶線比帶狀線快？如果把外層微帶線整面蓋上很厚的綠漆／膠層，速度和 Z₀ 各往哪邊走？</summary>
+<p><strong>解：</strong>微帶線的電場約一半在空氣（Dk = 1）中，等效 Dk_eff ≈ 0.475×4.2+0.67 ≈ 2.7，v = 30/√2.7 ≈ 18 cm/ns；帶狀線場全在 Dk ≈ 4.2 的介質裡，v = 30/√4.2 ≈ 15 cm/ns（Day 1 的數字）。蓋上厚綠漆／膠層後，原本屬於空氣的那半邊電場改走 Dk 3～4 的材料 → Dk_eff 上升 → <strong>v 變慢、C′ 變大、Z₀ 下降</strong>（往帶狀線的方向靠攏）。這正是 flex coverlay 的效應——所以 flex 阻抗計算一定要把 coverlay 建進模型，拿「裸線」的計算值去驗「貼了 coverlay」的實物，天生就會差一截。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>今天的觀念在外商面試的實際出題方式（先用英文口頭回答再看參考答案）：</p>
+
+<details>
+<summary>Q1: "On your stackup, layer 1 and layer 3 are both 50-ohm single-ended, but the trace widths are different. Why? And which one would you route a critical clock on?"</summary>
+<p><strong>參考答案骨架：</strong>Layer 1 is a microstrip — one reference plane below, fields half in air — while layer 3 is a stripline sandwiched between two reference planes. The stripline picks up capacitance to both planes, so for the same 50 ohms it needs a narrower trace or a thicker dielectric; that's why the inner-layer width is smaller. As a hand rule on FR-4, a 50-ohm microstrip lands around W ≈ 2H, and a stripline needs roughly 2.5 times the trace width in total dielectric span. For a critical clock I'd prefer the stripline layer: fully shielded fields mean less crosstalk and EMI, at the cost of slightly slower propagation and harder rework — and I'd keep it on one layer the whole way, because every via is an impedance discontinuity.</p>
+<p><strong>加分點：</strong>最後補一句量測思維——"And I'd verify with the TDR coupon, because Dk tolerance and etching mean the as-built number is a range, not the calculated value."</p>
+</details>
+
+<details>
+<summary>Q2: "You're specifying a 100-ohm differential pair on a camera module flex. What would you put in the spec to the flex vendor, and what do you check on incoming lots?"</summary>
+<p><strong>參考答案骨架：</strong>The spec needs the full impedance context, not just "100 ohms": the stackup with dielectric type and thickness, whether the number includes coverlay, the Dk value and the frequency it's specified at, the impedance tolerance — typically ±10%, tighter costs more — and the test method, usually TDR on a coupon that replicates the real trace geometry. Flex is especially sensitive because the dielectric is only tens of microns, so the same absolute thickness variation is a much larger percentage error than on a rigid board — a 1-mil variation on a 10-mil dielectric is already 10%. On incoming lots I'd do TDR sampling on the coupons, track the distribution against the limits, and treat any coverlay or material change as an ECN requiring re-qualification, not a drop-in replacement.</p>
+<p><strong>考點：</strong>規格欄位完整性＋公差百分比直覺＋進料管控，三件事串起來就是 camera HW EE 的日常。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：微帶線與帶狀線的差別？各自的速度量級（FR-4）？</p>
+  <p class="a">A1：微帶線在外層、單參考面、場一半在空氣（Dk_eff ≈ 0.475Dk+0.67）→ 約 18 cm/ns、快但屏蔽差；帶狀線在內層、雙參考面、場全在介質 → 約 15 cm/ns、慢但串擾/EMI 佳。同 Z₀ 帶狀線線寬更細（雙面計費 C′ 大）。</p>
+  <p class="q">Q2：FR-4 上 50 Ω 微帶線的手感比例？估算式骨架？</p>
+  <p class="a">A2：W ≈ 2H（0.8W+T ≈ 1.53H）。Z₀ ≈ [87/√(Dk+1.41)]·ln[5.98H/(0.8W+T)]；帶狀線 Z₀ ≈ [60/√Dk]·ln[1.9B/(0.8W+T)]，50 Ω 時 0.8W+T ≈ 0.35B。對數關係 → 線寬差 10%，Z₀ 只動幾 %。</p>
+  <p class="q">Q3：Z₀ 的三大製造不確定來源與量級？</p>
+  <p class="a">A3：(1) Dk 批次/頻率離散（±5% 量級，Dk 隨頻率降，PT2 Ch.6 要求向板廠確認）；(2) 層厚公差（10 mil 差 1 mil = 10%，越薄越敏感——flex 最傷）；(3) 蝕刻梯形與綠漆（各 1～3 Ω 量級）。所以業界標準公差 ±10%，驗收看 TDR coupon。</p>
+  <p class="q">Q4：讀 stackup 表的三個 30 秒檢查點？</p>
+  <p class="a">A4：(1) 參考層是誰、是否完整（電源平面須充分旁路才能當參考、走線不可中途換參考面——PT2 Ch.6）；(2) Dk 標的是哪個頻率的值；(3) 公差幾 %、含不含綠漆、以 coupon TDR 實測驗收。附贈判斷：各層同 Z₀ 線寬本來就該不同。</p>
+  <p class="q">Q5：平面電容公式與量級（PT2 Ch.6）？</p>
+  <p class="a">A5：C = 0.225·Dk·A/t（A：in²、t：in）。例：Dk 4.1、間距 5 mil → 約 184 pF/in²。是免費的高頻旁路電容，應最大化利用但遠不足以取代去耦電容（週 8 詳談）。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 6：反射係數 ρ——訊號撞牆時到底反彈多少</strong></p>
+  <p>Z₀ 有了、幾何有了，明天正式進入週 2 的高潮：完整推導 ρ = (Z_L−Z₀)/(Z_L+Z₀)，用它一口氣解釋開路全反射、短路負反射、匹配零反射，並把 Day 4 預告過的 Perfect Timing II Ch.7 實測波形（17 Ω 驅動的振鈴、150 Ω 弱驅動的階梯波）逐格算給你看。學完你就能看著示波器上的過衝波形，心算出「源端阻抗大概幾 Ω、走線大概多長」——這是 SI 面試最愛的讀波形題。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 5 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

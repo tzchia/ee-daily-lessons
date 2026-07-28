@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 6｜反射係數 ρ——訊號撞牆時到底反彈多少</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 6 天</div>
+  <h1>Day 6：反射係數 ρ——訊號撞牆時到底反彈多少</h1>
+  <div class="meta">2026-07-29（三）｜預估學習時間：90 分鐘｜難度：★★★☆☆（一條公式打天下，重點是學會「逐格算波形」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天的課，你要能夠：</p>
+  <ol>
+    <li>從邊界條件親手推導出 <strong>ρ = (Z_L − Z₀)/(Z_L + Z₀)</strong>，並解釋開路（+1）、短路（−1）、匹配（0）三個極端</li>
+    <li>用「彈跳圖（lattice diagram）」逐格算出 Perfect Timing II Ch.7 的兩個經典波形：17 Ω 強驅動的<strong>振鈴</strong>與 150 Ω 弱驅動的<strong>階梯波</strong></li>
+    <li>反過來玩：<strong>看著示波器波形，心算出源端阻抗大概幾 Ω、走線大概多長</strong>（SI 面試最愛的讀波形題）</li>
+    <li>說出「何時必須端接」的 1/6 法則（Perfect Timing II Ch.7），並把它接回 Day 1 的臨界長度觀念</li>
+    <li>解釋為什麼振鈴會造成 false clock / double clocking，以及它跟 EMI 的關係</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：角色到齊，好戲開演</h2>
+<p>週 2 到目前為止我們湊齊了三個角色：Day 4 推導了 <strong>Z₀ = √(L′/C′)</strong>——訊號在走線上「當下感受到的阻抗」；Day 5 給了幾何刻度——微帶線 W ≈ 2H、帶狀線雙面計費，還有 Z₀ 天生是 ±10% 的範圍。今天回答那個懸了三天的問題：<strong>當訊號沿著 50 Ω 的走線跑到盡頭，撞上一個「不是 50 Ω」的東西，會發生什麼事？</strong>答案就是反射——SI 這門學問有一半的災難（過衝、振鈴、階梯波、double clocking）都是它幹的。而描述它只需要一條你今天就會背起來的公式。</p>
+
+<h2>1. 直覺：回音谷與甩繩子</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（看懂這段，今天就成功一半）</span>
+  <p>對著山谷大喊，聲音撞到岩壁會彈回來——因為「空氣」和「岩壁」是兩種截然不同的介質，聲波過不去，只好折返。訊號在走線上也一樣：<strong>走線是 Z₀ 的世界，終點的晶片腳位是 Z_L 的世界，兩個世界的「阻抗」不一樣，訊號就無法全部過關，一部分會被彈回來</strong>。彈回多少？由兩邊「差多少」決定——差越大彈越多，完全一樣（匹配）就完全不彈。</p>
+  <p>更妙的比喻是甩繩子：把繩子一端綁死在柱子上（＝短路，動彈不得），甩出去的波峰撞到柱子會<strong>翻面變波谷</strong>彈回來；把繩子末端放空自由晃（＝開路），波峰撞到端點會<strong>原樣不翻面</strong>彈回來，而且端點會甩得特別高——這正是「開路端電壓加倍」的繩子版。今天所有數學，都只是把「翻不翻面、彈多大力」寫成一個介於 −1 和 +1 之間的數字，叫<strong>反射係數 ρ</strong>（唸 rho）。</p>
+  <p>最後一個關鍵畫面：彈回來的波跑回源頭，如果源頭的阻抗也不等於 Z₀，它會<strong>再彈一次</strong>——於是訊號在走線兩端來回彈跳，像回音谷裡的迴聲一樣越彈越小，這就是示波器上看到的<strong>振鈴（ringing）</strong>。Perfect Timing II Ch.7 開宗明義：反射脈衝若大到跨過接收端的門檻電壓，就會造成誤觸發（false trigger）——對 clock 訊號來說是災難級的。</p>
+</div>
+
+<h2>2. 推導：ρ 是被「邊界條件」逼出來的</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（公式看不懂可以先跳過，懂這段就好）</span>
+  <p>為什麼一定會有反射？因為物理定律在終點「打架」了。入射波自帶一個規矩：電壓÷電流必須等於 Z₀（走線的規矩）。但終點的負載也有規矩：電壓÷電流必須等於 Z_L（歐姆定律）。如果 Z_L ≠ Z₀，這兩條規矩不可能同時滿足——<strong>除非多出一道反射波來「補帳」</strong>。反射波的大小，就是讓兩邊帳都能平的唯一解。所以 ρ 不是經驗公式，是被大自然逼出來的。</p>
+</div>
+
+<p>設走線特性阻抗 Z₀，終點接負載 Z_L。入射波（電壓 V⁺、電流 I⁺）與反射波（V⁻、I⁻）在走線上各自守著 Z₀ 的規矩，注意<strong>反射波往回跑，電流方向反轉</strong>：</p>
+<div class="formula">
+  V⁺ = Z₀ · I⁺　　（入射波）<br>
+  V⁻ = −Z₀ · I⁻　（反射波：電壓同號、電流反向，所以帶負號）
+</div>
+<p>在負載端（邊界），電壓和電流都必須連續，且負載要守歐姆定律：</p>
+<div class="formula">
+  V_L = V⁺ + V⁻　，　I_L = I⁺ + I⁻　，　V_L = Z_L · I_L
+</div>
+<p>把三條式子聯立（代入 I⁺ = V⁺/Z₀、I⁻ = −V⁻/Z₀）：</p>
+<div class="formula">
+  V⁺ + V⁻ = Z_L · (V⁺/Z₀ − V⁻/Z₀)<br>
+  整理 ⇒　<strong>ρ ≡ V⁻/V⁺ = (Z_L − Z₀)/(Z_L + Z₀)</strong>
+</div>
+<p><em>白話翻譯：反射比例 ＝（對方比走線多出來的阻抗）÷（兩邊阻抗加總）。對方阻抗比走線大 → ρ 為正（同號反彈，電壓在端點堆高）；對方比走線小 → ρ 為負（翻面反彈，電壓被拉低）；一樣大 → ρ = 0，全數過關。</em></p>
+<p>順手拿到雙胞胎兄弟——<strong>穿透係數 τ</strong>（負載實際「看到」的電壓比例）：</p>
+<div class="formula">
+  τ = 1 + ρ = 2·Z_L/(Z_L + Z₀)　　（負載端電壓 V_L = τ · V⁺）
+</div>
+<p><em>白話翻譯：負載看到的電壓＝入射＋反射。這正是 Perfect Timing II Ch.7 寫的 A_L = 2·Z_L/(Z_L + Z₀) × 入射波——書中所有波形計算都是這兩條式子在輪流上場。</em></p>
+
+<h2>3. 三個極端：把 ρ 的性格摸透</h2>
+
+<figure>
+<svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">ρ 的三個極端：開路全反射、短路負反射、匹配零反射</text>
+  <!-- open -->
+  <text x="140" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">開路 Z_L = ∞</text>
+  <line x1="40" y1="110" x2="220" y2="110" stroke="#374151" stroke-width="3"/>
+  <line x1="228" y1="96" x2="228" y2="124" stroke="#dc2626" stroke-width="3"/>
+  <path d="M60,96 L130,96" stroke="#0e7490" stroke-width="2.5" marker-end="none"/>
+  <polygon points="130,90 144,96 130,102" fill="#0e7490"/>
+  <text x="90" y="88" font-size="11" fill="#0e7490">入射 V⁺</text>
+  <path d="M200,132 L120,132" stroke="#d97706" stroke-width="2.5"/>
+  <polygon points="120,126 106,132 120,138" fill="#d97706"/>
+  <text x="176" y="150" font-size="11" fill="#b45309">反射 +V⁺（不翻面）</text>
+  <text x="140" y="176" text-anchor="middle" font-size="13" font-weight="bold" fill="#dc2626">ρ = +1</text>
+  <text x="140" y="196" text-anchor="middle" font-size="11.5" fill="#374151">端點電壓 = 2V⁺（加倍！）</text>
+  <text x="140" y="214" text-anchor="middle" font-size="11" fill="#6b7280">繩子自由端：甩到最高</text>
+  <text x="140" y="232" text-anchor="middle" font-size="11" fill="#6b7280">CMOS 輸入 ≈ 這一款（高阻抗）</text>
+  <!-- short -->
+  <text x="380" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">短路 Z_L = 0</text>
+  <line x1="280" y1="110" x2="460" y2="110" stroke="#374151" stroke-width="3"/>
+  <line x1="460" y1="110" x2="460" y2="134" stroke="#374151" stroke-width="3"/>
+  <line x1="448" y1="134" x2="472" y2="134" stroke="#374151" stroke-width="2"/>
+  <line x1="452" y1="139" x2="468" y2="139" stroke="#374151" stroke-width="2"/>
+  <line x1="456" y1="144" x2="464" y2="144" stroke="#374151" stroke-width="2"/>
+  <path d="M300,96 L370,96" stroke="#0e7490" stroke-width="2.5"/>
+  <polygon points="370,90 384,96 370,102" fill="#0e7490"/>
+  <text x="330" y="88" font-size="11" fill="#0e7490">入射 V⁺</text>
+  <path d="M440,132 L360,132" stroke="#7c3aed" stroke-width="2.5"/>
+  <polygon points="360,126 346,132 360,138" fill="#7c3aed"/>
+  <text x="416" y="150" font-size="11" fill="#7c3aed">反射 −V⁺（翻面）</text>
+  <text x="380" y="176" text-anchor="middle" font-size="13" font-weight="bold" fill="#7c3aed">ρ = −1</text>
+  <text x="380" y="196" text-anchor="middle" font-size="11.5" fill="#374151">端點電壓 = 0（被釘死）</text>
+  <text x="380" y="214" text-anchor="middle" font-size="11" fill="#6b7280">繩子綁死端：波峰變波谷</text>
+  <text x="380" y="232" text-anchor="middle" font-size="11" fill="#6b7280">TDR 看短路故障 ≈ 這一款</text>
+  <!-- matched -->
+  <text x="620" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f4c5c">匹配 Z_L = Z₀</text>
+  <line x1="520" y1="110" x2="668" y2="110" stroke="#374151" stroke-width="3"/>
+  <rect x="668" y="98" width="14" height="26" fill="#16a34a" stroke="#15803d"/>
+  <text x="700" y="116" font-size="11" fill="#16a34a">Z₀</text>
+  <path d="M540,96 L610,96" stroke="#0e7490" stroke-width="2.5"/>
+  <polygon points="610,90 624,96 610,102" fill="#0e7490"/>
+  <text x="570" y="88" font-size="11" fill="#0e7490">入射 V⁺</text>
+  <text x="620" y="150" font-size="11" fill="#16a34a">全數被吸收，無反射</text>
+  <text x="620" y="176" text-anchor="middle" font-size="13" font-weight="bold" fill="#16a34a">ρ = 0</text>
+  <text x="620" y="196" text-anchor="middle" font-size="11.5" fill="#374151">端點電壓 = V⁺（乾乾淨淨）</text>
+  <text x="620" y="214" text-anchor="middle" font-size="11" fill="#6b7280">端接電阻的終極目標</text>
+  <text x="620" y="232" text-anchor="middle" font-size="11" fill="#6b7280">（明天 Day 7 的主角）</text>
+  <!-- number line -->
+  <line x1="120" y1="300" x2="640" y2="300" stroke="#374151" stroke-width="2"/>
+  <line x1="120" y1="294" x2="120" y2="306" stroke="#374151" stroke-width="2"/>
+  <line x1="380" y1="294" x2="380" y2="306" stroke="#374151" stroke-width="2"/>
+  <line x1="640" y1="294" x2="640" y2="306" stroke="#374151" stroke-width="2"/>
+  <text x="120" y="326" text-anchor="middle" font-size="12" fill="#7c3aed">ρ = −1（短路）</text>
+  <text x="380" y="326" text-anchor="middle" font-size="12" fill="#16a34a">ρ = 0（匹配）</text>
+  <text x="640" y="326" text-anchor="middle" font-size="12" fill="#dc2626">ρ = +1（開路）</text>
+  <text x="250" y="288" text-anchor="middle" font-size="11" fill="#6b7280">Z_L &lt; Z₀：翻面反彈</text>
+  <text x="510" y="288" text-anchor="middle" font-size="11" fill="#6b7280">Z_L &gt; Z₀：同號堆高</text>
+  <text x="380" y="350" text-anchor="middle" font-size="11" fill="#9ca3af">ρ 永遠落在 −1 ～ +1 之間（純電阻負載時）；電壓永遠不會憑空放大超過 2 倍</text>
+</svg>
+<figcaption>圖 1：反射係數的三個極端。把這條 −1 到 +1 的數線刻進腦子：負載偏大往右（正反射、電壓堆高），負載偏小往左（負反射、電壓拉低）。典型 CMOS 接收端輸入阻抗極高（MΩ 量級搭配 pF 量級電容），在慢邊沿近似下先當「開路」處理——這正是 PT2 Ch.7 用 1 MΩ 當負載算例的原因。</figcaption>
+</figure>
+
+<p>三個極端各代一句口訣：</p>
+<ul>
+  <li><strong>開路（Z_L → ∞）：ρ = +1</strong>。反射波跟入射波一樣大、同號，端點電壓＝入射＋反射＝<strong>2 倍入射波</strong>。「電壓加倍」不是 bug，是開路端的物理必然——之後學 TDR（週 3）和序列端接（明天）都靠它。</li>
+  <li><strong>短路（Z_L = 0）：ρ = −1</strong>。反射波翻面，端點電壓被釘在 0。能量沒有消失，全數帶著反向電壓跑回去了。</li>
+  <li><strong>匹配（Z_L = Z₀）：ρ = 0</strong>。訊號覺得「前面還是同一條線」，全數被吸收——這就是端接電阻存在的意義。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>ρ = (Z_L − Z₀)/(Z_L + Z₀)，端點電壓比例 τ = 1 + ρ。</strong>三個錨點：開路 +1（電壓加倍）、短路 −1（電壓歸零）、匹配 0。再加一個常用心算：<strong>Z_L = 3Z₀ 時 ρ = +1/2；Z_L = Z₀/3 時 ρ = −1/2</strong>（例：150 Ω 對 50 Ω 線 → +0.5；17 Ω 對 50 Ω 線 → 約 −0.5）。這兩個「1/2 錨點」就是等一下逐格算波形的全部軍火。</p>
+</div>
+
+<h2>4. 逐格算波形 I：17 Ω 強驅動的振鈴（Perfect Timing II Ch.7）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>現在把整條鏈路放進來：驅動端有自己的輸出阻抗 R_D，走線 Z₀，終點接收端當開路。訊號會經歷三件事：<strong>(1) 出門先打折</strong>——R_D 和 Z₀ 分壓，只有一部分電壓真正踏上走線；<strong>(2) 到終點彈回來</strong>——開路端 ρ ≈ +1，電壓瞬間堆到出門值的 2 倍；<strong>(3) 回到源頭再彈</strong>——源端 ρ_S = (R_D − Z₀)/(R_D + Z₀)，只要 R_D ≠ Z₀ 就繼續彈。強驅動（R_D 小）的源端 ρ_S 是<strong>負的</strong>，所以每彈一次翻一次面——波形圍著目標值上下振盪，這就是<strong>振鈴</strong>。</p>
+</div>
+
+<p>照 Perfect Timing II Ch.7 的算例走一遍：R_D = 17 Ω、Z₀ = 50 Ω、負載 1 MΩ（≈ 開路）、驅動電壓 V。</p>
+<div class="formula">
+  出門分壓：S = V · Z₀/(Z₀ + R_D) = V · 50/67 = <strong>3/4 V</strong>　踏上走線<br>
+  負載端（1 MΩ ≈ 開路）：V_L = 2 × 3/4 V = <strong>1.5 V</strong>（50% 過衝！）、反射 3/4 V 折返<br>
+  源端反射：ρ_S = (17 − 50)/(17 + 50) ≈ <strong>−1/2</strong> ⇒ 反射波 = −1/2 × 3/4 V = <strong>−0.375 V</strong> 再奔向負載
+</div>
+<p><em>白話翻譯：你以為送出去 1 V，接收端第一眼看到的卻是 1.5 V；接著 −0.375 V 的「翻面回馬槍」再撞一次負載端（又加倍成 −0.75 V），把電壓從 1.5 V 打到 0.75 V……如此往復，圍著 1 V 上下震、越震越小。每一次擺盪的寬度＝訊號來回走線一趟的時間（round trip time = 2 × 走線延遲）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">彈跳圖（lattice diagram）：17 Ω 驅動・50 Ω 線・開路負載（PT2 Ch.7 算例，V = 1）</text>
+  <!-- two vertical rails -->
+  <line x1="200" y1="70" x2="200" y2="390" stroke="#374151" stroke-width="2.5"/>
+  <line x1="560" y1="70" x2="560" y2="390" stroke="#374151" stroke-width="2.5"/>
+  <text x="200" y="58" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">源端 ρ_S ≈ −1/2</text>
+  <text x="200" y="44" text-anchor="middle" font-size="11" fill="#6b7280">R_D = 17 Ω</text>
+  <text x="560" y="58" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">負載端 ρ_L ≈ +1</text>
+  <text x="560" y="44" text-anchor="middle" font-size="11" fill="#6b7280">≈ 開路（1 MΩ）</text>
+  <!-- time axis -->
+  <text x="120" y="90" text-anchor="end" font-size="11" fill="#6b7280">t = 0</text>
+  <text x="120" y="150" text-anchor="end" font-size="11" fill="#6b7280">t = T_d</text>
+  <text x="120" y="210" text-anchor="end" font-size="11" fill="#6b7280">t = 2T_d</text>
+  <text x="120" y="270" text-anchor="end" font-size="11" fill="#6b7280">t = 3T_d</text>
+  <text x="120" y="330" text-anchor="end" font-size="11" fill="#6b7280">t = 4T_d</text>
+  <text x="120" y="390" text-anchor="end" font-size="11" fill="#6b7280">t = 5T_d</text>
+  <text x="60" y="240" text-anchor="middle" font-size="12" fill="#374151" transform="rotate(-90 60 240)">時間往下走（T_d = 走線單程延遲）</text>
+  <!-- bounces -->
+  <line x1="200" y1="86" x2="560" y2="146" stroke="#0e7490" stroke-width="2.5"/>
+  <polygon points="548,138 562,147 550,152" fill="#0e7490"/>
+  <text x="368" y="106" text-anchor="middle" font-size="12" fill="#0e7490" font-weight="bold">+0.75（出門分壓 50/67）</text>
+  <line x1="560" y1="146" x2="200" y2="206" stroke="#d97706" stroke-width="2.5"/>
+  <polygon points="212,198 198,207 210,212" fill="#d97706"/>
+  <text x="392" y="186" text-anchor="middle" font-size="12" fill="#b45309" font-weight="bold">+0.75（ρ_L≈+1 原樣反彈）</text>
+  <line x1="200" y1="206" x2="560" y2="266" stroke="#7c3aed" stroke-width="2.5"/>
+  <polygon points="548,258 562,267 550,272" fill="#7c3aed"/>
+  <text x="368" y="228" text-anchor="middle" font-size="12" fill="#7c3aed" font-weight="bold">−0.375（ρ_S≈−1/2 翻面）</text>
+  <line x1="560" y1="266" x2="200" y2="326" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 3"/>
+  <polygon points="212,318 198,327 210,332" fill="#7c3aed"/>
+  <text x="392" y="306" text-anchor="middle" font-size="12" fill="#7c3aed">−0.375（再反彈）</text>
+  <line x1="200" y1="326" x2="560" y2="386" stroke="#0e7490" stroke-width="2" stroke-dasharray="5 3"/>
+  <polygon points="548,378 562,387 550,392" fill="#0e7490"/>
+  <text x="368" y="348" text-anchor="middle" font-size="12" fill="#0e7490">+0.1875（又翻回正）</text>
+  <!-- load voltage column -->
+  <text x="660" y="90" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">負載端電壓</text>
+  <rect x="600" y="132" width="130" height="26" rx="6" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="665" y="150" text-anchor="middle" font-size="12.5" fill="#991b1b" font-weight="bold">1.50 V（過衝 50%）</text>
+  <rect x="600" y="252" width="130" height="26" rx="6" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="665" y="270" text-anchor="middle" font-size="12.5" fill="#5b21b6" font-weight="bold">0.75 V（跌破目標）</text>
+  <rect x="600" y="372" width="130" height="26" rx="6" fill="#fdf6ec" stroke="#d97706"/>
+  <text x="665" y="390" text-anchor="middle" font-size="12.5" fill="#92400e" font-weight="bold">1.125 V（再彈上）</text>
+  <text x="380" y="420" text-anchor="middle" font-size="11.5" fill="#6b7280">負載端序列：1.5 → 0.75 → 1.125 → 0.9375 → …圍著 1 V 收斂＝振鈴；每格寬度 = 2T_d（round trip）</text>
+</svg>
+<figcaption>圖 2：彈跳圖是逐格算反射的白板神器——左右兩條直線是走線兩端，時間往下走，每道斜線是一趟波、標上「這趟帶多少電壓」；到端點就乘上該端的 ρ 折返。負載端電壓＝把所有到站的波（含反彈）累加。PT2 Ch.7 的實測（19.8 Ω 驅動、6 吋、51.7 Ω stripline）在示波器上呈現的正是這種 1 V/div 刻度下清晰可數的振鈴。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p><strong>「driver 越強越好」是 SI 世界的第一大迷思。</strong>直覺上輸出阻抗越低、驅動力越猛，訊號應該越漂亮——但上面的算式告訴你相反：R_D 越小，出門分壓越接近 1（第一拳打得越重、過衝越大），而且源端 ρ_S 越接近 −1（回來的波幾乎全額翻面再彈）。<strong>強驅動＋不端接＝教科書級振鈴製造機</strong>。這也是為什麼明天要學的串聯端接，本質是「故意串一顆電阻把 driver 變鈍」。順帶一提：振鈴的來回頻率（1/(2T_d) 量級）通常落在數百 MHz 到 GHz，是 EMI 掃描時輻射超標尖峰的常客——SI 沒管好，EMI 一定找上門（週 9 詳談）。</p>
+</div>
+
+<h2>5. 逐格算波形 II：150 Ω 弱驅動的階梯波（Perfect Timing II Ch.7）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>反過來，如果 driver 很弱（輸出阻抗比走線大），會發生完全相反的戲碼：<strong>出門先被打骨折</strong>——150 Ω 對 50 Ω 分壓，只有 1/4 的電壓踏上走線；到了開路端加倍也才一半，<strong>接收端第一眼只看到 0.5 V，連門檻都可能跨不過</strong>。好消息是源端 ρ_S 這次是「正的」（+1/2），回來的波不翻面、再補一波正的過去——於是負載電壓 0.5 → 0.75 → 0.875 → …一階一階往 1 V 爬，像爬樓梯。壞消息是：爬到能用的電壓要好幾個來回，<strong>等效上升時間被拉長好幾倍</strong>，時序預算直接爆炸；更陰的是若門檻電壓剛好卡在某一階附近，訊號會在門檻上磨蹭，造成緩慢且抖動極大的觸發。</p>
+</div>
+
+<p>照 PT2 Ch.7 逐格算：R_D = 150 Ω、Z₀ = 50 Ω、負載 ≈ 開路：</p>
+<div class="formula">
+  出門分壓：S = V · 50/(50 + 150) = <strong>1/4 V</strong><br>
+  第一階（t = T_d）：V_L = 2 × 1/4 = <strong>0.5 V</strong>；反射 1/4 V 折返<br>
+  源端：ρ_S = (150 − 50)/(150 + 50) = <strong>+1/2</strong> ⇒ 補一波 +0.125 V 過去<br>
+  第二階（t = 3T_d）：V_L = 0.5 + 2 × 0.125 = <strong>0.75 V</strong>；之後 0.875、0.9375…每階寬 2T_d
+</div>
+<p><em>白話翻譯：同一條公式、同一套彈跳圖，只因 ρ_S 從負變正，波形就從「上下振鈴」變成「單向爬梯」。判斷口訣：<strong>源端太強（R_D &lt; Z₀）→ 振鈴；源端太弱（R_D &gt; Z₀）→ 階梯</strong>。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 350" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">同一條線、兩種病：負載端看到的波形（示意，V = 1、負載≈開路）</text>
+  <!-- left: ringing -->
+  <text x="200" y="52" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#dc2626">R_D = 17 Ω（太強）→ 振鈴</text>
+  <line x1="60" y1="290" x2="360" y2="290" stroke="#374151" stroke-width="1.5"/>
+  <line x1="60" y1="290" x2="60" y2="80" stroke="#374151" stroke-width="1.5"/>
+  <line x1="60" y1="170" x2="360" y2="170" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="52" y="174" text-anchor="end" font-size="10.5" fill="#6b7280">1.0V</text>
+  <text x="52" y="114" text-anchor="end" font-size="10.5" fill="#6b7280">1.5V</text>
+  <text x="52" y="234" text-anchor="end" font-size="10.5" fill="#6b7280">0.5V</text>
+  <path d="M60,290 L90,290 L90,110 L150,110 L150,200 L210,200 L210,155 L270,155 L270,178 L330,178 L330,167 L360,167" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <line x1="90" y1="98" x2="150" y2="98" stroke="#374151" stroke-width="1.2"/>
+  <line x1="90" y1="94" x2="90" y2="102" stroke="#374151" stroke-width="1.2"/>
+  <line x1="150" y1="94" x2="150" y2="102" stroke="#374151" stroke-width="1.2"/>
+  <text x="120" y="90" text-anchor="middle" font-size="10.5" fill="#374151">2T_d</text>
+  <text x="120" y="126" text-anchor="middle" font-size="10.5" fill="#991b1b">1.5</text>
+  <text x="180" y="216" text-anchor="middle" font-size="10.5" fill="#991b1b">0.75</text>
+  <text x="240" y="149" text-anchor="middle" font-size="10.5" fill="#991b1b">1.125</text>
+  <text x="200" y="316" text-anchor="middle" font-size="11" fill="#6b7280">圍著 1 V 上下震盪收斂（PT2 Fig 7.3 型）</text>
+  <!-- right: stairs -->
+  <text x="570" y="52" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#b45309">R_D = 150 Ω（太弱）→ 階梯波</text>
+  <line x1="430" y1="290" x2="730" y2="290" stroke="#374151" stroke-width="1.5"/>
+  <line x1="430" y1="290" x2="430" y2="80" stroke="#374151" stroke-width="1.5"/>
+  <line x1="430" y1="170" x2="730" y2="170" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="422" y="174" text-anchor="end" font-size="10.5" fill="#6b7280">1.0V</text>
+  <text x="422" y="234" text-anchor="end" font-size="10.5" fill="#6b7280">0.5V</text>
+  <path d="M430,290 L460,290 L460,230 L520,230 L520,200 L580,200 L580,185 L640,185 L640,177 L700,177 L700,174 L730,174" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <line x1="460" y1="218" x2="520" y2="218" stroke="#374151" stroke-width="1.2"/>
+  <line x1="460" y1="214" x2="460" y2="222" stroke="#374151" stroke-width="1.2"/>
+  <line x1="520" y1="214" x2="520" y2="222" stroke="#374151" stroke-width="1.2"/>
+  <text x="490" y="212" text-anchor="middle" font-size="10.5" fill="#374151">2T_d</text>
+  <text x="490" y="246" text-anchor="middle" font-size="10.5" fill="#92400e">0.5</text>
+  <text x="550" y="216" text-anchor="middle" font-size="10.5" fill="#92400e">0.75</text>
+  <text x="610" y="201" text-anchor="middle" font-size="10.5" fill="#92400e">0.875</text>
+  <!-- threshold danger -->
+  <line x1="430" y1="206" x2="730" y2="206" stroke="#dc2626" stroke-dasharray="6 4" stroke-width="1.5"/>
+  <text x="726" y="200" text-anchor="end" font-size="10.5" fill="#dc2626">門檻若卡在階梯間 → 觸發時間大抖動</text>
+  <text x="570" y="316" text-anchor="middle" font-size="11" fill="#6b7280">一階一階爬向 1 V，每階寬 2T_d（PT2 Fig 7.4 型）</text>
+  <text x="380" y="340" text-anchor="middle" font-size="11.5" fill="#374151" font-weight="bold">讀波形口訣：來回擺／爬階的「一格寬度」= 2T_d = 走線來回時間 → 直接反推線長</text>
+</svg>
+<figcaption>圖 3：源端太強 vs 太弱，同一套反射公式長出兩種病徵（依 PT2 Ch.7 的計算重繪示意）。注意兩張圖的橫向格寬都是 2T_d——這是等一下「看波形反推線長」的鑰匙。</figcaption>
+</figure>
+
+<h2>6. 讀波形反推：面試官最愛的偵探遊戲</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>前面是「已知電路算波形」，面試（和 debug）常常反著考：<strong>給你一張示波器截圖，要你當偵探</strong>。線索只有兩條，但足夠破案：<strong>(1) 第一個平台的高度</strong>洩漏了源端分壓比，反推 R_D；<strong>(2) 振鈴/階梯的週期</strong>就是 2T_d，除以走線速度（Day 5：外層約 18 cm/ns、內層約 15 cm/ns）就是線長。學會這招，你在會議室看一眼波形就能說出「這條 clock 沒端接、driver 大概十幾歐姆、線長十幾公分」——全場只有你像目擊者。</p>
+</div>
+
+<p>破案流程（負載近似開路的常見情況）：</p>
+<ol>
+  <li><strong>量第一平台 V_first（或第一過衝峰值 V_peak）</strong>：開路端 V_peak = 2S，所以出門波 S = V_peak/2。由 S = V·Z₀/(Z₀+R_D) 反解：<strong>R_D = Z₀·(V/S − 1)</strong>。例：V = 1 V 的擺幅、看到峰值 1.5 V → S = 0.75 → R_D = 50×(1/0.75 − 1) ≈ 17 Ω。就是 PT2 的算例倒著走。</li>
+  <li><strong>量振鈴一格的寬度 = 2T_d</strong>：例如量到 2 ns → T_d = 1 ns → 內層帶狀線約 15 cm、外層微帶線約 18 cm（Day 5 的速度手感）。PT2 Ch.7 實測條件「6 吋 stripline」對應 T_d 約 1 ns 量級（書中以約 175 ps/inch 的傳播延遲舉例），示波器橫軸 1 ns/div 正好把振鈴一格一格攤開。</li>
+  <li><strong>看極性判斷源端強弱</strong>：第一拳打過頭再往回掉（振鈴）→ R_D &lt; Z₀；一階一階往上爬（階梯）→ R_D &gt; Z₀。連 ρ_S 的正負都幫你標好了。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>讀波形三步：平台高度 → 源阻抗；格寬 = 2T_d → 線長；振鈴或階梯 → R_D 比 Z₀ 小或大。</strong>再背一個危害判準：反射造成的擺盪若跨過接收端門檻（例如 CMOS 的 V_IH/V_IL），clock 就可能被多數一拍（double clocking）——PT2 Ch.7 稱之為 false trigger，「當這訊號是 clock 時後果是災難性的（disastrous）」。</p>
+</div>
+
+<h2>7. 何時必須端接？——1/6 法則把 Day 1 接回來</h2>
+<p>Perfect Timing II Ch.7 對「何時要端接」給出明確準則：<strong>clock 訊號最佳實務是一律端接</strong>；若情況不允許，則走線延遲必須遠小於邊沿時間——書中的 guideline 是<strong>走線延遲至少比 clock 上升時間快 6 倍</strong>（T_d &lt; t_r/6），超過這個比例的走線必須端接，否則反射就會成為問題。書中同時要求：所有 clock 走線都應該用 IBIS 或 SPICE 模型模擬驗證端接（週 6 會碰 IBIS）。</p>
+<p>這其實就是 Day 1 學過的「臨界長度」換個說法：T_d &lt; t_r/6 時，訊號來回彈好幾趟都還疊在慢慢爬升的邊沿裡，反射被邊沿「糊」掉了，看起來就是無害的小肩膀；邊沿一快（t_r 縮短），同一條線立刻從「集總」變「傳輸線」，昨天還乖的板子今天就振鈴——<strong>換一顆更快的 buffer 而板子沒改，是 SI 事故的經典開場</strong>。2002 年的書用 2 ns 上升時間舉例；以現代標準需上修：現在的 clock buffer 與 SoC I/O 邊沿常在數百 ps 甚至更快，同樣的 1/6 法則算出來的「免端接長度」縮到 1～2 cm 量級，實務上等於「幾乎所有跨板 clock 都要端接」。</p>
+
+<h2>8. 實務案例：把今天的觀念接回你的工作</h2>
+<ul>
+  <li><strong>NB 主機板：RTC/PCIe reference clock 的 double clocking 懸案。</strong>某機種偶發開機異常，抓到的波形是 clock 在低電位附近有一個回勾的凸包、剛好摸到 V_IH。用今天的偵探術：凸包離主邊沿的時間差 = 2T_d，一算正好對應那段量產前臨時改長的繞線；源端串接電阻當初為省 BOM 被 0 Ω 取代 → ρ_S 接近 −0.5，反射全額翻面回灌。對策就是明天的主題：把串聯端接補回正確阻值。這類「量波形 → 反推哪一段線 → 對回 layout 改版紀錄」的敘事，正是 Apple/Google FA 面試想聽的完整故事鏈。</li>
+  <li><strong>鏡頭模組：MIPI 走線的 LP 模式最怕反射。</strong>MIPI D-PHY 的 HS 模式有 100 Ω 差動端接（ρ ≈ 0，天下太平），但 <strong>LP 模式是無端接的單端 1.2 V 訊號、接收端高阻抗 ≈ 開路（ρ ≈ +1）</strong>——flex 一長，LP-01/LP-10 的切換邊沿就帶著全額反射來回彈，嚴重時 bring-up 階段 LP 指令被誤判、sensor 不進 HS。看懂今天的開路全反射，你就知道為什麼 MIPI 規範要限制 LP 模式的邊沿速率與線長，也知道 debug 時該先量 LP 波形的振鈴而不是先怪韌體。</li>
+  <li><strong>面試白板題原型：</strong>「Here's a scope shot of an unterminated clock, tell me everything you can.」用第 6 節三步：源阻抗、線長、強弱判斷，再補一句 1/6 法則與端接建議——四句話讓面試官知道你能從波形直接讀出電路。</li>
+</ul>
+
+<h2>9. 動手練習</h2>
+<p>拿紙筆逐格算，這五題就是白板面試的完整彈藥庫。算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（暖身）：Z₀ = 50 Ω，分別求 Z_L = 25 Ω、75 Ω、100 Ω、10 Ω 的 ρ 與負載端電壓比例 τ。</summary>
+<p><strong>解：</strong>ρ = (Z_L−50)/(Z_L+50)、τ = 1+ρ。25 Ω：ρ = −25/75 = <strong>−1/3</strong>，τ = 2/3；75 Ω：ρ = 25/125 = <strong>+0.2</strong>，τ = 1.2；100 Ω：ρ = 50/150 = <strong>+1/3</strong>，τ = 4/3；10 Ω：ρ = −40/60 = <strong>−2/3</strong>，τ = 1/3。觀察兩件事：(1) 負載偏小的殺傷力大於偏大（−2/3 vs +1/3 都是差 5 倍/2 倍的不對稱）；(2) τ 永遠在 0 到 2 之間——反射再兇，端點電壓最多加倍、最少歸零，不會無中生有。</p>
+</details>
+
+<details>
+<summary>練習 2（PT2 Ch.7 完整重演）：R_D = 17 Ω、Z₀ = 50 Ω、負載開路、驅動 0→3.3 V。畫彈跳圖，算出負載端前四個電壓值與各自出現的時間（以 T_d 表示），並求最終穩態值。</summary>
+<p><strong>解：</strong>出門波 S = 3.3 × 50/67 ≈ 2.46 V。ρ_L ≈ +1、ρ_S = −33/67 ≈ −0.4925（心算用 −1/2）。負載端：t = T_d：2×2.46 ≈ <strong>4.93 V</strong>（過衝約 1.6 V！）；t = 3T_d：4.93 + 2×(−0.4925×2.46) ≈ 4.93 − 2.43 ≈ <strong>2.50 V</strong>；t = 5T_d：2.50 + 2×(+1.19) ≈ <strong>4.89 V</strong>……用精確 ρ_S 算則收斂稍快，序列圍著 3.3 V 振盪衰減。穩態：無 DC 負載電流 → 負載端最終 = <strong>3.3 V</strong>。附加觀察：4.93 V 已遠超一般 3.3 V I/O 的絕對最大額定（約 3.6～4 V 量級，依元件而定），這種過衝會打開輸入端的 ESD 保護二極體去箝位——長期打會傷元件、瞬間打會把能量灌進電源軌，這是「不端接不只訊號醜、還傷料」的原因。</p>
+</details>
+
+<details>
+<summary>練習 3（階梯波時序）：R_D = 150 Ω、Z₀ = 50 Ω、負載開路。負載電壓要爬到最終值的 90% 以上，需要幾階？若走線 T_d = 1 ns，等效「上升時間」被拉長到多少？這對 100 MHz 的 clock 意味著什麼？</summary>
+<p><strong>解：</strong>每一階後負載電壓 = V×(1 − ρ_S^n)，其中 ρ_S = +0.5、n 為到站波次：第 1 階 0.5V、第 2 階 0.75V、第 3 階 0.875V、<strong>第 4 階 0.9375V &gt; 90%</strong>。第 n 階出現在 t = (2n−1)T_d，所以需要 t = 7T_d = <strong>7 ns</strong>。對 100 MHz clock（週期 10 ns、半週期 5 ns）：訊號還沒爬到高準位就要往下切了——<strong>clock 根本到不了合格的 V_IH，這條線直接不能用</strong>。這就是 PT2 Ch.7 說弱驅動（高阻抗、慢邊沿）情境的殺傷力：它不是「醜」，是「不會動」。解法：換低阻抗 driver（但要配端接防振鈴）或改用 end termination（明天詳談）。</p>
+</details>
+
+<details>
+<summary>練習 4（讀波形偵探題）：示波器上一條無端接、負載近似開路的 3.3 V clock：第一個峰值 4.4 V，之後每 3 ns 上下擺一次收斂到 3.3 V。走線是內層帶狀線（約 15 cm/ns）。求源端阻抗與線長。</summary>
+<p><strong>解：</strong>(1) 峰值 4.4 = 2S → S = 2.2 V → 分壓比 S/V = 2.2/3.3 = 2/3 = Z₀/(Z₀+R_D) → R_D = Z₀/2 = <strong>25 Ω</strong>（Z₀ 取 50 Ω）。(2) 擺盪一格 = 2T_d = 3 ns → T_d = 1.5 ns → 線長 ≈ 1.5 ns × 15 cm/ns = <strong>約 22.5 cm</strong>。(3) 驗算合理性：ρ_S = (25−50)/75 = −1/3，第二個到站值 = 4.4 + 2×(−1/3×2.2) ≈ 2.93 V，圍著 3.3 V 衰減振盪，與「上下擺收斂」相符。這題就是面試現場的標準劇本——答的時候把三步驟講出聲，比答案本身更加分。</p>
+</details>
+
+<details>
+<summary>練習 5（觀念題）：為什麼 PT2 Ch.7 用「1 MΩ」代表典型負載就敢近似 ρ ≈ +1？什麼情況下這個「開路」近似會失效？（提示：接收端腳位除了大電阻還並聯了什麼？）</summary>
+<p><strong>解：</strong>ρ = (10⁶−50)/(10⁶+50) ≈ 0.9999 ≈ +1，誤差不到萬分之一，所以純電阻角度看完全成立。但真實 CMOS 輸入腳還並聯了<strong>數 pF 量級的輸入電容＋封裝/pad 寄生</strong>。電容的阻抗隨頻率下降（1/ωC），對慢邊沿它近似開路沒問題；<strong>邊沿一快（頻譜拉到 GHz），電容那一瞬間的阻抗掉到幾十 Ω 甚至更低，ρ 不再是 +1，而是一個「先往負再回正」的動態過程</strong>——波形上看到的是端點先被電容「吃」出一個圓角/下凹，再回彈。這就是週 3 要學的：TDR 看到電容性不連續是「向下的酒窩」、電感性是「向上的尖峰」。今天的純電阻 ρ 是骨架，下週給它長肉。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>今天的觀念在外商面試的實際出題方式（先用英文口頭回答再看參考答案）：</p>
+
+<details>
+<summary>Q1: "Walk me through what happens, step by step, when a CMOS driver with low output impedance launches a step into a 50-ohm trace that ends at a high-impedance receiver with no termination."</summary>
+<p><strong>參考答案骨架：</strong>First there's a voltage divider at the source: the launched wave is V times Z0 over Z0 plus the driver impedance — with a strong driver, most of V gets onto the line. The wave arrives at the receiver one propagation delay later; the input is essentially open, so the reflection coefficient is close to plus one and the receiver momentarily sees nearly double the launched wave — that's the overshoot. The reflected wave travels back, hits the source mismatch, and because the driver impedance is below Z0, the source reflection coefficient is negative — the wave flips polarity and heads back out. The receiver voltage then rings above and below the final value, with each swing lasting one round-trip time, until it damps out. If any swing crosses the input threshold, you can get a false clock — that's why clock traces should always be terminated. (依據 Perfect Timing II Ch.7 的 17 Ω/50 Ω 算例：launch 3/4 V、負載端 1.5 V、源端反射 −0.375 V。)</p>
+<p><strong>加分點：</strong>主動補數字化直覺——"With a 17-ohm driver into 50 ohms you launch three quarters of V, see 1.5 V at the load, and the source bounces back minus half of whatever returns — you can build the whole waveform on a napkin with just rho."</p>
+</details>
+
+<details>
+<summary>Q2: "Here's a scope capture: the far-end of an unterminated line steps up to only half the supply, then climbs in stairs every 4 nanoseconds. What's wrong, and what do you know about the circuit already?"</summary>
+<p><strong>參考答案骨架：</strong>A stair-step means the source impedance is higher than the trace impedance. The first plateau at half the swing tells me the source divider is one half, so the driver impedance is roughly three times Z0 — around 150 ohms on a 50-ohm line, which matches the classic weak-driver case. Each stair is one round trip, so 4 nanoseconds means 2 nanoseconds one-way — roughly 30 centimeters of inner-layer trace at 15 centimeters per nanosecond. The risk isn't overshoot, it's timing: the receiver threshold sits between stairs, so the effective edge is delayed by multiple round trips and the switching time jitters. The fix is either a stronger driver with proper series termination, or an end termination so the first incident wave alone crosses the threshold cleanly. And per the guideline in the Cypress clock design guide, if the trace delay is longer than about one sixth of the rise time, termination isn't optional.</p>
+<p><strong>考點：</strong>從波形直接反推 R_D 與線長（偵探三步）＋知道階梯波傷的是時序而非電壓＋給出對策與判準，一氣呵成。</p>
+</details>
+
+<h2>11. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：反射係數與穿透係數公式？三個極端值？</p>
+  <p class="a">A1：ρ = (Z_L−Z₀)/(Z_L+Z₀)、τ = 1+ρ = 2Z_L/(Z_L+Z₀)。開路 ρ=+1（端點電壓加倍）、短路 ρ=−1（電壓歸零）、匹配 ρ=0（全吸收）。ρ 恆在 ±1 之間、τ 在 0～2 之間。心算錨點：Z_L=3Z₀→+1/2；Z_L=Z₀/3→−1/2。</p>
+  <p class="q">Q2：PT2 Ch.7 的 17 Ω 強驅動算例，負載端前三個電壓？病名？</p>
+  <p class="a">A2：launch = V·50/67 = 3/4V；開路端 1.5V（50% 過衝）→ 源端 ρ_S≈−1/2 反射 −0.375V → 負載 0.75V → 再彈回 1.125V…圍著 V 衰減振盪＝振鈴。口訣：R_D &lt; Z₀（源太強）→ 振鈴；每格寬 = 2T_d。</p>
+  <p class="q">Q3：PT2 Ch.7 的 150 Ω 弱驅動算例，波形長怎樣？為什麼危險？</p>
+  <p class="a">A3：launch 僅 1/4V，開路端第一階只有 0.5V；ρ_S=+1/2 為正 → 不翻面逐波補足：0.5→0.75→0.875…每階寬 2T_d 的階梯波。危險在時序：爬到 90% 要到 7T_d，門檻卡在階梯間會造成大幅延遲與觸發抖動，clock 可能根本到不了 V_IH。</p>
+  <p class="q">Q4：看無端接波形反推電路的偵探三步？</p>
+  <p class="a">A4：(1) 第一峰值/平台 = 2S → S 反推源阻抗 R_D = Z₀(V/S−1)；(2) 振鈴/階梯一格寬 = 2T_d → 乘走線速度（外層約 18、內層約 15 cm/ns）得線長；(3) 振鈴 = R_D&lt;Z₀、階梯 = R_D&gt;Z₀。危害判準：擺盪跨過 V_IH/V_IL → false trigger / double clocking（PT2 Ch.7）。</p>
+  <p class="q">Q5：何時必須端接（PT2 Ch.7 的 1/6 法則）？</p>
+  <p class="a">A5：clock 最佳實務一律端接；不端接的條件是走線延遲比上升時間快至少 6 倍（T_d &lt; t_r/6），且所有 clock 線都應以 IBIS/SPICE 模擬驗證。2002 年以 2 ns 邊沿舉例；現代邊沿常見數百 ps → 免端接長度縮至 1～2 cm 量級，跨板 clock 幾乎一律要端接。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 7：端接策略——一顆電阻的四種放法（串聯／並聯／戴維寧／AC 端接）</strong></p>
+  <p>病因（反射）和病徵（振鈴、階梯）今天都看透了，明天開藥：Perfect Timing II Ch.7 的主場——串聯端接為什麼是 clock 界的預設解（含 R_S = Z₀ − R_D 的計算與「離 driver 多近才夠近」的 1/10 法則）、戴維寧與並聯端接的功耗代價、AC 端接的電容怎麼選，以及一條線帶兩個負載時的 stub 陷阱。學完你就能解釋為什麼串聯端接的線「中途量只有半高、到終點才是全壓」——這是每年不知道騙倒多少新人的量測陷阱。週五實作日就拿它到公司實機驗證。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 6 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

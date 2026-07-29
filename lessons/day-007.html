@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 7｜端接策略——一顆電阻的四種放法</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 7 天</div>
+  <h1>Day 7：端接策略——一顆電阻的四種放法（串聯／戴維寧／並聯／AC）</h1>
+  <div class="meta">2026-07-30（四）｜預估學習時間：90 分鐘｜難度：★★★☆☆（觀念不難，難在「選哪一種、放哪裡、算多大」三件事都要答得出來）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天的課，你要能夠：</p>
+  <ol>
+    <li>用一句話說出端接的本質：<strong>在走線的某一端「假造」一個 Z₀，讓反射波無家可回</strong></li>
+    <li>完整走一遍串聯端接的波形（Perfect Timing II Ch.7 實例：19.8 Ω driver＋31.9 Ω 電阻＋51.7 Ω stripline），並解釋<strong>「線中途量只有半高」是特徵不是故障</strong>——每年騙倒無數新人的量測陷阱</li>
+    <li>背出串聯電阻的擺放準則：<strong>離 driver 的飛行時間 &lt; t_r/10</strong>（Perfect Timing II Ch.7 的 1/10 法則），並會換算成公分</li>
+    <li>設計戴維寧端接：R1‖R2 = Z₀、驗 IOH/IOL 不超載、算它一直在燒的 DC 功耗</li>
+    <li>說明並聯與 AC 端接的取捨，以及一條線帶兩個負載時的 stub 法則與該避免的 bifurcated trace</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：病因看透了，今天開藥</h2>
+<p>Day 6 我們把「不端接」的兩種病徵算得清清楚楚：R_D = 17 Ω 的強驅動把開路端打到 1.5 V（50% 過衝）然後振鈴；R_D = 150 Ω 的弱驅動只送得出 0.5 V 然後慢慢爬階梯。病因只有一個：<strong>走線兩端都不是 Z₀，反射波在兩面牆之間來回彈</strong>。Perfect Timing II Ch.7 的處方也只有一個原則——「讓至少一端看起來就是 Z₀」——但這顆電阻有四種放法，各自的代價（功耗、面積、上升時間、能不能帶多負載）完全不同。今天把四種放法一次學會，明天（週五實作日）就帶到公司實機驗證。</p>
+
+<h2>1. 白話總覽：吸音棉裝門口，還是裝對面牆？</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（看懂這段，今天就成功一半）</span>
+  <p>把走線想成 Day 6 那個回音谷（或 KTV 包廂）：聲音撞牆會彈回來，彈來彈去就是振鈴。要消除回音，方法是<strong>裝吸音棉</strong>——而吸音棉只有兩個地方可裝：</p>
+  <p><strong>裝在門口（訊號出發的那端）＝串聯端接</strong>：回音照樣產生、照樣彈回來，但它一回到門口就被吸音棉整口吃掉，<strong>只彈這一次就結束</strong>。好處是吸音棉平常不耗東西（沒有 DC 電流）；代價是「彈這一次」被巧妙地利用掉了——等一下你會看到，串聯端接根本是<strong>故意利用開路端的電壓加倍</strong>來湊出全電壓，設計得漂亮到像魔術。</p>
+  <p><strong>裝在對面牆（訊號抵達的那端）＝終端端接</strong>（戴維寧／並聯／AC 三兄弟）：訊號一抵達就被吸光，<strong>連第一次反射都不會發生</strong>。好處是波形第一拍就是全速全壓、而且線的中段也乾淨（所以可以沿路掛多個負載）；代價是那面牆會<strong>持續耗電</strong>（戴維寧最兇）、還要確認 driver 拉得動這面牆。</p>
+  <p>先把結論給你：<strong>點對點的 CMOS clock，預設解是串聯端接</strong>——Perfect Timing II Ch.7 開頭就說它是「目前為止最受歡迎（by far the most popular）」的 clock 端接法。終端端接三兄弟是特定情況的替補：要帶多負載、或 driver 夠壯且能接受耗電時才上場。</p>
+</div>
+
+<h2>2. 串聯端接：把「彈一次」變成設計的一部分</h2>
+
+<div class="card intuition">
+  <span class="label">白話版（公式看不懂可以先跳過，懂這段就好）</span>
+  <p>Day 6 說過強驅動的病根：R_D 太小，(1) 出門電壓太滿、(2) 源端 ρ_S 是負的會翻面再彈。串聯端接的思路簡單粗暴：<strong>既然 driver 天生太瘦（17 Ω），就串一顆電阻幫它增肥到剛好 50 Ω</strong>。增肥之後發生兩件妙事：</p>
+  <p>第一，出門分壓變成正好 <strong>一半</strong>（50 對 50 平分）——你可能會慌：「半壓怎麼夠用？」別忘了 Day 6 的開路端魔法：<strong>ρ ≈ +1，端點電壓加倍</strong>。半壓 × 2 ＝ 全壓，接收端第一拍就看到完整的 V，一滴不多一滴不少。</p>
+  <p>第二，反射波（半壓）跑回源端時，看到的是 R_S + R_D = Z₀——<strong>源端 ρ_S = 0，回波被整口吸收，故事就此結束</strong>。整條線的波形只有「去一趟、回一趟」兩幕戲，沒有第三幕。過衝？沒有。振鈴？沒有。持續耗電？也沒有（線上沒有到地的 DC 通路）。這就是它稱霸 clock 端接的原因。</p>
+</div>
+
+<p>把 Perfect Timing II Ch.7 的規則寫成數學。設計式只有一條：</p>
+<div class="formula">
+  <strong>R_S = Z₀ − R_D</strong>　（讓 R_D + R_S = Z₀，源端反射係數歸零）
+</div>
+<p><em>白話翻譯：電阻補多少＝走線阻抗減掉 driver 本身的阻抗。</em>PT2 Ch.7 的實測板正是這樣配的：driver 輸出阻抗 19.8 Ω、有效 51.7 Ω 的 stripline，所以串了 <strong>31.9 Ω</strong>（19.8 + 31.9 = 51.7）——書中 6 吋走線的示波器截圖（1 V/div、1 ns/div）顯示負載端一步到位、乾乾淨淨。R_D 從哪查？書中明說：<strong>元件 datasheet 或 IBIS 模型</strong>（很多模擬器可以直接萃取；週 6 會學 IBIS）。</p>
+
+<p>接著逐格走一遍波形（V 為 driver 全擺幅，負載近似開路）：</p>
+<div class="formula">
+  出門分壓：S = V · Z₀/(Z₀ + R_D + R_S) = V · Z₀/2Z₀ = <strong>1/2 V</strong>　踏上走線<br>
+  t = T_d 到負載（≈ 開路）：A_L = 2 × 1/2 V = <strong>V（全壓，一步到位）</strong>；反射 1/2 V 折返<br>
+  t = 2T_d 回到源端：ρ_S = (R_D + R_S − Z₀)/(R_D + R_S + Z₀) = <strong>0 ⇒ 全數吸收，劇終</strong>
+</div>
+<p><em>白話翻譯：半壓出門 → 終點加倍變全壓 → 回波回家被吃掉。三行搞定，這正是 PT2 Ch.7 寫的 A_L = 2·(1 MΩ)/(1 MΩ + Z₀) × ½V = V、R_L = ½V 的計算。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">串聯端接的波形三現場：源端後、線中途、負載端（V = 1、負載≈開路）</text>
+  <!-- circuit sketch -->
+  <line x1="60" y1="64" x2="120" y2="64" stroke="#374151" stroke-width="2.5"/>
+  <rect x="120" y="54" width="44" height="20" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="142" y="68" text-anchor="middle" font-size="11" fill="#0e7490">R_S</text>
+  <line x1="164" y1="64" x2="640" y2="64" stroke="#374151" stroke-width="2.5"/>
+  <line x1="648" y1="50" x2="648" y2="78" stroke="#dc2626" stroke-width="3"/>
+  <text x="60" y="50" font-size="11" fill="#6b7280">driver R_D</text>
+  <text x="700" y="60" text-anchor="middle" font-size="11" fill="#dc2626">負載≈開路</text>
+  <text x="142" y="44" text-anchor="middle" font-size="11" fill="#0e7490" font-weight="bold">R_D+R_S=Z₀</text>
+  <circle cx="200" cy="64" r="5" fill="#16a34a"/>
+  <text x="200" y="92" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="bold">A 點（近源端）</text>
+  <circle cx="400" cy="64" r="5" fill="#d97706"/>
+  <text x="400" y="92" text-anchor="middle" font-size="11" fill="#b45309" font-weight="bold">B 點（線中途）</text>
+  <circle cx="620" cy="64" r="5" fill="#dc2626"/>
+  <text x="600" y="92" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="bold">C 點（負載端）</text>
+  <!-- waveform A -->
+  <text x="110" y="140" font-size="12.5" font-weight="bold" fill="#16a34a">A 點：半壓平台最久（撐 2T_d）</text>
+  <line x1="80" y1="230" x2="700" y2="230" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="230" x2="80" y2="150" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="162" x2="700" y2="162" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="72" y="166" text-anchor="end" font-size="10" fill="#6b7280">1.0V</text>
+  <text x="72" y="200" text-anchor="end" font-size="10" fill="#6b7280">0.5V</text>
+  <path d="M80,230 L120,230 L120,196 L340,196 L340,162 L700,162" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <line x1="120" y1="184" x2="340" y2="184" stroke="#374151" stroke-width="1"/>
+  <line x1="120" y1="180" x2="120" y2="188" stroke="#374151" stroke-width="1"/>
+  <line x1="340" y1="180" x2="340" y2="188" stroke="#374151" stroke-width="1"/>
+  <text x="230" y="178" text-anchor="middle" font-size="10.5" fill="#374151">半壓平台寬 = 2T_d（來回一趟）</text>
+  <!-- waveform B -->
+  <text x="110" y="266" font-size="12.5" font-weight="bold" fill="#b45309">B 點：先半壓、回波掃過才補滿——「中途量半高」的真相</text>
+  <line x1="80" y1="356" x2="700" y2="356" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="356" x2="80" y2="276" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="288" x2="700" y2="288" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="72" y="292" text-anchor="end" font-size="10" fill="#6b7280">1.0V</text>
+  <text x="72" y="326" text-anchor="end" font-size="10" fill="#6b7280">0.5V</text>
+  <path d="M80,356 L175,356 L175,322 L285,322 L285,288 L700,288" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <text x="230" y="316" text-anchor="middle" font-size="10.5" fill="#92400e">半壓架子（shelf）寬 = 2×(B到終點的延遲)</text>
+  <text x="470" y="316" text-anchor="middle" font-size="10.5" fill="#6b7280">回波（+½V）由右向左掃回來，掃到哪、哪裡補滿</text>
+  <!-- waveform C -->
+  <text x="110" y="392" font-size="12.5" font-weight="bold" fill="#991b1b">C 點：一步到位全壓（半壓×開路加倍），這才是「給晶片看」的波形</text>
+  <line x1="80" y1="458" x2="700" y2="458" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="414" x2="700" y2="414" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="72" y="418" text-anchor="end" font-size="10" fill="#6b7280">1.0V</text>
+  <path d="M80,458 L230,458 L230,414 L700,414" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="330" y="440" text-anchor="middle" font-size="10.5" fill="#6b7280">t = T_d 抵達即全壓，無過衝、無振鈴、無階梯</text>
+</svg>
+<figcaption>圖 1：串聯端接的三個探棒位置看到三種波形（依 PT2 Ch.7 的波傳計算重繪示意）。越靠近源端，半壓平台越寬（A 點撐滿一個 round trip 2T_d）；只有負載端從頭到尾都是乾淨的全壓步階。所以<strong>驗串聯端接的訊號，探棒一律點在接收端腳位</strong>。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區（年度騙新人冠軍）</span>
+  <p><strong>「我在線中間量，clock 只有一半高，這板子壞了！」</strong>——沒壞，這正是串聯端接<strong>健康運作的證據</strong>。半壓波先出門、回波補滿是它的工作原理：在離終點還有 T_x 飛行時間的位置探測，就會看到一個寬度 2T_x 的「半壓架子」。三個推論：(1) <strong>debug 串聯端接的線，探棒點在接收端</strong>，量中途量到架子不要慌；(2) 反過來說這是免費的偵探工具——<strong>架子寬度 ÷ 2 × 走線速度 ＝ 你的探棒離終點多遠</strong>；(3) 這也解釋了 PT2 Ch.7 的警告：<strong>串聯端接只能用在負載全部在線末端的拓撲</strong>——掛在線中段的負載會看到半壓架子，若門檻卡在半壓附近就會誤觸發。書中另提一個先天限制：driver 的輸出阻抗會沿著它的 I-V 曲線變動，R_D 不是常數，所以串聯端接天生做不到完美匹配——工程上取「夠好」，並用 IBIS/SPICE 模擬驗證。</p>
+</div>
+
+<h3>2.1 放哪裡？——1/10 法則</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>R_S 和 driver 之間畢竟隔著一小段線，這一小段的兩端（driver→線、線→R_S）都是阻抗不連續點，都會產生小反射。什麼時候可以裝沒看見？——<strong>那一小段夠短、短到小反射全部糊進上升沿裡</strong>的時候。這跟 Day 1 的臨界長度、Day 6 的 1/6 法則是同一個哲學，只是這裡標準更嚴。</p>
+</div>
+<p>Perfect Timing II Ch.7 的準則：<strong>driver 到 R_S 的飛行時間應在訊號上升時間的 1/10 以內</strong>。書中例子：2 ns 上升時間的 clock → 飛行時間 ≤ 200 ps → 以書中 175 ps/inch 的走線約 <strong>1.14 吋（約 2.9 cm）</strong>。以現代標準需上修：現今 clock buffer／SoC I/O 邊沿常見數百 ps，取 t_r ≈ 500 ps 算，飛行時間只剩 50 ps——內層帶狀線（約 15 cm/ns）換算約 <strong>7～8 mm</strong>；邊沿再快就只剩幾 mm。實務結論：<strong>R_S 緊貼 driver 的第一顆零件位放</strong>，layout guideline 常直接寫「as close to the driver as possible」，根源就是這條 1/10 法則。</p>
+
+<h3>2.2 串聯端接的速度與功耗</h3>
+<p>接收端看進去的等效源阻抗是 Z₀（driver+R_S 透過匹配的線看過來就是 Z₀），對著負載電容 C_L 充電，所以 PT2 Ch.7 給出最快可能的上升時間（10%–90%）：</p>
+<div class="formula">
+  t_R = 2.2 · Z₀ · C_L　；實際上升時間 t = √(t_D² + t_R²)　（t_D 為 driver 本身的上升時間）
+</div>
+<p><em>白話翻譯：訊號到站後還要幫接收腳的寄生電容充電，充電快慢由「Z₀ × 電容」決定；再和 driver 自己的邊沿用平方和開根號合併。例：Z₀ = 50 Ω、C_L = 5 pF → t_R = 2.2×50×5p = 550 ps——在現代訊號速度下這不可忽略，也是待會戴維寧「快一倍」賣點的比較基準。</em></p>
+<p>功耗方面，串聯端接<strong>沒有 DC 通路</strong>，只在波來回的那段時間（每個切換各 2T）有壓降，PT2 Ch.7 給的公式：</p>
+<div class="formula">
+  P_T = f · 2T · (V_OH − V_OL)² / (2R_T)　（f：clock 頻率、T：走線延遲、R_T：串聯電阻）
+</div>
+<p><em>白話翻譯：頻率越高、線越長（波在外面晃越久），電阻工作的「值班時間」越長，燒得越多——但量級仍遠小於一直值班的戴維寧（練習 3 會實際比一次）。</em></p>
+
+<h2>3. 戴維寧端接：拔河式的終端吸收</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>終端端接的思路：與其等回波回家再吸，不如<strong>在終點就把訊號整口吃掉</strong>。戴維寧（Thevenin）的做法像拔河：終點放兩顆電阻，R1 往上拉向 VCC、R2 往下拉向 GND。對「衝過來的波」而言，它同時看到兩條去路（往上、往下），等效阻抗是<strong>兩顆並聯</strong>——只要 R1‖R2 = Z₀，波以為路還沒走完，全數被吸收，ρ_L = 0，連第一次反射都沒有。</p>
+  <p>代價立刻浮現：VCC 到 GND 之間從此有一條 R1+R2 的常駐通路，<strong>不管 clock 動不動，它都在燒電</strong>；而且 driver 每輸出高電位就得跟 R2 拔河、輸出低電位跟 R1 拔河——driver 不夠壯（IOH/IOL 不夠）就會被拉到到不了合格電位。PT2 Ch.7 的模擬圖（103 Ω + 103 Ω、6 吋、51.7 Ω stripline）就明白顯示：<strong>訊號擺不到電源軌</strong>，這是戴維寧的正常特徵。</p>
+</div>
+
+<p>設計三步驟（Perfect Timing II Ch.7）：</p>
+<div class="formula">
+  ① 匹配：1/R1 + 1/R2 = 1/Z₀　（即 R1‖R2 = Z₀；driver 上下對稱時取 R1 = R2 = 2Z₀）<br>
+  ② 驗電流：I_OH &lt; (V_CC − V_OH)/R1 − V_OH/R2　，　I_OL &gt; (V_CC − V_OL)/R1 − V_OL/R2<br>
+  ③ 算功耗：P(R1) = [(V_CC−V_OH)² + (V_CC−V_OL)²]/(2R1)　，　P(R2) = [V_OH² + V_OL²]/(2R2)
+</div>
+<p><em>白話翻譯：① 兩顆並聯要等於走線阻抗（50 Ω 線最常見就是 100 Ω + 100 Ω）；② 檢查 driver 拉高、拉低時流過兩顆電阻的淨電流沒有超過 datasheet 的 IOH/IOL——書中提醒 IOH 式子兩邊通常都是負數（driver 在放電流出去）；③ 功耗公式假設 clock 是 50% duty（一半時間高、一半時間低）——這對 clock 天然成立。</em>接收端看進去是「走線 Z₀ 並聯戴維寧等效 Z₀」＝ Z₀/2，所以充電快一倍：</p>
+<div class="formula">
+  t_R = 2.2 · (Z₀/2) · C_R = <strong>1.1 · Z₀ · C_R</strong>　（比串聯端接快一倍）　；t = √(t_D² + t_R²)
+</div>
+
+<h2>4. 並聯端接與 AC 端接：戴維寧的兩個變奏</h2>
+<p><strong>並聯端接（parallel）</strong>：只留一顆下拉電阻 R1 = Z₀ 到地。比戴維寧少掉「VCC→GND 常駐通路」，但 driver 輸出高電位時得獨力灌飽這顆 50 Ω——PT2 Ch.7 的檢查式是 <strong>I_OH &lt; −V_OH/R1</strong>（3.3 V 對 50 Ω 就是 66 mA 量級，一般 CMOS clock buffer 根本扛不住，所以單端 CMOS 很少用純並聯；它的主場在天生吃端接電流的介面）。上升時間與功耗：t_R 同戴維寧（1.1·Z₀·C_r）；P(R1) = (V_OH² + V_OL²)/(2R1)。</p>
+<p><strong>AC 端接</strong>：在並聯電阻下面墊一顆電容擋 DC。PT2 Ch.7 記載兩種玩法：<strong>版本一</strong>——C 充到高低電位的中點，電阻兩端只剩半擺幅，功耗砍半；條件是訊號必須 DC 平衡（clock 天然滿足），且 RC 時間常數要遠大於 clock 週期。<strong>版本二</strong>——C 純粹當 DC 阻斷：切換瞬間電容導通、端接電阻正常工作，高低電位穩定後無電流，<strong>C 典型值 10 pF</strong>（書中原話：value is small and typically 10 pF，並叮嚀要實測波形確認）。書中也點出缺點：<strong>長走線效果不佳、IBIS 模擬困難</strong>（要跑很多個 clock 週期等電容充穩），所以多數情況串聯或其他終端端接是更好的選擇。</p>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">四種端接一張圖：放哪、多大、代價是什麼</text>
+  <!-- series -->
+  <rect x="30" y="44" width="345" height="170" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="202" y="68" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#15803d">① 串聯（clock 預設解）</text>
+  <line x1="55" y1="100" x2="90" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="90" y="91" width="36" height="18" fill="#fff" stroke="#16a34a" stroke-width="2"/>
+  <text x="108" y="104" text-anchor="middle" font-size="10" fill="#15803d">R_S</text>
+  <line x1="126" y1="100" x2="330" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="336" y1="90" x2="336" y2="110" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="55" y="88" font-size="10" fill="#6b7280">R_D</text>
+  <text x="202" y="132" text-anchor="middle" font-size="11" fill="#374151">R_S = Z₀ − R_D（例 51.7−19.8 = 31.9 Ω）</text>
+  <text x="202" y="150" text-anchor="middle" font-size="11" fill="#374151">放置：離 driver 飛行時間 &lt; t_r/10</text>
+  <text x="202" y="168" text-anchor="middle" font-size="11" fill="#15803d">✓ 無 DC 功耗、省面積　✗ 負載限線末端</text>
+  <text x="202" y="186" text-anchor="middle" font-size="11" fill="#15803d">✗ 中途半壓架子　t_R = 2.2·Z₀·C_L</text>
+  <!-- thevenin -->
+  <rect x="385" y="44" width="345" height="170" rx="10" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="557" y="68" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#991b1b">② 戴維寧（拔河式）</text>
+  <line x1="410" y1="100" x2="650" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="642" y="60" width="16" height="30" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="672" y="78" font-size="10" fill="#991b1b">R1→VCC</text>
+  <rect x="642" y="110" width="16" height="30" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="672" y="128" font-size="10" fill="#991b1b">R2→GND</text>
+  <text x="557" y="160" text-anchor="middle" font-size="11" fill="#374151">R1‖R2 = Z₀（對稱時 R1=R2=2Z₀，例 100+100）</text>
+  <text x="557" y="178" text-anchor="middle" font-size="11" fill="#991b1b">✓ 終點零反射、可帶多負載、t_R 快一倍（1.1·Z₀·C_R）</text>
+  <text x="557" y="196" text-anchor="middle" font-size="11" fill="#991b1b">✗ 常駐 DC 功耗、吃 IOH/IOL、擺不到軌</text>
+  <!-- parallel -->
+  <rect x="30" y="228" width="345" height="170" rx="10" fill="#fdf6ec" stroke="#d97706"/>
+  <text x="202" y="252" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#b45309">③ 並聯（單顆下拉）</text>
+  <line x1="55" y1="284" x2="300" y2="284" stroke="#374151" stroke-width="2"/>
+  <rect x="292" y="292" width="16" height="30" fill="#fff" stroke="#d97706" stroke-width="2"/>
+  <text x="322" y="310" font-size="10" fill="#b45309">R1=Z₀→GND</text>
+  <text x="202" y="344" text-anchor="middle" font-size="11" fill="#374151">R1 = Z₀；驗 I_OH &lt; −V_OH/R1</text>
+  <text x="202" y="362" text-anchor="middle" font-size="11" fill="#b45309">✓ 比戴維寧少一條 VCC 通路</text>
+  <text x="202" y="380" text-anchor="middle" font-size="11" fill="#b45309">✗ 高電位時 driver 獨扛大電流（3.3V/50Ω 量級 66mA）</text>
+  <!-- AC -->
+  <rect x="385" y="228" width="345" height="170" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+  <text x="557" y="252" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#4338ca">④ AC 端接（R + C 擋 DC）</text>
+  <line x1="410" y1="284" x2="650" y2="284" stroke="#374151" stroke-width="2"/>
+  <rect x="642" y="292" width="16" height="26" fill="#fff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="672" y="308" font-size="10" fill="#4338ca">R=Z₀</text>
+  <line x1="642" y1="328" x2="658" y2="328" stroke="#4f46e5" stroke-width="2.5"/>
+  <line x1="642" y1="336" x2="658" y2="336" stroke="#4f46e5" stroke-width="2.5"/>
+  <text x="672" y="336" font-size="10" fill="#4338ca">C（典型 10pF）</text>
+  <text x="557" y="362" text-anchor="middle" font-size="11" fill="#374151">切換瞬間 C 導通端接生效；穩態無 DC 電流</text>
+  <text x="557" y="380" text-anchor="middle" font-size="11" fill="#4338ca">✗ 需 DC 平衡訊號、長線效果差、IBIS 難模擬</text>
+  <text x="380" y="414" text-anchor="middle" font-size="11.5" fill="#374151" font-weight="bold">口訣：點對點 clock → ①；多負載/要快邊沿且吃得起電 → ②；特殊介面 → ③；省電且訊號 DC 平衡 → ④</text>
+</svg>
+<figcaption>圖 2：四種端接的拓撲、設計式與取捨（整理自 Perfect Timing II Ch.7）。面試被問「how would you terminate this」時，先問清楚拓撲（點對點？多負載？）與預算（功耗？面積？），再從這張圖挑——展現的是決策流程，不是背答案。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">必背</span>
+  <p><strong>串聯：R_S = Z₀ − R_D，放在 t_r/10 飛行時間內，半壓去、加倍到、回波滅，無 DC 功耗，負載限線末端。</strong><strong>戴維寧：R1‖R2 = Z₀，驗 IOH/IOL，常駐燒電但終點零反射、t_R 快一倍（1.1·Z₀·C 對 2.2·Z₀·C）。</strong>並聯 = 單顆 Z₀ 下拉（省 VCC 通路、driver 扛電流）；AC = R+C（C 典型 10 pF 量級，需 DC 平衡訊號）。PT2 Ch.7 總原則：clock 一律端接、一律用 IBIS/SPICE 模擬驗證。</p>
+</div>
+
+<h2>5. 多負載：stub 法則與 bifurcated trace</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>理想世界一條 clock 只餵一顆晶片（點對點，用 fanout buffer 分配）——PT2 Ch.7 明說這是首選。但現實常常一個 driver 要餵兩顆負載。兩顆負載之間那一小段線叫 <strong>stub（殘枝）</strong>，它是沒端接的分岔，波到了會亂彈。救贖條件跟 1/10 法則同一個哲學：<strong>殘枝夠短，短到波在裡面來回的時間遠小於上升沿，兩顆負載就「糊」成一顆</strong>——代價是電容翻倍、邊沿變鈍。殘枝太長？那就不要硬接，直接拉兩條各自端接的線。</p>
+</div>
+
+<p>PT2 Ch.7 給的三個處方：</p>
+<ol>
+  <li><strong>兩負載靠很近（串聯端接沿用）</strong>：stub 的延遲必須<strong>比訊號上升時間快至少 6 倍</strong>（stub delay &lt; t_r/6），此時兩負載可視為單一集總電容負載。副作用：C 翻倍（兩顆輸入電容並聯＋stub 走線電容），t_R = 2.2·Z·C 跟著變慢——書中實測圖（19.8 Ω driver、31.9 Ω 串阻、6 吋線、兩負載相距 1 吋）可看到邊沿明顯變緩。一樣：模擬驗證。</li>
+  <li><strong>兩負載離很遠 → 雙線各自串聯端接</strong>：driver 看到兩條「R_S＋線」並聯，設計式變成 <strong>R_D + R_S1‖R_S2 = Z₀‖Z₀</strong>——注意右邊是 Z₀/2！兩條線並聯讓等效阻抗砍半，所以 R_S 比單線時小。兩個附帶條件：<strong>(a) 兩條線要等長</strong>（回波才會同時回來、對稱抵消）；<strong>(b) 若 Z₀‖Z₀ 已經小於 R_D，無解</strong>——沒有任何 R_S 能端接，只能換更低輸出阻抗的 driver。</li>
+  <li><strong>絕對要避免的 bifurcated trace（分岔線）</strong>：如果 driver 先走一段「共用線」再分岔接兩顆 R_S，且共用段的飛行時間超過 t_r/10——這段共用線自己就成了一條傳輸線，波打到分岔點（阻抗突變）就反射，形成複雜的多重回波。PT2 Ch.7 原話：<strong>should be avoided</strong>。正確做法是兩顆 R_S 都貼著 driver 放、從源頭就分成兩條獨立的線。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">一個 driver 餵兩顆負載：兩個可行解、一個地雷</text>
+  <!-- case 1 -->
+  <rect x="26" y="42" width="708" height="82" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="40" y="66" font-size="12.5" font-weight="bold" fill="#15803d">解法 A：負載靠近 → 一條線＋短 stub（stub 延遲 &lt; t_r/6）</text>
+  <line x1="60" y1="96" x2="100" y2="96" stroke="#374151" stroke-width="2"/>
+  <rect x="100" y="88" width="30" height="16" fill="#fff" stroke="#16a34a" stroke-width="2"/>
+  <text x="115" y="100" text-anchor="middle" font-size="9" fill="#15803d">R_S</text>
+  <line x1="130" y1="96" x2="560" y2="96" stroke="#374151" stroke-width="2"/>
+  <circle cx="560" cy="96" r="5" fill="#dc2626"/>
+  <line x1="560" y1="96" x2="640" y2="96" stroke="#d97706" stroke-width="2.5"/>
+  <circle cx="640" cy="96" r="5" fill="#dc2626"/>
+  <text x="600" y="86" text-anchor="middle" font-size="10.5" fill="#b45309" font-weight="bold">stub（要極短）</text>
+  <text x="600" y="116" text-anchor="middle" font-size="10" fill="#374151">兩負載 ≈ 一顆大電容（C 翻倍、邊沿變鈍）</text>
+  <!-- case 2 -->
+  <rect x="26" y="134" width="708" height="92" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+  <text x="40" y="158" font-size="12.5" font-weight="bold" fill="#4338ca">解法 B：負載遠 → 雙線各自端接：R_D + R_S1‖R_S2 = Z₀‖Z₀（阻抗砍半！兩線務必等長）</text>
+  <line x1="60" y1="192" x2="90" y2="192" stroke="#374151" stroke-width="2"/>
+  <rect x="96" y="170" width="30" height="16" fill="#fff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="111" y="182" text-anchor="middle" font-size="9" fill="#4338ca">R_S1</text>
+  <rect x="96" y="198" width="30" height="16" fill="#fff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="111" y="210" text-anchor="middle" font-size="9" fill="#4338ca">R_S2</text>
+  <line x1="90" y1="192" x2="96" y2="178" stroke="#374151" stroke-width="1.5"/>
+  <line x1="90" y1="192" x2="96" y2="206" stroke="#374151" stroke-width="1.5"/>
+  <line x1="126" y1="178" x2="640" y2="178" stroke="#374151" stroke-width="2"/>
+  <line x1="126" y1="206" x2="640" y2="206" stroke="#374151" stroke-width="2"/>
+  <circle cx="640" cy="178" r="5" fill="#dc2626"/>
+  <circle cx="640" cy="206" r="5" fill="#dc2626"/>
+  <text x="380" y="222" text-anchor="middle" font-size="10" fill="#4338ca">兩顆 R_S 都貼著 driver；若 Z₀‖Z₀ &lt; R_D → 無解，換 driver</text>
+  <!-- case 3 -->
+  <rect x="26" y="236" width="708" height="82" rx="10" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="40" y="260" font-size="12.5" font-weight="bold" fill="#991b1b">地雷：bifurcated trace——共用段太長才分岔（共用段飛行時間 &gt; t_r/10）→ 分岔點反射大亂鬥，應避免</text>
+  <line x1="60" y1="292" x2="300" y2="292" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="180" y="284" text-anchor="middle" font-size="10" fill="#991b1b">共用段（自成傳輸線）✗</text>
+  <line x1="300" y1="292" x2="360" y2="274" stroke="#374151" stroke-width="1.5"/>
+  <rect x="362" y="266" width="30" height="16" fill="#fff" stroke="#991b1b" stroke-width="1.5"/>
+  <line x1="392" y1="274" x2="640" y2="274" stroke="#374151" stroke-width="2"/>
+  <circle cx="640" cy="274" r="5" fill="#dc2626"/>
+  <line x1="300" y1="292" x2="360" y2="308" stroke="#374151" stroke-width="1.5"/>
+  <rect x="362" y="300" width="30" height="16" fill="#fff" stroke="#991b1b" stroke-width="1.5"/>
+  <line x1="392" y1="308" x2="640" y2="308" stroke="#374151" stroke-width="2"/>
+  <circle cx="640" cy="308" r="5" fill="#dc2626"/>
+  <circle cx="300" cy="292" r="6" fill="none" stroke="#991b1b" stroke-width="2"/>
+</svg>
+<figcaption>圖 3：多負載的三種局面（整理自 PT2 Ch.7 Multiple Loads 節）。判斷順序：先量負載間距（stub 法則）→ 太遠就拉雙線（記得阻抗砍半與等長）→ 千萬別偷懶走中間那條「先共用再分岔」的路。</figcaption>
+</figure>
+
+<h2>6. 實務案例：把今天的觀念接回你的工作</h2>
+<ul>
+  <li><strong>NB 主機板：你板上那些 22/33 Ω 小電阻的身世。</strong>翻開任何一片 NB 主機板的 clock 區域，PCIe refclk、SPI clock、DDR 相關訊號旁邊成排的 22 Ω、33 Ω 0201/0402 電阻，多數就是串聯端接——33 Ω 對應「driver 十幾 Ω＋走線 50 Ω 上下」這個最常見的組合（跟 PT2 的 19.8+31.9=51.7 同一邏輯）。Day 6 案例裡那顆被 0 Ω 取代釀成 double clocking 的電阻，今天你有完整語言解釋它為什麼非在不可、阻值怎麼來、以及為什麼它必須擺在 driver 端而不是隨便找空位——DFM 改版挪料件位置時，clock 串阻是最不能亂挪的一族（1/10 法則）。</li>
+  <li><strong>鏡頭模組：MIPI D-PHY 其實是「終端端接」家族。</strong>HS 模式接收端內建 100 Ω 差動端接（兩條 50 Ω 單端到虛擬中點），本質就是今天學的「在終點假造 Z₀」——所以 HS 訊號第一拍就全速全壓、無反射，才撐得起 Gbps 級速率。而 LP 模式無端接（Day 6 講過 ρ≈+1 全反射），規範靠限制邊沿速率讓線長落在「免端接」區——正是 1/6 法則的活教材。差動端接的完整故事（LVDS 的 RT=2Z₀ 單電阻、中點電容吃 skew、LVPECL 的下拉）PT2 Ch.7 後半有精彩內容，留到週 4 差動訊號日詳談。</li>
+  <li><strong>面試現場的決策題原型：</strong>「You have one clock output and two receivers on the board — walk me through your options.」用圖 3 的三格照順序講：先問間距與 t_r → stub 法則 → 雙線等長＋阻抗砍半 → 點名 bifurcated trace 是地雷 → 收尾補一句「and I'd verify with IBIS simulation」。這題考的是決策樹完不完整，不是單一答案。</li>
+</ul>
+
+<h2>7. 動手練習</h2>
+<p>拿紙筆算完再展開詳解。練習 2 和 4 就是明天實作日要上機驗證的劇本。</p>
+
+<details>
+<summary>練習 1（設計基本功）：driver 輸出阻抗 17 Ω、走線 50 Ω、負載開路、擺幅 3.3 V。(a) 選串聯端接阻值；(b) 逐格寫出「加了 R_S 之後」負載端與源端（R_S 之後）的電壓時間序列；(c) 對比 Day 6 練習 2 不端接時的 4.93 V 過衝，說明改善。</summary>
+<p><strong>解：</strong>(a) R_S = Z₀ − R_D = 50 − 17 = <strong>33 Ω</strong>（實務取 E24 的 33 Ω，剛好是 NB 板上最常見的值之一）。(b) 出門分壓 S = 3.3 × 50/(50+17+33) = 3.3/2 = <strong>1.65 V</strong>；t = T_d 負載端：2×1.65 = <strong>3.3 V 一步到位</strong>，反射 1.65 V 折返；t = 2T_d 回到源端：R_D+R_S = 50 = Z₀ → ρ_S = 0，<strong>全吸收，波形結束</strong>。源端（R_S 後）的波形：t=0 跳到 1.65 V、撐到 t = 2T_d 回波掃過補滿 3.3 V——正是圖 1 的 A 點。(c) 不端接時第一峰 4.93 V（過衝約 1.6 V、打 ESD 二極體）之後多次振鈴；端接後零過衝零振鈴，代價只是負載端晚 T_d 拿到訊號＋一顆 0402 電阻。這就是「一顆電阻救一條 clock」。</p>
+</details>
+
+<details>
+<summary>練習 2（1/10 法則換算）：(a) 依 PT2 Ch.7 原例：t_r = 2 ns、走線 175 ps/inch，R_S 最遠可離 driver 多遠？(b) 換成現代 SoC：t_r = 400 ps、內層帶狀線約 15 cm/ns，答案變多少？(c) 若 layout 工程師說「driver 端塞不下，我把 R_S 放到線中間可以嗎？」用波形說明會發生什麼事。</summary>
+<p><strong>解：</strong>(a) 飛行時間 ≤ 2 ns/10 = 200 ps → 距離 = 200/175 ≈ <strong>1.14 吋（約 2.9 cm）</strong>——書中原數字。(b) 飛行時間 ≤ 40 ps → 40 ps × 15 cm/ns = <strong>0.6 cm（6 mm）</strong>，約為 2002 年的 1/5——「以現代標準需上修」的具體體現：R_S 實質上必須貼著 driver 的第一顆料位。(c) R_S 放中間 → driver（17 Ω）到 R_S 之間那段線變成「無端接的 50 Ω 線接 17 Ω 源」：波在 driver—R_S 段來回彈（源端 ρ 負、R_S 端看到 33+50=83 Ω 為正的不連續），主波形上疊出台階與毛刺；R_S 到負載段也不再是乾淨的半壓波。整條線退化成 PT2 說的「a complex set of reflecting waves」。結論：塞不下就換 0201、或請 driver 挪位，串阻位置不可妥協。</p>
+</details>
+
+<details>
+<summary>練習 3（戴維寧全套設計）：Z₀ = 50 Ω、VCC = 3.3 V、driver 對稱、V_OH ≈ 2.4 V、V_OL ≈ 0.4 V、datasheet 標 I_OH = −24 mA、I_OL = +24 mA。(a) 選 R1、R2；(b) 驗 IOH/IOL；(c) 算兩顆電阻的總功耗，並跟串聯端接（R_T = 33 Ω、f = 100 MHz、T_d = 1 ns、擺幅 3.3→0.4 近似取 2.9 V）比一比。</summary>
+<p><strong>解：</strong>(a) 對稱 driver → R1 = R2 = 2Z₀ = <strong>100 Ω</strong>（100‖100 = 50 ✓）。(b) IOH 檢查：(3.3−2.4)/100 − 2.4/100 = 9 mA − 24 mA = <strong>−15 mA</strong>；條件 I_OH &lt; −15 mA，driver 給 −24 mA ✓（能供 24 mA、只需 15 mA）。IOL 檢查：(3.3−0.4)/100 − 0.4/100 = 29 − 4 = <strong>+25 mA</strong>；條件 I_OL &gt; 25 mA，driver 只有 24 mA → <strong>邊緣不合格！</strong>V_OL 會被拉高——這正是書中「care must be taken not to exceed IOL/IOH」的實際意義：戴維寧不是算出 100‖100 就完事，電流驗算才是生死關。(c) 戴維寧功耗：P(R1) = ((3.3−2.4)² + (3.3−0.4)²)/(2×100) = (0.81+8.41)/200 ≈ <strong>46 mW</strong>；P(R2) = (2.4²+0.4²)/(2×100) = (5.76+0.16)/200 ≈ <strong>30 mW</strong>；合計<strong>約 76 mW、24 小時常駐</strong>。串聯端接：P_T = f·2T·ΔV²/(2R_T) = 10⁸ × 2×10⁻⁹ × 2.9²/(66) ≈ 0.2 × 0.127 ≈ <strong>約 25 mW</strong>，且只在切換窗內發生、clock gating 掉就歸零。一條 clock 差 50 mW 看似小，NB 板上幾十條 clock 加總就是續航力——這就是筆電產品幾乎清一色串聯端接的原因。</p>
+</details>
+
+<details>
+<summary>練習 4（半壓架子偵探題）：一條串聯端接、總長對應 T_d = 2 ns 的 50 Ω 線。你把探棒點在離 driver 端 1/4 線長處，看到 3.3 V clock 的每個上升沿有一個 1.65 V 的平台。(a) 平台會撐多寬？(b) 若平台量到 1.2 V 而不是 1.65 V，猜哪裡出問題？(c) 明天實作日要驗證這題——先寫下你預期在「源端、中點、終端」三處量到的三張波形。</summary>
+<p><strong>解：</strong>(a) 探棒位置離終點 3/4 線長 → 波從探棒點到終點再回來 = 2 × (3/4 × 2 ns) = <strong>3 ns</strong>。(b) 平台高度 = V·Z₀/(Z₀+R_D+R_S)，量到 1.2 V 代表分壓比 = 1.2/3.3 ≈ 0.36 而非 0.5 → 分母偏大 → <strong>R_S 選太大（或 R_D 比 IBIS 值大）</strong>：50/(50+R_D+R_S) = 0.36 → R_D+R_S ≈ 89 Ω，比 Z₀ 多了約 39 Ω——過端接（over-terminated），終點會變成小幅階梯波（ρ_S 轉正）。順帶檢查終點：第一拍只到 2×1.2 = 2.4 V，要等下一趟才補滿——時序被偷走一個 round trip。(c) 預期：源端（R_S 後）＝半壓撐 4 ns（2T_d）再補滿；中點＝半壓撐 2 ns；終端＝一步到位 3.3 V 無平台。明天在公司用訊號產生器＋同軸線＋示波器重現這三張圖，親手「摸」到波在線上跑。</p>
+</details>
+
+<details>
+<summary>練習 5（多負載決策）：一顆 clock buffer（R_D = 20 Ω）要餵兩顆 IC，訊號 t_r = 1 ns，板子走內層帶狀線（約 15 cm/ns、Z₀ = 50 Ω）。(a) 兩顆 IC 相距 2 cm，可以用單線＋stub 嗎？(b) 若相距 8 cm 呢？該怎麼接、R_S 選多少？(c) 若這顆 buffer 的 R_D 是 30 Ω，(b) 的方案還可行嗎？</summary>
+<p><strong>解：</strong>(a) stub 延遲 = 2/15 ns ≈ 133 ps；法則要求 &lt; t_r/6 = 167 ps → <strong>133 ps &lt; 167 ps，勉強可以</strong>（但已貼近上限，記得 C 翻倍讓 t_R = 2.2·Z·C 變慢，務必模擬；若未來換更快的 buffer，t_r 縮到 600 ps 就爆了——設計要留餘裕）。(b) 8 cm → 533 ps 遠超 167 ps → 用<strong>雙線各自串聯端接</strong>：R_D + R_S1‖R_S2 = Z₀‖Z₀ = 25 Ω → R_S1‖R_S2 = 5 Ω → 對稱取 <strong>R_S1 = R_S2 = 10 Ω</strong>；兩條線等長、兩顆電阻都貼 driver。(c) R_D = 30 Ω &gt; 25 Ω = Z₀‖Z₀ → R_S 需要負電阻，<strong>無解</strong>——PT2 Ch.7 明說此時「no value of RS will be able to properly terminate the trace」，只能換低輸出阻抗的 driver、或改用一驅一的 fanout buffer（首選）、或改終端端接。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>今天的觀念在外商面試的實際出題方式（先用英文口頭回答再看參考答案）：</p>
+
+<details>
+<summary>Q1: "You have a point-to-point 100 MHz single-ended clock from an SoC to a receiver, about 10 cm of 50-ohm trace. How do you terminate it, and walk me through the waveform."</summary>
+<p><strong>參考答案骨架：</strong>For point-to-point CMOS clocks, series termination at the source is the default. I'd pull the driver's output impedance from the datasheet or its IBIS model — say it's around 20 ohms — and add a series resistor so that driver plus resistor equals the trace impedance: roughly 30 ohms here. The resistor must sit right next to the driver — the rule of thumb is the flight time from driver to resistor should be under one tenth of the rise time, which for modern sub-nanosecond edges means within a few millimeters. The waveform: the matched source launches exactly half the swing; one propagation delay later it hits the high-impedance receiver, the reflection coefficient there is close to plus one, so the voltage doubles to the full swing in one clean step. The half-amplitude reflection travels back, sees a perfectly matched source, and is fully absorbed — no ringing, no overshoot, and no DC power because there's no resistive path to ground. I'd confirm with an IBIS simulation, and I'd probe at the receiver pin, not mid-trace, because mid-trace legitimately shows a half-voltage shelf. (依據 Perfect Timing II Ch.7：R_S = Z₀ − R_D、19.8 Ω＋31.9 Ω＝51.7 Ω 實例、1/10 擺放法則。)</p>
+<p><strong>加分點：</strong>主動講出取捨——"The tradeoff is the receiver must be at the far end — series termination can't support loads distributed along the trace, and the driver impedance varies over its I-V curve so the match is never perfect."</p>
+</details>
+
+<details>
+<summary>Q2: "A junior engineer probes the middle of a series-terminated clock trace, sees the signal sitting at half the supply for several nanoseconds, and files a bug. What do you tell them — and when would you choose Thevenin termination instead of series?"</summary>
+<p><strong>參考答案骨架：</strong>First, the board is fine — that half-voltage shelf is the signature of a healthy series-terminated line. The source launches half the swing, and any point along the trace stays at half voltage until the doubled reflection from the open far end sweeps back past it. The shelf width is exactly twice the flight time from the probe point to the far end — you can even use it to figure out where you are on the trace. The receiver at the far end never sees the shelf; that's the only node that matters, so always probe at the receiver pin. As for Thevenin: I'd switch to end termination when I need loads distributed along the trace, or when I need the fastest edge at the receiver — the receiver sees Z0 over 2 instead of Z0, so the RC-limited rise time is twice as fast. The costs are constant DC power through the divider and driver loading — you must check the resistor network against the driver's IOH and IOL specs, and accept that the signal won't reach the rails. For battery-powered products that constant dissipation usually rules it out, which is why laptop clock trees are almost all series-terminated. (依據 Perfect Timing II Ch.7：R1‖R2 = Z₀、IOH/IOL 不等式、t_R = 1.1·Z₀·C_R vs 2.2·Z₀·C_L。)</p>
+<p><strong>考點：</strong>半壓架子的物理成因＋「探棒點在接收端」的量測素養＋兩種端接的系統級取捨（速度 vs 功耗 vs 拓撲自由度），三層都答到才是 senior 級答案。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：串聯端接的設計式與完整波形故事？</p>
+  <p class="a">A1：R_S = Z₀ − R_D（PT2 Ch.7 實例：19.8 Ω driver＋31.9 Ω＝51.7 Ω stripline）。波形三幕：半壓出門（50/50 分壓）→ 開路端 ρ≈+1 加倍成全壓、一步到位 → 回波遇 R_D+R_S=Z₀（ρ_S=0）全吸收。優點：無 DC 功耗、省面積；限制：負載須在線末端、R_D 沿 I-V 曲線變動故匹配不完美。</p>
+  <p class="q">Q2：串聯電阻要放多近？（1/10 法則）</p>
+  <p class="a">A2：driver 到 R_S 的飛行時間 &lt; t_r/10（PT2 Ch.7）。書中 2 ns 邊沿例：≤200 ps ≈ 1.14 吋（175 ps/inch）；現代數百 ps 邊沿需上修：t_r=400 ps → 內層約 6 mm，實務上＝緊貼 driver。放太遠 → driver–R_S 段自成傳輸線，多重反射毛刺。</p>
+  <p class="q">Q3：「串聯端接的線中途量只有半高」怎麼解釋？</p>
+  <p class="a">A3：健康特徵非故障。線上任一點先看到半壓，等終點加倍後的回波掃回來才補滿；半壓架子寬度＝該點到終點飛行時間×2。推論：(1) 驗訊號一律探接收端腳位；(2) 架子寬度可反推探棒位置；(3) 這是串聯端接不能帶中段負載的原因。</p>
+  <p class="q">Q4：戴維寧端接的設計三步與代價？</p>
+  <p class="a">A4：① R1‖R2 = Z₀（對稱時 R1=R2=2Z₀，50 Ω 線→100+100）；② 驗 I_OH &lt; (VCC−V_OH)/R1 − V_OH/R2、I_OL &gt; (VCC−V_OL)/R1 − V_OL/R2；③ 功耗 P(R1)=[(VCC−V_OH)²+(VCC−V_OL)²]/2R1、P(R2)=[V_OH²+V_OL²]/2R2 常駐燒電。優點：終點零反射可帶多負載、t_R=1.1·Z₀·C（比串聯的 2.2·Z₀·C 快一倍）；特徵：擺不到電源軌。並聯端接＝只留下拉 R=Z₀（驗 I_OH&lt;−V_OH/R）；AC 端接＝R+C（C 典型 10 pF 量級，需 DC 平衡、長線不宜）。</p>
+  <p class="q">Q5：一個 driver 帶兩個負載的三條路？</p>
+  <p class="a">A5：(1) 負載近：單線＋stub，條件 stub 延遲 &lt; t_r/6，兩負載併成一顆電容（C 翻倍、邊沿變鈍）；(2) 負載遠：雙線各自端接，R_D + R_S1‖R_S2 = Z₀‖Z₀（阻抗砍半！），兩線等長、電阻貼 driver；若 Z₀‖Z₀ &lt; R_D 無解只能換 driver；(3) 地雷：bifurcated trace（共用段 &gt; t_r/10 才分岔）應避免（PT2 Ch.7）。首選永遠是 fanout buffer 一驅一。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 8（週五實作日）：把反射與端接搬上示波器——公司儀器實驗指引</strong></p>
+  <p>連續三天的紙上談兵（Z₀ → ρ → 端接）明天全部上機驗證：用訊號產生器＋同軸線＋示波器重現 PT2 Ch.7 的實驗——親眼看開路端電壓加倍、量出振鈴的 2T_d 反推線長、然後加上串聯電阻看波形瞬間變乾淨，順便驗證今天練習 4 的「半壓架子」三連拍；也會把 Day 2 欠的上升時間實驗一起補上。記得把實驗指引頁面帶到公司，儀器等級不用高，百 MHz 示波器就能做出所有現象。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 7 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

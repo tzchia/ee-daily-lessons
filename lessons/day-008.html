@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 8｜實作日：把反射與端接搬上示波器——窮人版 TDR 與端接實驗</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 8 天（週五實作日）</div>
+  <h1>Day 8：把反射與端接搬上示波器——窮人版 TDR 與端接實驗</h1>
+  <div class="meta">2026-07-31（五）｜預估操作時間：90～100 分鐘｜難度：★★☆☆☆（動手不難，難在「看到波形的當下說得出為什麼」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>今天不推新公式，把 Day 4～7 紙上談兵的東西全部搬上儀器。做完你要能夠：</p>
+  <ol>
+    <li>用「訊號產生器＋一條同軸線＋示波器」搭出<strong>窮人版 TDR</strong>：親眼看到半壓架子（shelf）、開路端電壓加倍，並用架子寬度 2T_d <strong>反推線纜長度</strong>（誤差可到幾個百分點）</li>
+    <li>親手切換三種線末端（開路／50 Ω 匹配／短路），並在波形出現前<strong>先預測</strong>它長什麼樣</li>
+    <li>用「T 型接頭＋終端器」的小技巧<strong>人造出教科書等級的振鈴</strong>，再串一顆 27 Ω 電阻把它治好——Perfect Timing II Ch.7 的實驗自己重現一次</li>
+    <li>完成 Day 7 練習 4 預埋的<strong>三點探測</strong>：源端半壓撐 2T_d、中點架子、終端一步到位，三張波形親手量出來</li>
+    <li>補做 Day 2 欠的三項量測基本功：RC 驗證 0.35/t_r、接地長線 vs 接地彈簧的振鈴、示波器頻寬限制的鈍化——並用 Perfect Timing II Ch.11 的公式算出「示波器顯示的上升時間」該是多少</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：三天的紙上談兵，今天全部驗收</h2>
+<p>這一週我們建立了完整的反射理論鏈：Z₀ 是波前進時看到的瞬時阻抗（Day 4）、幾何決定 Z₀（Day 5）、撞牆反彈多少由 ρ = (Z_L−Z₀)/(Z_L+Z₀) 決定（Day 6）、一顆電阻的四種放法消滅反射（Day 7）。今天的實驗全部只用公司實驗室的標準配備，儀器等級不用高——<strong>百 MHz 示波器就能做出所有現象</strong>，因為我們會故意用「很長的線」把飛行時間拉到幾十奈秒，讓慢儀器也看得一清二楚。這正是實驗設計的第一課：<strong>看不到現象時，不一定要換快儀器，可以把現象變慢</strong>。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在玩什麼</span>
+  <p>Day 6 說訊號像回音谷裡的喊聲，Day 7 說端接像裝吸音棉。但到目前為止你只「算過」回音，沒「聽過」回音。今天我們拿一條 10 公尺的同軸線當回音谷——訊號在裡面單程要走約 50 奈秒，來回一趟約 100 奈秒，慢到連百 MHz 的示波器都能拍得清清楚楚。然後我們對這條線做各種事：讓末端開路（全反射）、鎖上 50 Ω 終端器（吸音棉）、鎖上短路帽（翻面反彈）、故意把源端弄瘦（人造振鈴）再串電阻治好。<strong>每個動作前先預測波形，再按下 Run 對答案</strong>——預測對了，理論才真正是你的。</p>
+</div>
+
+<h2>1. 器材清單與行前準備</h2>
+<ul>
+  <li><strong>任意函數／訊號產生器</strong>（能出方波即可；邊沿越快越好，一般機型 t_r 約 10～20 ns 量級，夠用）</li>
+  <li><strong>示波器</strong>：100 MHz 以上、雙通道；輸入阻抗要能切 1 MΩ（今天全程用 1 MΩ 檔）</li>
+  <li><strong>50 Ω 同軸線（BNC 頭）</strong>：總長至少 5 m，<strong>建議湊到 10 m</strong>（多條短線用 BNC 母對母直通頭串接即可）。RG-58 這類實驗室標準線就行</li>
+  <li><strong>BNC T 型接頭 ×2、BNC 母對母直通頭（barrel）×1～2</strong></li>
+  <li><strong>50 Ω BNC 終端器（terminator）×1</strong>、<strong>BNC 短路帽 ×1</strong>（沒有短路帽可用「BNC 轉鱷魚夾＋直接夾在一起」代替）</li>
+  <li><strong>電阻</strong>：27 Ω、100 Ω 各一顆（E12 系列即可）；<strong>BNC 轉鱷魚夾（或轉香蕉頭）轉接線 ×2</strong> 或麵包板，用來把電阻「串進」BNC 路徑</li>
+  <li>補做實驗用：1 kΩ 電阻、1 nF 電容、10:1 被動探棒（含接地彈簧配件，若有）</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">行前必讀的兩個坑（先知道，等下才不會懷疑人生）</span>
+  <p><strong>坑一：訊號產生器顯示的振幅是騙人的（一半機率）。</strong>多數產生器的振幅顯示值假設你接了 50 Ω 負載；今天我們的線末端常常是開路，實際穩態電壓會是顯示值的<strong>約兩倍</strong>。有「High-Z」輸出設定就切過去，沒有就記住這件事，全程用「相對於最終穩態值的比例」讀波形。</p>
+  <p><strong>坑二：示波器輸入阻抗檔位。</strong>今天的劇本依賴「示波器輸入 1 MΩ ≈ 開路牆（ρ ≈ +1）」這個設定。若通道被切到 50 Ω 輸入檔，它就變成吸音棉，所有現象全部消失。每接一個通道先確認：<strong>1 MΩ 檔</strong>。（順帶記住這個對應：1 MΩ 輸入＝開路端、50 Ω 貫通終端器＝Day 7 的並聯端接——儀器本身就是端接元件。）</p>
+</div>
+
+<h3>1.1 一個數字撐全場：同軸線每公尺約 5 ns</h3>
+<p>RG-58 這類實心 PE 介質同軸線的速度因子（velocity factor）約 0.66，即傳播速度約 0.66 × 30 cm/ns ≈ <strong>20 cm/ns</strong>，換算成延遲就是<strong>約 5 ns/m</strong>。10 m 線 → 單程 T_d ≈ 50 ns、來回 2T_d ≈ 100 ns。今天所有時間量測都會用這個數字對答案（不同線材的速度因子略有差異，以「約」看待；發泡介質線會更快）。也順手複習 Day 1：這條線遠長於邊沿的空間長度（20 cm/ns × 15 ns ≈ 3 m），是不折不扣的傳輸線。</p>
+
+<h2>2. 實驗 1（約 20 分）：窮人版 TDR——半壓架子與反推線長</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>TDR（時域反射儀）的原理一句話：<strong>丟一顆石頭進山谷，聽回音多久回來、是什麼音色，就知道牆多遠、牆是什麼材質</strong>。正規 TDR 是一台幾十萬的儀器，但它的靈魂——步階波＋在源端看回波——用你桌上的產生器和示波器就能湊出來。關鍵佈局：<strong>T 型接頭鎖在示波器輸入上</strong>，讓示波器「站在線的中間偏源端」看波路過。</p>
+</div>
+
+<p><strong>接法（照抄即可）：</strong>產生器輸出 →（短同軸線，約 1 m）→ <strong>T 型接頭直接鎖在示波器 CH1 輸入</strong>（1 MΩ 檔）→ T 的另一口接<strong>長同軸線（10 m）</strong>→ 長線末端<strong>懸空（開路）</strong>。產生器設定：方波、100 kHz～1 MHz、幅度 1～2 Vpp、邊沿選最快。</p>
+<p>為什麼這樣接是合法的？產生器輸出阻抗 50 Ω＝Z₀，<strong>源端天生就是串聯端接</strong>（Day 7 的 R_D+R_S=Z₀ 這裡由儀器免費送你）；T 型接頭處左右兩邊都是 50 Ω 線、CH1 的 1 MΩ 只是旁觀者，波直接路過；末端開路 ρ ≈ +1。整條鏈就是 Day 7 圖 1 的活體版本，CH1 是那支「點在線上某處」的探棒。</p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">窮人版 TDR：接法與三種末端的 CH1 預測波形</text>
+  <!-- setup sketch -->
+  <rect x="36" y="46" width="96" height="44" rx="8" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="84" y="66" text-anchor="middle" font-size="11" fill="#374151">訊號產生器</text>
+  <text x="84" y="82" text-anchor="middle" font-size="10" fill="#6b7280">50Ω 輸出＝源端接</text>
+  <line x1="132" y1="68" x2="230" y2="68" stroke="#374151" stroke-width="2.5"/>
+  <text x="181" y="60" text-anchor="middle" font-size="10" fill="#6b7280">短線 ~1m</text>
+  <rect x="230" y="54" width="56" height="28" rx="6" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="258" y="72" text-anchor="middle" font-size="10.5" fill="#0e7490">T 接頭</text>
+  <line x1="258" y1="82" x2="258" y2="106" stroke="#0e7490" stroke-width="2"/>
+  <rect x="212" y="106" width="92" height="34" rx="8" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="258" y="121" text-anchor="middle" font-size="10.5" fill="#0e7490">示波器 CH1</text>
+  <text x="258" y="134" text-anchor="middle" font-size="9.5" fill="#6b7280">1 MΩ 檔（旁觀者）</text>
+  <line x1="286" y1="68" x2="620" y2="68" stroke="#374151" stroke-width="2.5"/>
+  <text x="453" y="58" text-anchor="middle" font-size="10.5" fill="#374151">長線 10 m（T_d ≈ 50 ns，約 5 ns/m）</text>
+  <line x1="628" y1="54" x2="628" y2="82" stroke="#dc2626" stroke-width="3"/>
+  <text x="688" y="62" text-anchor="middle" font-size="10.5" fill="#dc2626">末端：開路／</text>
+  <text x="688" y="76" text-anchor="middle" font-size="10.5" fill="#dc2626">50Ω／短路帽</text>
+  <!-- waveform: open -->
+  <text x="96" y="176" font-size="12.5" font-weight="bold" fill="#16a34a">末端開路：半壓架子，寬 = 2T_d ≈ 100 ns → 反推線長</text>
+  <line x1="80" y1="252" x2="700" y2="252" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="252" x2="80" y2="186" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="196" x2="700" y2="196" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="200" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <text x="74" y="228" text-anchor="end" font-size="10" fill="#6b7280">0.5</text>
+  <path d="M80,252 L140,252 L146,224 L360,224 L366,196 L700,196" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <line x1="146" y1="212" x2="360" y2="212" stroke="#374151" stroke-width="1"/>
+  <line x1="146" y1="208" x2="146" y2="216" stroke="#374151" stroke-width="1"/>
+  <line x1="360" y1="208" x2="360" y2="216" stroke="#374151" stroke-width="1"/>
+  <text x="253" y="207" text-anchor="middle" font-size="10" fill="#374151">架子寬 2T_d：游標量它！</text>
+  <!-- waveform: matched -->
+  <text x="96" y="292" font-size="12.5" font-weight="bold" fill="#0e7490">末端鎖 50 Ω 終端器：架子消失，永遠停在半壓（回波被吃掉了）</text>
+  <line x1="80" y1="356" x2="700" y2="356" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="302" x2="700" y2="302" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="306" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <text x="74" y="332" text-anchor="end" font-size="10" fill="#6b7280">0.5</text>
+  <path d="M80,356 L140,356 L146,328 L700,328" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <text x="430" y="322" text-anchor="middle" font-size="10" fill="#0e7490">ρ_L = 0：沒有第二步——「訊號跑去哪了？」被終端器變成熱</text>
+  <!-- waveform: short -->
+  <text x="96" y="396" font-size="12.5" font-weight="bold" fill="#b45309">末端鎖短路帽：步階變脈衝（回波翻面，2T_d 後把自己抵消）</text>
+  <line x1="80" y1="460" x2="700" y2="460" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="406" x2="700" y2="406" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="410" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <text x="74" y="436" text-anchor="end" font-size="10" fill="#6b7280">0.5</text>
+  <path d="M80,460 L140,460 L146,432 L360,432 L366,460 L700,460" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <text x="470" y="440" text-anchor="middle" font-size="10" fill="#92400e">ρ_L = −1：一條線把「步階」變成「寬 2T_d 的脈衝」——脈衝形成線</text>
+</svg>
+<figcaption>圖 1：窮人版 TDR 的接法與三種末端的 CH1 波形預測（縱軸以開路穩態值正規化為 1）。T 型接頭鎖在示波器輸入上，CH1 就是「站在線上」的觀察點；三種末端＝Day 6 反射係數表的三個極端案例活體展示。</figcaption>
+</figure>
+
+<p><strong>步驟：</strong></p>
+<ol>
+  <li>末端開路，觸發穩定後把時基調到 50 ns/div 左右。你會看到：上升沿先跳到<strong>一半高度</strong>、平平地撐一段、再補跳到全高——這就是 Day 7 講到爛的<strong>半壓架子</strong>，今天它是你親手量出來的。</li>
+  <li>用游標量架子寬度。理論值 2T_d ≈ 100 ns（10 m 線）。<strong>反推線長：架子寬 ÷ 2 × 20 cm/ns</strong>。拿捲尺（或看線上印的長度標示）對答案——通常能對到幾個百分點以內，誤差主要來自速度因子的「約」。</li>
+  <li>把長線換成 5 m（拆掉一段），再量一次：架子寬度應該<strong>剛好減半</strong>。這一步證明架子寬度真的是幾何量，不是儀器假影。</li>
+  <li>觀察細節：架子的「台階角」上可能有小凸小凹——那是 T 型接頭與 CH1 輸入電容（約 10～15 pF 量級）造成的微小不連續，下週講 TDR 判讀時它會變成主角，今天先跟它打個照面。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">實驗 1 帶走的話</span>
+  <p><strong>「架子寬度 ÷ 2 × 速度 ＝ 到開路點的距離」</strong>——這就是 TDR 找斷線位置的原理。工廠裡 flex 排線斷在哪、線束哪一節開路，正規 TDR 做的事和你剛剛做的一模一樣，只是它的步階邊沿快到 ps 級、解析度從「公尺」進步到「公釐」。</p>
+</div>
+
+<h2>3. 實驗 2（約 10 分）：換三種結尾——把 Day 6 的 ρ 表格變成手感</h2>
+<ol>
+  <li><strong>鎖上 50 Ω 終端器</strong>（在長線懸空端）：架子瞬間消失，波形永遠停在半壓。先想 Day 6 的問題：「另一半電壓去哪了？」——沒有去哪，<strong>從此源端分壓就是穩態</strong>，終端器把入射功率全變成熱，ρ_L = 0、無回波，所以 CH1 沒有第二步。這就是 Day 7「終端端接三兄弟」的並聯版本，由儀器配件出演。</li>
+  <li><strong>換短路帽</strong>：波形變成<strong>寬 2T_d 的脈衝</strong>——先跳半壓，2T_d 後翻面的回波（ρ_L = −1）掃回來把它抵消歸零。你剛剛把一條線變成了「脈衝形成線」，雷達與高壓脈衝電源就用這招造窄脈衝。</li>
+  <li>每一步都先<strong>手畫預測波形再看螢幕</strong>。三種末端＝ρ 的三個極端（+1、0、−1），從此這張表不再是背的，是摸過的。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">常見誤區</span>
+  <p>「短路了怎麼還有電壓？」——短路在<strong>線的那一端</strong>，而波要花 T_d 才知道那裡是短路。在 t &lt; 2T_d 的時間窗裡，源端看到的只有 Z₀，跟末端是什麼毫無關係——這正是 Day 4「瞬時阻抗」的最佳註腳：<strong>資訊以波速傳播，末端的真相要 2T_d 後才回得到源端</strong>。DC 直覺（短路＝處處 0 V）只在穩態成立。</p>
+</div>
+
+<h2>4. 實驗 3（約 20 分）：人造振鈴，再親手治好它</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：怎麼「弄壞」一個好端的系統</span>
+  <p>到目前為止波形都太乖了——因為產生器 50 Ω 輸出天生就是完美的串聯端接。想看 Day 6 算過的振鈴，得先把源端「弄瘦」（Z_S &lt; Z₀，讓 ρ_S 變負）。變不出低阻抗源怎麼辦？<strong>用並聯偷吃步</strong>：在產生器輸出口鎖一個 T 型接頭，一口掛 50 Ω 終端器、一口接長線——長線往回看，看到「產生器 50 Ω ‖ 終端器 50 Ω」＝<strong>25 Ω 的瘦源</strong>。ρ_S = (25−50)/(25+50) = −1/3，振鈴的舞台就搭好了。</p>
+</div>
+
+<p><strong>接法 A（振鈴）：</strong>產生器輸出口直接鎖 <strong>T 型接頭</strong>→ T 的一口鎖 <strong>50 Ω 終端器</strong>、另一口接 <strong>10 m 長線</strong> → 長線末端接<strong>示波器 CH1（1 MΩ 檔＝開路端）</strong>。這次我們站在<strong>接收端</strong>看戲。</p>
+<p><strong>預測（動手前先算，正規化到穩態值 1）：</strong>出發波 = 50/(50+25) = 2/3；t = T_d 開路端加倍 → <strong>1.33（過衝 33%！）</strong>；回波 2/3 × (−1/3) 回源端再反射，t = 3T_d 到達 → <strong>0.89</strong>；t = 5T_d → <strong>1.04</strong>；t = 7T_d → <strong>0.99</strong>……每半週期衰減 ×1/3，台階間隔 2T_d ≈ 100 ns。這正是 Day 6「強驅動：過衝＋交替振鈴」的劇本，現在它在你的螢幕上。</p>
+<p><strong>接法 B（治療）：</strong>在 T 型接頭與長線之間<strong>串入一顆 27 Ω 電阻</strong>（用兩條 BNC 轉鱷魚夾線把電阻夾在中間，或過一下麵包板）。此時 Z_S = 25 + 27 = 52 Ω ≈ Z₀，ρ_S ≈ 0——按下 Run：<strong>振鈴消失，接收端一步到位</strong>。你剛剛做了 Perfect Timing II Ch.7 那張「19.8 Ω driver＋31.9 Ω 串阻」實測圖的自製版：R_S = Z₀ − R_D，只是你的 R_D 是 25 Ω、R_S 是 27 Ω。</p>
+<p><strong>接法 C（加碼：過端接的階梯波）：</strong>把 27 Ω 換成 <strong>100 Ω</strong>：Z_S = 125 Ω &gt; Z₀，ρ_S 轉正（+0.43），接收端變成<strong>慢慢爬的階梯波</strong>（第一步只有 2×50/175 ≈ 0.57，之後每 2T_d 補一階）——Day 6「弱驅動」劇本、也是 Day 7 練習 4(b)「過端接」的實體版。三顆元件、三種波形，欠阻尼／臨界／過阻尼一次收集完畢。</p>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 3：同一條線的三種源端，接收端（開路）三種命運</text>
+  <!-- setup -->
+  <rect x="36" y="44" width="90" height="40" rx="8" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="81" y="62" text-anchor="middle" font-size="10.5" fill="#374151">產生器 50Ω</text>
+  <text x="81" y="76" text-anchor="middle" font-size="9.5" fill="#6b7280">＋T 接頭</text>
+  <rect x="126" y="36" width="60" height="22" rx="5" fill="#fef2f2" stroke="#dc2626" stroke-width="1.8"/>
+  <text x="156" y="51" text-anchor="middle" font-size="9.5" fill="#991b1b">50Ω 終端器</text>
+  <text x="156" y="30" text-anchor="middle" font-size="9.5" fill="#991b1b">↓並聯後源端只剩 25Ω</text>
+  <rect x="196" y="55" width="60" height="20" rx="5" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8"/>
+  <text x="226" y="69" text-anchor="middle" font-size="9.5" fill="#15803d">串 R（B/C）</text>
+  <line x1="126" y1="65" x2="196" y2="65" stroke="#374151" stroke-width="2"/>
+  <line x1="256" y1="65" x2="600" y2="65" stroke="#374151" stroke-width="2.5"/>
+  <text x="428" y="56" text-anchor="middle" font-size="10" fill="#374151">10 m 線（T_d ≈ 50 ns）</text>
+  <rect x="600" y="46" width="120" height="38" rx="8" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="660" y="62" text-anchor="middle" font-size="10.5" fill="#0e7490">CH1（1 MΩ＝開路）</text>
+  <text x="660" y="76" text-anchor="middle" font-size="9.5" fill="#6b7280">站在接收端看</text>
+  <!-- waveform A -->
+  <text x="96" y="126" font-size="12.5" font-weight="bold" fill="#dc2626">A：不加串阻（Z_S=25Ω）→ 過衝 33%＋交替振鈴，台階間隔 2T_d，每彈衰減 ×1/3</text>
+  <line x1="80" y1="208" x2="700" y2="208" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="152" x2="700" y2="152" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="156" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <path d="M80,208 L150,208 L156,133 L280,133 L286,159 L410,159 L416,150 L540,150 L546,153 L700,153" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="218" y="128" text-anchor="middle" font-size="10" fill="#991b1b">1.33</text>
+  <text x="348" y="174" text-anchor="middle" font-size="10" fill="#991b1b">0.89</text>
+  <text x="478" y="145" text-anchor="middle" font-size="10" fill="#991b1b">1.04</text>
+  <!-- waveform B -->
+  <text x="96" y="246" font-size="12.5" font-weight="bold" fill="#16a34a">B：串 27Ω（Z_S≈52Ω≈Z₀）→ 一步到位、零過衝——一顆電阻救一條線</text>
+  <line x1="80" y1="312" x2="700" y2="312" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="262" x2="700" y2="262" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="266" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <path d="M80,312 L150,312 L156,262 L700,262" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <!-- waveform C -->
+  <text x="96" y="350" font-size="12.5" font-weight="bold" fill="#b45309">C：串 100Ω（Z_S=125Ω，過端接）→ 階梯波慢慢爬（第一步僅約 0.57）</text>
+  <line x1="80" y1="414" x2="700" y2="414" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="364" x2="700" y2="364" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="368" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <path d="M80,414 L150,414 L156,386 L280,386 L286,373 L410,373 L416,368 L540,368 L546,366 L700,366" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <text x="218" y="400" text-anchor="middle" font-size="10" fill="#92400e">0.57</text>
+</svg>
+<figcaption>圖 2：實驗 3 的三種源端與接收端波形預測（正規化到穩態值 1）。A/B/C 分別對應 Day 6 的強驅動振鈴、Day 7 的完美串聯端接、過端接階梯——用 T 型接頭＋兩顆電阻收集全套。夾線串電阻會引入寄生電感，邊沿上出現小毛刺屬正常，不影響大局。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">實驗 3 帶走的話</span>
+  <p>振鈴的<strong>台階間隔＝2T_d</strong>：從振鈴週期可以反推「哪一段線在共振」——這是 debug 板子時判斷「振鈴來自哪條走線」的免費線索。而 27 Ω 一上、波形瞬間變乾淨的那一刻，就是 NB 板上每一顆 22/33 Ω 串阻存在的理由，親眼看過一次，比讀十遍 guideline 都深刻。</p>
+</div>
+
+<h2>5. 實驗 4（約 15 分）：三點探測——Day 7 練習 4 驗收</h2>
+<p>回到實驗 1 的骨架，這次<strong>兩個通道一起上</strong>：產生器 →（短線）→ <strong>T 接頭鎖在 CH1</strong> →（B 段線）→ <strong>CH2（1 MΩ＝開路終端）</strong>。CH1 就是「點在線上距終點 B 段長度處」的探棒，CH2 是接收端。換三種 B 段長度，重現 Day 7 圖 1 的三張波形：</p>
+<ol>
+  <li><strong>B = 10 m（CH1 靠近源端）</strong>：CH1 半壓架子最寬（≈ 2×50 = 100 ns）；CH2 一步到位全壓。</li>
+  <li><strong>B = 5 m（CH1 在中段）</strong>：CH1 架子縮成約 50 ns——驗證 Day 7 的判詞：<strong>架子寬度 = 2 ×（探測點到終點的飛行時間）</strong>，跟源端到探測點的距離無關。</li>
+  <li><strong>B = 1 m（CH1 貼近負載）</strong>：架子理論上只剩約 10 ns——跟產生器的邊沿差不多寬，於是<strong>架子「糊進」上升沿裡幾乎看不見</strong>。恭喜，你親眼看到了 Day 1 的 1/6 法則：距離夠短，反射融入邊沿、系統回到集總世界。</li>
+  <li>對照 CH2：<strong>不管 B 多長，接收端永遠是乾淨的一步到位</strong>——「驗串聯端接的線，探棒一律點接收端」這條鐵律，從今天起是你的實測經驗，不是別人的口訣。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">年度騙新人陷阱・實測版</span>
+  <p>把 CH1 的架子截圖存起來。哪天有同事（或未來的你）在產線量 clock 量到「只有半高，板子壞了」，把圖拿出來：<strong>半壓架子是串聯端接健康運作的證據</strong>，架子寬度還能告訴你探棒離終點多遠。今天這張截圖，就是你面試題 Q2（Day 7）的實物證據。</p>
+</div>
+
+<h2>6. 補做實驗（約 25 分）：Day 2 欠的三項量測基本功</h2>
+<p>以下三項是 Day 2（舊制週六實作日）留待平日補做的功課，詳細步驟在 <a href="day-002.html">Day 2 頁面</a>第 2 節，這裡給濃縮版清單與今天新增的理論武器——Perfect Timing II Ch.11 整章就在講「為什麼示波器會騙你」。</p>
+
+<h3>6.1 RC 驗證 0.35/t_r（約 10 分）</h3>
+<p>麵包板串 R = 1 kΩ、C = 1 nF 到地，方波進、電容上量：t_r 理論 2.2τ = 2.2 µs；再掃正弦找 −3 dB 點（理論約 159 kHz）；兩者相乘 ≈ 0.35。做完你就親手驗證了 SI 第一公式（完整步驟見 Day 2 實驗 B）。</p>
+
+<h3>6.2 接地長線 vs 接地彈簧：假振鈴現形記（約 10 分）</h3>
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>探棒那條 10 幾公分的接地鱷魚夾線，和探棒尖端的輸入電容，組成一個 <strong>LC 鈴鐺</strong>。量快邊沿時鈴鐺被敲響，螢幕上出現漂亮的正弦振鈴——<strong>但那是探棒自己在唱歌，不是電路的聲音</strong>。Perfect Timing II Ch.11 給了具體數字：3 吋接地線、離訊號 0.5 吋的迴路，電感約 <strong>150 nH</strong>；配 5 pF 探棒電容，光接地迴路就貢獻 t_GROUND = 3.4·√(LC) ≈ <strong>2.9 ns</strong> 的上升時間鈍化——比很多待測訊號本身還慢。</p>
+</div>
+<ol>
+  <li>用 10:1 探棒＋<strong>原廠長接地線（鱷魚夾）</strong>量產生器最快邊沿（BNC 轉接到板上或用探棒鉤直接鉤轉接頭芯線），觀察邊沿後的高頻振鈴，記下振鈴頻率。</li>
+  <li>換<strong>接地彈簧</strong>（探棒帽拔掉、套上彈簧針，就近接地）再量：振鈴大幅縮小、邊沿變快。</li>
+  <li>把接地線繞短一半再量一次：振鈴頻率<strong>升高</strong>——證明鈴鐺是接地迴路（L 變小 → f = 1/(2π√(LC)) 變高），不是電路。以 L ≈ 150 nH、C ≈ 10 pF 估，f 落在百 MHz 量級。</li>
+  <li><strong>判別心法（面試會考）：</strong>改接地方式振鈴就變 → 探棒假影；振鈴週期對應走線 2T_d、怎麼換接地都不變 → 真反射。兩把尺，一生受用。</li>
+</ol>
+
+<h3>6.3 頻寬限制的鈍化＋PT2 Ch.11 的 RSS 總帳（約 5 分）</h3>
+<p>按下示波器 <strong>20 MHz BW Limit</strong> 再量同一個邊沿，讀值明顯變大；用 RSS 反推驗證（Day 2 實驗 C）。今天升級理論：Perfect Timing II Ch.11 把量測鏈寫成完整的四項平方和——</p>
+<div class="formula">
+  t_DISPLAY = √( t²_SIGNAL + t²_PROBE + t²_SCOPE + t²_GROUND )　；　t_SCOPE ≈ 0.338 / F_3dB（PT2 Ch.11）
+</div>
+<p><em>白話翻譯：螢幕上的上升時間＝訊號、探棒、示波器、接地迴路四個「慢」的平方和開根號——木桶效應的平方版。</em>書中實例：100 MHz、t_r = 1 ns 的 clock，用 400 MHz 示波器＋400 MHz 探棒（各折合約 0.84 ns）＋3 吋接地線（2.9 ns）去量，螢幕顯示 <strong>3.3 ns</strong>——儀器規格看似綽綽有餘，實際誤差 230%，兇手主要是那條接地線。Ch.11 還提醒：數位示波器的取樣率至少要是頻寬的 4 倍，10 倍以上才幾乎不靠內插補點（2002 年的機型數據，現代示波器普遍已達標，但「取樣率÷頻寬夠不夠倍」這個檢查習慣不過時）。探棒的完整故事（負載效應、主動探棒）留到週 6 量測週，屆時 Ch.11 還會再上場。</p>
+
+<h2>7. 量測記錄表（拍照存檔，週日測驗會用到）</h2>
+<table>
+  <tr><th>#</th><th>項目</th><th>理論預測</th><th>實測值</th><th>偏差原因猜測</th></tr>
+  <tr><td>1</td><td>10 m 線架子寬 2T_d</td><td>約 100 ns</td><td></td><td></td></tr>
+  <tr><td>2</td><td>反推線長</td><td>標示長度</td><td></td><td>速度因子「約 0.66」</td></tr>
+  <tr><td>3</td><td>短路帽脈衝寬</td><td>約 100 ns</td><td></td><td></td></tr>
+  <tr><td>4</td><td>人造振鈴第一峰（正規化）</td><td>約 1.33</td><td></td><td>終端器精度／夾線寄生</td></tr>
+  <tr><td>5</td><td>串 27 Ω 後過衝</td><td>≈ 0</td><td></td><td></td></tr>
+  <tr><td>6</td><td>B=5 m 時 CH1 架子寬</td><td>約 50 ns</td><td></td><td></td></tr>
+  <tr><td>7</td><td>RC 電路 t_r × BW</td><td>≈ 0.35</td><td></td><td>元件誤差／麵包板寄生</td></tr>
+  <tr><td>8</td><td>長接地線振鈴頻率</td><td>百 MHz 量級</td><td></td><td>迴路面積估不準</td></tr>
+</table>
+<p>「偏差原因猜測」那欄不是裝飾——寫下猜測、想辦法驗證，就是 FA（failure analysis）思維的日常肌肉訓練，Phase 4 會正式開課。</p>
+
+<h2>8. 實務案例：今天的手感值多少錢</h2>
+<ul>
+  <li><strong>NB 主機板：</strong>板廠回報「clock 波形異常」附一張振鈴截圖時，你現在有一套完整的拷問流程：振鈴週期是多少？對應板上哪段 2T_d？換接地彈簧再量還在嗎？探棒點在接收端了嗎？——四個問題問完，一半的「異常」會消失在量測方法裡，剩下那一半才值得動 layout。</li>
+  <li><strong>鏡頭模組：</strong>模組 flex 的 MIPI 走線斷裂／連接器接觸不良，FA 實驗室用 TDR 定位——原理就是你今天的實驗 1，只是把「10 m 同軸、5 ns/m」換成「10 cm flex、皮秒級解析」。看懂 TDR 報告上的距離軸與阻抗軸，下週正式開課。</li>
+  <li><strong>面試：</strong>Apple/Google 的 HW 面試極愛問量測素養（因為新人最常在這裡翻車）。「你怎麼確認螢幕上的振鈴是真的？」——今天 6.2 的判別心法＋PT2 Ch.11 的四項 RSS，就是滿分答案的骨架。</li>
+</ul>
+
+<h2>9. 動手練習（實驗數據分析）</h2>
+<p>用今天的實測（或理論值）作答，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（反推長度）：實驗 1 中你量到架子寬 102 ns，線材速度因子約 0.66。(a) 這捲線多長？(b) 若把末端 50 Ω 終端器換成 100 Ω 電阻（用轉接夾），CH1 會看到什麼？</summary>
+<p><strong>解：</strong>(a) 單程 T_d = 102/2 = 51 ns；v = 0.66 × 30 ≈ 19.8 cm/ns；長度 ≈ 51 × 0.198 m ≈ <strong>10.1 m</strong>（速度因子帶「約」，答 10 m ± 幾% 都合理）。(b) ρ_L = (100−50)/(100+50) = +1/3：CH1 先跳半壓（0.5），2T_d 後補一小步 0.5×(1/3)=0.167 → 停在約 0.67 再微調——<strong>介於「開路全架子」與「匹配無架子」之間的小台階</strong>。TDR 判讀的核心就是從台階高度反推 ρ、再反推 Z_L——你已經在做下週的課了。</p>
+</details>
+
+<details>
+<summary>練習 2（人造振鈴設計題）：實驗 3 若把 T 接頭上的 50 Ω 終端器換成 75 Ω（視訊線用終端器），(a) 源端阻抗變多少？(b) 接收端第一峰（正規化到穩態 1）變多少？(c) 每次反彈衰減多少？(d) 為什麼這招只能把源端「弄瘦」不能「弄胖」？</summary>
+<p><strong>解：</strong>(a) Z_S = 50‖75 = 30 Ω。(b) 出發波 = 50/(50+30) = 0.625，開路端加倍 → <strong>1.25，過衝 25%</strong>。(c) ρ_S = (30−50)/(30+50) = −0.25，每次回源端反彈帶走 −1/4 → 衰減比 33% 那組快。(d) 並聯只會讓等效電阻<strong>變小</strong>（50‖任何值 &lt; 50）；要「弄胖」得用<strong>串聯</strong>——這正是接法 C 串 100 Ω 的做法。順帶複習 Day 7：這也是為什麼補救瘦 driver 用串聯電阻（加法）、而戴維寧的並聯等效要小心算。</p>
+</details>
+
+<details>
+<summary>練習 3（TDR 找故障）：一條標稱 10 m 的線纜，末端開路。窮人版 TDR 量到的「架子」只有 40 ns 寬，而且台階向下（先跳半壓、40 ns 後往下掉）。發生什麼事？故障點在哪？</summary>
+<p><strong>解：</strong>台階<strong>向下</strong>＝回波是負的＝ρ &lt; 0 ＝撞到<strong>低阻抗（短路類）</strong>故障——線沒有開路到底，而是在中途短路（壓扁、進水、屏蔽刺穿內芯都會）。位置：單程 = 40/2 = 20 ns → 20 × 0.198 ≈ <strong>4 m 處</strong>。剪掉重接頭或整條報廢前，你已經知道往哪裡剪。這就是 TDR 在產線與 FA 的日常：<strong>台階方向判性質（開路向上、短路向下）、時間判位置</strong>。</p>
+</details>
+
+<details>
+<summary>練習 4（真假振鈴判官）：你在板上量一條 15 cm 的 clock 走線（FR-4 表層約 6.7 ps/mm 量級），邊沿後看到週期約 8 ns 的振鈴。(a) 若是走線反射造成，振鈴週期理論值多少？(b) 8 ns 的振鈴比較可能是誰？用什麼實驗確認？</summary>
+<p><strong>解：</strong>(a) T_d ≈ 150 mm × 6.7 ps/mm ≈ 1 ns，反射振鈴週期 ≈ 2T_d ≈ <strong>2 ns</strong>——跟 8 ns 對不上。(b) 8 ns ↔ 125 MHz，落在「長接地線 LC 鈴鐺」的典型頻段：L ≈ 150 nH（PT2 Ch.11 的 3 吋線實例）、C ≈ 10 pF → f = 1/(2π√(LC)) ≈ 130 MHz ≈ 8 ns 週期，<strong>高度吻合探棒假影</strong>。確認實驗：換接地彈簧（或縮短接地迴路）再量——振鈴消失或頻率大變＝假影；紋風不動＝再回頭懷疑板子。<strong>先驗量測鏈，再驗電路</strong>，順序不能反。</p>
+</details>
+
+<details>
+<summary>練習 5（PT2 Ch.11 總帳題）：t_r = 1 ns 的 clock，用 400 MHz 示波器＋400 MHz 探棒＋3 吋接地線（t_GROUND ≈ 2.9 ns）量測。(a) 螢幕顯示的 t_r 約多少？(b) 換接地彈簧（t_GROUND 近似忽略）後顯示多少？(c) 要把顯示誤差壓到 10% 以內，還需要升級什麼？</summary>
+<p><strong>解：</strong>(a) t_SCOPE = t_PROBE = 0.338/0.4 GHz ≈ 0.84 ns；t_DISPLAY = √(1² + 0.84² + 0.84² + 2.9²) ≈ <strong>3.3 ns</strong>（PT2 Ch.11 原例——誤差 230%，兇手是接地線）。(b) √(1² + 0.84² + 0.84²) ≈ <strong>1.56 ns</strong>，仍高估 56%——接地線只是第一層皮。(c) 要 t_DISPLAY ≤ 1.1 ns，需 √(t²_P + t²_S) ≤ √(1.1²−1²) ≈ 0.46 ns，即探棒＋示波器合計折合約 0.33 ns/each → 各約 <strong>1 GHz 以上</strong>（0.338/0.33）。這就是「儀器鏈要比訊號快 3～5 倍」經驗法則的帳目來源；書中數字為 2002 年機型，現代對應更快的邊沿要同比例上修。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>實作日的內容反而是面試的富礦——動手素養最能區分「讀過書」和「做過事」。先用英文口頭回答，再看參考答案。</p>
+
+<details>
+<summary>Q1: "With only a function generator and an oscilloscope — no TDR — how would you measure the length of a coax cable, or locate an open or short somewhere along it?"</summary>
+<p><strong>參考答案骨架：</strong>I'd build a poor man's TDR. Put a BNC tee right at the scope input set to 1 megohm, drive it from the generator through a short cable — the generator's 50-ohm output impedance conveniently acts as a matched source — and hang the cable under test off the other side of the tee. The generator launches a step; the scope at the tee sees the launched half-amplitude step, and then the reflection from the far end arrives one round trip later. For an open end the trace steps up to full amplitude; for a short it steps back down to zero — the polarity of the second step tells me open versus short. The time between the two steps is twice the electrical length, so length equals half the shelf width times the propagation velocity — about 5 nanoseconds per meter for solid-PE coax with a velocity factor around 0.66. If the step happens earlier than the cable's known length, that time directly locates the fault. The only requirements are that the edge is fast compared to the round trip, and the scope input stays at 1 megohm so it doesn't terminate the line.</p>
+<p><strong>加分點：</strong>提到解析度限制——"Resolution is limited by the edge rate; a 10 ns edge smears anything closer than about a meter, which is why real TDRs use tens-of-picosecond steps."</p>
+</details>
+
+<details>
+<summary>Q2: "You probe a clock net and see ringing after every edge. How do you decide whether it's a real signal-integrity problem or a measurement artifact — and what does your measurement chain need to be trusted?"</summary>
+<p><strong>參考答案骨架：</strong>Two checks. First, the ring period: reflection-driven ringing has a period of twice the trace flight time, so I compare the measured period against 2·T_d of the physical net — a 15-centimeter trace rings at about 2 nanoseconds, so an 8-nanosecond ring can't be the trace. Second, I change the probing: swap the long ground clip for a ground spring, or shorten the ground loop, and re-measure. If the ringing shrinks or shifts frequency, it was the probe's ground-loop inductance resonating with the probe capacitance — a few inches of ground lead is roughly 150 nanohenries, which with about 10 picofarads rings right in the low hundreds of megahertz. For the chain to be trusted, I budget it as a root-sum-square: displayed rise time is the RSS of the signal, probe, scope, and ground-loop contributions — per the classic guide, a 1-nanosecond edge measured with a 400 MHz scope and probe plus a 3-inch ground lead displays as 3.3 nanoseconds, so I keep the instrument chain 3 to 5 times faster than the signal and always minimize the ground loop, then probe at the receiver pin. (依據 Perfect Timing II Ch.11：t_DISPLAY = √(t²sig+t²probe+t²scope+t²ground)、150 nH／2.9 ns 實例。)</p>
+<p><strong>考點：</strong>「先驗量測鏈再驗電路」的素養＋兩個定量判據（2T_d 對頻率、換接地再量），答得出數字量級才是 senior。</p>
+</details>
+
+<h2>11. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：同軸線的傳播延遲量級？如何用它反推線長？</p>
+  <p class="a">A1：實心 PE 同軸線（RG-58 類）速度因子約 0.66 → 約 20 cm/ns、約 5 ns/m。窮人版 TDR：源端看到的半壓架子（或振鈴台階）寬度 = 2T_d → 線長 = 架子寬 ÷ 2 × 20 cm/ns。台階向上＝開路類（ρ&gt;0）、向下＝短路類（ρ&lt;0），時間定位置、方向判性質。</p>
+  <p class="q">Q2：窮人版 TDR 的接法與三種末端的源端波形？</p>
+  <p class="a">A2：T 接頭鎖在示波器輸入（1 MΩ 檔），產生器（50 Ω 輸出＝天然串聯端接）經短線接 T，長線掛 T 另一口。末端開路：半壓架子後補滿；末端 50 Ω：永遠停半壓（無回波）；末端短路：寬 2T_d 的脈衝（回波翻面抵消）。記：示波器 1 MΩ 檔＝開路端、50 Ω 貫通終端器＝並聯端接。</p>
+  <p class="q">Q3：如何在實驗桌上人造振鈴、再治好它？</p>
+  <p class="a">A3：產生器輸出鎖 T 接頭＋50 Ω 終端器 → 源端變 50‖50 = 25 Ω（ρ_S = −1/3）→ 開路接收端第一峰 1.33（過衝 33%）、台階間隔 2T_d、每彈衰減 ×1/3。治法：源端串 27 Ω → Z_S ≈ 52 ≈ Z₀ 一步到位（自製版 PT2 Ch.7 的 R_S = Z₀ − R_D）。串 100 Ω 則過端接 → 階梯波（第一步約 0.57）。</p>
+  <p class="q">Q4：示波器顯示的上升時間怎麼估？（PT2 Ch.11）</p>
+  <p class="a">A4：t_DISPLAY = √(t²_SIGNAL + t²_PROBE + t²_SCOPE + t²_GROUND)，其中 t ≈ 0.338/F_3dB。書中實例：1 ns 訊號＋400 MHz 示波器＋400 MHz 探棒（各約 0.84 ns）＋3 吋接地線（2.9 ns）→ 顯示 3.3 ns。對策：儀器鏈比訊號快 3～5 倍＋壓縮接地迴路。另：數位示波器取樣率 ≥ 4× 頻寬（10× 以上更佳）。</p>
+  <p class="q">Q5：怎麼判斷螢幕上的振鈴是真反射還是探棒假影？</p>
+  <p class="a">A5：兩把尺——① 週期對帳：真反射振鈴週期 ≈ 走線 2T_d；② 換接地再量：改用接地彈簧／縮短接地迴路後振鈴變小或變頻＝假影（接地迴路 L 與探棒 C 的 LC 諧振：3 吋線約 150 nH、配 10 pF 約落在百 MHz 量級，PT2 Ch.11）；紋風不動＝真反射。心法：先驗量測鏈，再驗電路。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 9（週六）：TDR 原理與判讀——把今天的窮人版升級成正規儀器</strong></p>
+  <p>今天你用 10 m 線和 100 ns 的架子讀懂了 TDR 的靈魂；明天把它換成皮秒級步階：正規 TDR 如何從台階高度直接換算阻抗（ρ → Z 的讀圖法）、電感性不連續為什麼是向上尖刺、電容性為什麼是向下凹陷、以及 via、connector、flex 壓接處在 TDR 曲線上的長相。純閱讀課，不需儀器——但今天的實測波形先留著，明天會一一對號入座。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 8 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

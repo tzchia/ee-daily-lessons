@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 9｜TDR 原理與判讀——從台階高度讀出阻抗，從尖刺凹陷認出元凶</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 9 天（週六新觀念課・純閱讀）</div>
+  <h1>Day 9：TDR 原理與判讀——從台階高度讀出阻抗，從尖刺凹陷認出元凶</h1>
+  <div class="meta">2026-08-01（六）｜預估學習時間：90 分鐘｜難度：★★★☆☆（觀念全是 Day 6～8 的延伸，新的是「讀圖的手感」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>昨天你用 10 m 同軸線和百 MHz 示波器自製了窮人版 TDR；今天把它升級成 FA 實驗室裡那台正規儀器。讀完你要能夠：</p>
+  <ol>
+    <li>說出正規 TDR 和窮人版的三個關鍵差異：<strong>皮秒級步階、取樣式示波器、源端 50 Ω 內建量測點</strong>——以及為什麼這三件事讓解析度從「公尺」進步到「公釐」</li>
+    <li>掌握 TDR 讀圖法的核心公式：<strong>從台階高度算 ρ，再用 Z = Z₀(1+ρ)/(1−ρ) 換算阻抗</strong>；小偏差時用速算 Z ≈ Z₀(1+2ρ)</li>
+    <li>一眼認出兩種不連續的長相：<strong>電感性＝向上尖刺、電容性＝向下凹陷</strong>，並理解「尖刺面積 ∝ 多餘的 L 或 C」</li>
+    <li>認得 via、connector、flex 壓接、via stub 在 TDR 曲線上的「指紋」，並把昨天實測的每一個波形細節對號入座</li>
+    <li>知道 TDR 的三個極限（上升時間解析度、多重反射遮蔽、探不進匹配端之後），量測時才不會過度解讀</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：昨天你已經做過 TDR 了，只是還不會「讀」</h2>
+<p>回顧昨天的實驗 1：步階波打進線裡、站在源端看回波——半壓架子的<strong>寬度</strong>告訴你牆多遠、台階的<strong>方向</strong>告訴你牆是開路還是短路（練習 3 你甚至定位了 4 m 處的短路故障）。這就是 TDR（Time Domain Reflectometry，時域反射術）的全部靈魂。今天只做一件事：把「開路／短路／匹配」這三個粗粒度的答案，細化成<strong>連續的阻抗讀數</strong>——讓曲線上每一個高度都變成一個 Ω 數、每一個時間都變成一個公釐數。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：TDR 是「用回音畫地圖的蝙蝠」</span>
+  <p>蝙蝠對山谷喊一聲，靠回音的<strong>延遲</strong>知道牆多遠、靠回音的<strong>音色</strong>知道牆是岩石還是樹叢。TDR 就是電路界的蝙蝠：對走線發一個超快的步階波，然後把「每一個時刻收到的回波」畫成曲線——<strong>橫軸是距離（時間 ÷ 2 × 波速），縱軸是那個位置的阻抗</strong>。走線哪裡變寬（阻抗變低）曲線就往下掉、哪裡有顆 via（多了電容）就出現一個小凹陷、哪裡斷了（開路）曲線就直衝天花板。一條曲線 ＝ 一張「這條走線沿路的阻抗地形圖」。你昨天畫的是解析度 1 公尺的粗地圖；正規 TDR 畫的是解析度幾公釐的精細地圖，原理一模一樣。</p>
+</div>
+
+<h2>1. 從窮人版到正規 TDR：差在哪三件事</h2>
+<p>正規 TDR 通常是「取樣式示波器（sampling scope）＋ TDR 模組」的組合，或向量網路分析儀（VNA）換算出來的時域結果。它和你昨天的自製版差在三處：</p>
+<ol>
+  <li><strong>步階快了三個數量級：</strong>昨天產生器的邊沿約 10～20 ns；正規 TDR 模組的步階上升時間一般在<strong>約 20～40 ps 量級</strong>（高階系統可到 10 ps 級）。解析度和邊沿成正比（第 3 節細講），所以從「公尺」直接進步到「公釐」。</li>
+  <li><strong>觀測點就在源內部：</strong>昨天你用 T 接頭把示波器「掛」在線上；正規 TDR 的步階源輸出阻抗 50 Ω，<strong>取樣器就做在源端裡面</strong>，看的是「發射波＋所有回波」的疊加，不需要外掛探棒——也就沒有探棒負載與接地迴路的問題（Day 8 的 6.2 節煩惱直接消失）。</li>
+  <li><strong>縱軸直接標 Ω：</strong>儀器知道自己發了多大的入射波，所以每一時刻量到的電壓都能即時換算成 ρ、再換算成阻抗，螢幕縱軸直接顯示 50 Ω、75 Ω……你不必自己按計算機。但<strong>換算邏輯必須會手算</strong>——面試白板上沒有儀器幫你。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">名詞先打疫苗：TDR / TDT / 差動 TDR</span>
+  <p><strong>TDR</strong> 看反射（reflect）、站在發射端；<strong>TDT</strong>（Time Domain Transmission）看穿透（transmit）、站在接收端——昨天你的 CH2 其實就在做 TDT。<strong>差動 TDR</strong> 用兩個互補步階同時打差動對、讀差模阻抗（例如 MIPI 的 100 Ω 差動），第 4 週講差動訊號時回來收割。今天全部講單端。</p>
+</div>
+
+<h2>2. 讀圖法核心：台階高度 → ρ → Z</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：先懂結論再看公式</span>
+  <p>TDR 曲線的規則只有一句話：<strong>「曲線比基準線高＝那裡的阻抗比 50 Ω 大；比基準線低＝比 50 Ω 小；高（低）多少，照表換算成 Ω。」</strong>基準線就是儀器自己的 50 Ω 世界。開路是「阻抗無限大」所以曲線衝到頂（昨天的架子補滿全壓）；短路是「阻抗 0」所以曲線掉到底（昨天的脈衝歸零）；75 Ω 的線就停在頂與基準線之間的某個刻度。下面的數學只是把「某個刻度」算精確而已，<strong>公式看不懂可以先跳過，記住「上＝高阻抗、下＝低阻抗」就能讀懂八成的 TDR 報告</strong>。</p>
+</div>
+
+<p>設儀器發射的入射步階高度為 V<sub>i</sub>（進入 50 Ω 線後的電壓）。波走到某個阻抗為 Z 的位置，反射係數是 Day 6 的老朋友：</p>
+<div class="formula">ρ = (Z − Z₀) / (Z + Z₀)</div>
+<p><em>白話翻譯：撞到的東西比家裡（50 Ω）硬，ρ 為正、回波同向；比家裡軟，ρ 為負、回波反向。</em></p>
+<p>源端取樣器看到的是「入射＋回波」：V = V<sub>i</sub>(1 + ρ)。所以從螢幕讀出 V 之後：</p>
+<div class="formula">ρ = (V − V<sub>i</sub>) / V<sub>i</sub>　⟹　Z = Z₀ × (1 + ρ) / (1 − ρ)</div>
+<p><em>白話翻譯：先算「曲線離基準線偏了幾成」得到 ρ，再用這條除法把 ρ 翻譯回 Ω。這是 Day 6 公式的反著用——當年從 Z 算 ρ，今天從 ρ 反推 Z。</em></p>
+
+<p>把幾個常用刻度算出來做成心算表（Z₀ = 50 Ω）：</p>
+<table>
+  <tr><th>曲線位置（相對入射步階）</th><th>ρ</th><th>Z</th><th>對應昨天的實驗</th></tr>
+  <tr><td>停在基準線（1.00 V<sub>i</sub>）</td><td>0</td><td>50 Ω</td><td>鎖 50 Ω 終端器：永遠半壓</td></tr>
+  <tr><td>衝到 2.00 V<sub>i</sub></td><td>+1</td><td>∞（開路）</td><td>末端懸空：架子後補滿</td></tr>
+  <tr><td>掉到 0</td><td>−1</td><td>0（短路）</td><td>短路帽：脈衝歸零</td></tr>
+  <tr><td>1.20 V<sub>i</sub></td><td>+0.2</td><td>75 Ω</td><td>—（視訊同軸線的阻抗）</td></tr>
+  <tr><td>1.33 V<sub>i</sub></td><td>+1/3</td><td>100 Ω</td><td>練習 1(b) 的 100 Ω 電阻端</td></tr>
+  <tr><td>0.80 V<sub>i</sub></td><td>−0.2</td><td>約 33 Ω</td><td>—（走線下方掏空補償過頭、或線變寬）</td></tr>
+</table>
+
+<h3>2.1 小偏差速算：Z ≈ Z₀(1 + 2ρ)</h3>
+<p>實務上 TDR 曲線大部分時間都在基準線附近小幅波動（好板子的阻抗偏差多在 ±10% 內）。當 ρ 很小時，(1+ρ)/(1−ρ) ≈ 1 + 2ρ，於是：</p>
+<div class="formula">|ρ| ≪ 1 時：Z ≈ Z₀ (1 + 2ρ)　⟹　ΔZ ≈ 2ρ × Z₀</div>
+<p><em>白話翻譯：曲線每偏離基準線 1%，阻抗大約偏 1 Ω（在 50 Ω 系統）。曲線抖 +4% ＝ 那段走線約 54 Ω。</em>這條速算讓你看報告時不必按計算機——驗板時拿到「阻抗 coupon 量測 52.3 Ω」這種數字，儀器內部就是這樣從電壓換出來的。</p>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">TDR 讀圖法：縱軸的每個高度都是一個阻抗</text>
+  <!-- axes -->
+  <line x1="70" y1="380" x2="720" y2="380" stroke="#374151" stroke-width="1.5"/>
+  <line x1="70" y1="380" x2="70" y2="50" stroke="#374151" stroke-width="1.5"/>
+  <text x="700" y="400" text-anchor="middle" font-size="11" fill="#374151">時間（÷2×波速＝距離）</text>
+  <!-- gridlines with rho/Z labels -->
+  <line x1="70" y1="60" x2="720" y2="60" stroke="#e5e7eb"/>
+  <text x="64" y="64" text-anchor="end" font-size="10" fill="#6b7280">2.0 Vi｜ρ=+1｜開路 ∞</text>
+  <line x1="70" y1="140" x2="720" y2="140" stroke="#e5e7eb"/>
+  <text x="64" y="144" text-anchor="end" font-size="10" fill="#6b7280">1.33 Vi｜ρ=+1/3｜100Ω</text>
+  <line x1="70" y1="180" x2="720" y2="180" stroke="#e5e7eb"/>
+  <text x="64" y="184" text-anchor="end" font-size="10" fill="#6b7280">1.2 Vi｜ρ=+0.2｜75Ω</text>
+  <line x1="70" y1="220" x2="720" y2="220" stroke="#9ca3af" stroke-dasharray="5 3" stroke-width="1.3"/>
+  <text x="64" y="224" text-anchor="end" font-size="10" fill="#0e7490" font-weight="bold">1.0 Vi｜ρ=0｜50Ω 基準線</text>
+  <line x1="70" y1="260" x2="720" y2="260" stroke="#e5e7eb"/>
+  <text x="64" y="264" text-anchor="end" font-size="10" fill="#6b7280">0.8 Vi｜ρ=−0.2｜約33Ω</text>
+  <line x1="70" y1="380" x2="720" y2="380" stroke="#e5e7eb"/>
+  <text x="64" y="360" text-anchor="end" font-size="10" fill="#6b7280">0｜ρ=−1｜短路 0Ω</text>
+  <!-- curve: 50 ohm cable, then 75 ohm section, then open -->
+  <path d="M70,380 L90,380 L94,220 L300,220 L306,180 L470,180 L476,220 L620,220 L626,60 L720,60" fill="none" stroke="#dc2626" stroke-width="2.8"/>
+  <text x="195" y="208" text-anchor="middle" font-size="10.5" fill="#374151">50Ω 線（貼基準線）</text>
+  <text x="388" y="168" text-anchor="middle" font-size="10.5" fill="#b45309" font-weight="bold">中段換成 75Ω 線：曲線上浮到 1.2 Vi</text>
+  <text x="548" y="208" text-anchor="middle" font-size="10.5" fill="#374151">回到 50Ω</text>
+  <text x="668" y="48" text-anchor="middle" font-size="10.5" fill="#dc2626" font-weight="bold">末端開路：衝頂</text>
+  <text x="92" y="405" text-anchor="middle" font-size="10" fill="#6b7280">t=0 發射</text>
+  <!-- annotation of reading -->
+  <line x1="388" y1="180" x2="388" y2="220" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="3 2"/>
+  <text x="388" y="242" text-anchor="middle" font-size="10" fill="#0e7490">讀法：偏 +20% → ρ=0.2 → Z=50×1.2/0.8=75Ω</text>
+</svg>
+<figcaption>圖 1：TDR 讀圖法。儀器沿時間軸畫出「入射＋回波」的疊加電壓，每個高度依 Z = Z₀(1+ρ)/(1−ρ) 對應一個阻抗；曲線就是這條通道沿路的阻抗地形圖。注意 75 Ω 段結束後曲線回到基準線——TDR 顯示的是「當地」阻抗，不是累積值。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">兩個新手誤讀（驗板報告的常見冤案）</span>
+  <p><strong>誤讀一：把「入射步階」當成故障。</strong>t=0 那個從 0 跳上基準線的大台階是儀器自己發的波，不是通道的問題；通道的資訊從基準線之後才開始。（昨天窮人版的第一跳＝半壓，同一件事。）</p>
+  <p><strong>誤讀二：忘了時間軸是「來回」。</strong>螢幕上讀到的 1 ns，是波去程＋回程的總和，換算距離要<strong>先除以 2</strong>。儀器多半可切「單程顯示」模式，看報告時先確認軸的定義，不然定位故障會差一倍距離——FA 開錯位置的 X-ray，時間就白花了。</p>
+</div>
+
+<h2>3. 時間軸＝距離軸：解析度由步階邊沿決定</h2>
+<p>距離換算是昨天的老公式：</p>
+<div class="formula">距離 = (t<sub>回波</sub> / 2) × v　；　FR-4 內層帶狀線 v ≈ 15 cm/ns（約 6～7 ps/mm），表層微帶線略快</div>
+<p><em>白話翻譯：回波晚 1 ns 到，故障就在約 7.5 公分外（FR-4 板內）。</em></p>
+<p>而<strong>解析度</strong>——兩個相鄰的不連續要隔多遠才分得開——由步階上升時間決定。經驗式：</p>
+<div class="formula">可分辨的最小間距 ≈ (t_r / 2) × v</div>
+<p><em>白話翻譯：邊沿有多「胖」，比它近的兩個東西就會糊成一團。</em>代數字：昨天 t_r ≈ 15 ns 的產生器 → 解析度約 1.1 m——這正是昨天實驗 4 裡 B = 1 m 時「架子糊進邊沿」的定量解釋，你已經親眼看過解析度極限長什麼樣。正規 TDR 的 35 ps 步階 → 解析度約 2.6 mm——所以它能把一顆 via、一個 connector 引腳分開來看。<strong>換儀器不是為了「更準的電壓」，是為了「更細的空間」。</strong></p>
+
+<h2>4. 兩種不連續的長相：L 尖刺向上、C 凹陷向下</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：減速丘與小水坑</span>
+  <p>走線上的不連續大多不是「整段換材質」，而是一顆小小的寄生元件。<strong>串聯的多餘電感</strong>（細頸、長 via barrel、彈簧針）像路上的<strong>減速丘</strong>：波撞上去的瞬間覺得「好硬」（電感抗拒電流突變＝瞬間高阻抗），曲線向上戳一個<strong>尖刺</strong>，過了就恢復。<strong>並聯的多餘電容</strong>（via pad、connector 焊盤、測試點）像<strong>小水坑</strong>：波到的瞬間電容拚命吸電流（瞬間低阻抗），曲線向下挖一個<strong>凹陷</strong>，充飽就恢復。記憶法一句話：<strong>「L 上 C 下」——電感頂上去、電容吸下來</strong>。尖刺／凹陷都是「一過性」的，這是它和「整段阻抗偏移」（平台式上下）最大的區別。</p>
+</div>
+
+<p>為什麼是尖刺不是平台？因為 L 和 C 都是「暫態元件」：電感只在電流<strong>變化</strong>的瞬間有電壓（V = L·di/dt）、電容只在電壓<strong>變化</strong>的瞬間吃電流（I = C·dv/dt）。步階邊沿掃過它們的那一小段時間裡它們現形，邊沿過後它們對直流隱形，曲線回到後面那段線的阻抗。</p>
+
+<h3>4.1 從尖刺「面積」反推 L 與 C 的大小</h3>
+<p>當不連續夠小（回波遠小於入射波）時，有一對漂亮的近似式——尖刺下的面積直接給出多餘電感／電容：</p>
+<div class="formula">L<sub>excess</sub> ≈ 2 Z₀ ∫ρ(t) dt（向上尖刺）　；　C<sub>excess</sub> ≈ (2/Z₀) ∫|ρ(t)| dt（向下凹陷）</div>
+<p><em>白話翻譯：把尖刺（以 ρ 為單位）的面積量出來：乘 2Z₀ 就是多餘的電感，除 Z₀ 再乘 2 就是多餘的電容。尖刺越高或越寬 ＝ 寄生越大。</em>量級感：50 Ω 系統裡一個「峰值 ρ = 0.1、寬 100 ps」的三角形尖刺，面積約 5 ps → L ≈ 2×50×5 ps = 0.5 nH——正好是一顆普通通孔 via 的量級。現代 TDR 軟體會自動做這個積分，但白板面試要你「估一下這個凹陷是幾 pF」時，這條就是你的武器。</p>
+
+<div class="card takeaway">
+  <span class="label">為什麼寄生要用「面積」不能用「高度」？</span>
+  <p>因為尖刺的<strong>高度</strong>和步階邊沿有關：同一顆 via，用 35 ps 步階量尖刺又高又窄，用 100 ps 步階量就矮而寬——高度變了，<strong>面積不變</strong>。面積才是元件本身的屬性（L、C），高度只是「元件 × 儀器」的合成品。這也解釋了昨天實驗 1 步驟 4 那些「台階角上的小凸小凹」為什麼那麼不起眼——15 ns 的胖邊沿把 T 接頭與 CH1 輸入電容（約 10～15 pF）的凹陷抹得又淺又寬，但面積還在。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">不連續的 TDR 指紋圖鑑（縱軸：阻抗；虛線：50 Ω 基準）</text>
+  <!-- panel 1: series L -->
+  <text x="80" y="56" font-size="12.5" font-weight="bold" fill="#dc2626">① 串聯電感（細頸、長 via barrel、彈簧針）：向上尖刺</text>
+  <line x1="80" y1="105" x2="700" y2="105" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <path d="M80,105 L260,105 L285,68 L310,105 L700,105" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="285" y="60" text-anchor="middle" font-size="10" fill="#991b1b">面積 → L ≈ 2Z₀∫ρdt</text>
+  <text x="500" y="98" text-anchor="middle" font-size="10" fill="#6b7280">過了就回基準線（一過性）</text>
+  <!-- panel 2: shunt C -->
+  <text x="80" y="150" font-size="12.5" font-weight="bold" fill="#0e7490">② 並聯電容（via pad、測試點、connector 焊盤）：向下凹陷</text>
+  <line x1="80" y1="172" x2="700" y2="172" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <path d="M80,172 L260,172 L285,208 L310,172 L700,172" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <text x="285" y="226" text-anchor="middle" font-size="10" fill="#0e7490">面積 → C ≈ (2/Z₀)∫|ρ|dt</text>
+  <!-- panel 3: impedance step -->
+  <text x="80" y="262" font-size="12.5" font-weight="bold" fill="#b45309">③ 整段阻抗偏移（線寬改變、換層、少了參考平面）：平台，不是尖刺</text>
+  <line x1="80" y1="300" x2="700" y2="300" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <path d="M80,300 L260,300 L268,278 L440,278 L448,300 L700,300" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <text x="354" y="270" text-anchor="middle" font-size="10" fill="#92400e">整段持續偏高（例：跨切割區、掏空）——用 Z=Z₀(1+ρ)/(1−ρ) 讀值</text>
+  <!-- panel 4: connector -->
+  <text x="80" y="346" font-size="12.5" font-weight="bold" fill="#16a34a">④ connector／flex 壓接：L-C 連環套（先刺後陷的「扭波」）＋接觸不良時整段墊高</text>
+  <line x1="80" y1="392" x2="700" y2="392" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <path d="M80,392 L240,392 L256,372 L272,410 L288,392 L460,392 L700,392" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <path d="M80,462 L240,462 L256,442 L272,478 L288,455 L700,455" fill="none" stroke="#15803d" stroke-width="2" stroke-dasharray="6 3"/>
+  <line x1="80" y1="462" x2="700" y2="462" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="470" y="378" text-anchor="middle" font-size="10" fill="#15803d">健康：扭一下就回基準線</text>
+  <text x="500" y="448" text-anchor="middle" font-size="10" fill="#166534">接觸電阻劣化：扭完回不到基準線（整段墊高）→ 換 connector 的證據</text>
+</svg>
+<figcaption>圖 2：四種典型指紋。判讀口訣——「一過性看極性（L 上 C 下），持續性讀平台（阻抗偏移），扭一下是 connector，回不來是接觸電阻」。</figcaption>
+</figure>
+
+<h2>5. 實物指紋：via、connector、flex 壓接、via stub</h2>
+
+<h3>5.1 via：通常是「向下凹陷」，長 barrel 時帶「向上前奏」</h3>
+<p>一顆通孔 via 電氣上是「pad／anti-pad 的並聯電容 ＋ barrel 圓柱的串聯電感」的組合。常見量級（標「約」，實際依疊構）：1.6 mm 板厚的通孔 via，barrel 電感約 1 nH 量級、pad 電容約 0.3～0.5 pF 量級。在 50 Ω 系統裡電容項通常佔上風，所以<strong>教科書答案是：via ＝ 向下的小凹陷</strong>；但若 anti-pad 開很大、又走細 barrel（電容被削、電感相對凸顯），也可能呈現向上尖刺——所以正確的說法是「看 TDR 才知道這顆 via 偏 L 還是偏 C」，這句在面試比背教科書答案加分。</p>
+<p>《Perfect Timing II》Ch.6 對 via 的提醒放在今天特別有感：via 由<strong>電鍍的顆粒狀銅（plated granular copper）</strong>構成，電阻比等長走線高；對高速訊號傷害最大的是它的<strong>電感</strong>，效果「像在路徑上加了一顆阻值隨 clock 速率上升的電阻」。書中給的緩解三招——<strong>把 via 做大（面積大＝L 與 R 都小）、外層銅電鍍加厚、把 via 填實（fill）</strong>——以及第一原則「clock 走線盡量留在同一層、能不打 via 就不打」（Perfect Timing II Ch.6）。2002 年的忠告以現代標準要補一句：現在的高速 SerDes/MIPI 換層幾乎不可避免，所以工程重點從「避免 via」轉成「<strong>優化 via</strong>」——back-drill 去 stub、緊鄰放回流 via、pad/anti-pad 調到讓 TDR 凹陷最淺。</p>
+
+<h3>5.2 via stub：凹陷之外還會「共振咬人」</h3>
+<p>訊號從表層打到內層、但 via 繼續往下穿到底層的那段「沒人用的尾巴」就是 stub。在 TDR 上它讓 via 的電容性凹陷更深更寬（尾巴＝一段開路短線＝額外電容）；更陰險的是頻域裡它是一支 λ/4 開路諧振腔，在特定頻率把訊號吸掉——這件事 TDR 曲線只給你「凹陷有點深」的暗示，完整故事等第 5 週講損耗與眼圖時算給你看。今天先記：<strong>TDR 凹陷特別深的 via，先查有沒有 stub、能不能 back-drill。</strong></p>
+
+<h3>5.3 connector：L-C 連環套的「扭波」</h3>
+<p>板對板 connector、BNC 接頭、board-to-flex 的 ZIF 座，結構上都是「引腳（L）＋焊盤與殼體（C）」交錯，TDR 上呈現<strong>先上後下（或先下後上）的一個「扭波」（wiggle）</strong>——圖 2 的 ④。健康的 connector 扭完回到基準線；<strong>回不到基準線、整段墊高</strong>就是接觸電阻劣化（氧化、插拔磨損、壓接不良）——這是純電阻性的證據，跟 L/C 的一過性尖刺本質不同。昨天你在 T 接頭上看到的小凸小凹，就是這個扭波的窮人版。</p>
+
+<h3>5.4 flex 壓接與 flex 本體：鏡頭模組 FA 的主戰場</h3>
+<p>相機模組的 flex 從 connector 到 sensor 一路上的 TDR 故事：<strong>hotbar／ACF 壓接處</strong>健康時只是個小扭波；壓接偏移或錫量不足時墊高（電阻性）；<strong>flex 彎折疲勞的裂紋</strong>初期是「間歇性向上的小台階」（裂紋讓截面變窄＝電阻＋電感升高）、完全斷裂就是衝頂的開路——而衝頂位置直接告訴你裂在補強板邊緣還是彎折區。<strong>flex 本體</strong>因為介質薄、且常為了柔軟去掉整面地（改 mesh 地或跳層參考），阻抗容易整段偏離 50 Ω——TDR 上是一段「平台」，這是設計問題不是缺陷，判讀時別跟故障混為一談。</p>
+
+<h3>5.5 「隱形殺手」：回流路徑缺口——走線沒變，阻抗變了</h3>
+<p>TDR 曲線出現一段向上平台、但你檢查走線寬度完全沒變——低頭看<strong>參考平面</strong>。《Perfect Timing II》Ch.6 講得很直白：高速訊號的回流電流走<strong>最小電感路徑</strong>＝緊貼訊號線正下方的平面；若平面上有切割（cutout）而訊號跨過它，回流被迫繞路，<strong>路徑電感增加、上升時間變慢、串擾風險上升</strong>（Perfect Timing II Ch.6）。電感增加在 TDR 上就是那段「莫名其妙的向上鼓包」。同章還警告：控阻抗走線的參考面在電源平面與地平面之間切換，「轉換處極可能造成明顯的阻抗不連續、成為反射源」——所以換層時要嘛沿同一參考面、要嘛在換層 via 旁補 stitching via／電容。<strong>TDR 是少數能「看見」回流路徑問題的量測</strong>：走線在 A 層好好的，元凶在 B 層的一個開槽。</p>
+
+<h2>6. 昨天的波形，今天一一對號入座</h2>
+<table>
+  <tr><th>昨天親眼看到的</th><th>今天的正式名字</th><th>TDR 判讀語言</th></tr>
+  <tr><td>半壓架子後補滿（開路端）</td><td>ρ = +1 的終點特徵</td><td>曲線衝頂＝開路；衝頂位置＝斷點距離</td></tr>
+  <tr><td>短路帽：步階變 2T_d 脈衝</td><td>ρ = −1 的終點特徵</td><td>曲線落底＝短路；落底位置＝短路點距離</td></tr>
+  <tr><td>50 Ω 終端器：永遠停半壓</td><td>ρ = 0，無回波</td><td>曲線貼基準線到底——<strong>TDR 看不到匹配端之後的世界</strong></td></tr>
+  <tr><td>台階角上的小凸小凹（T 接頭＋CH1 輸入）</td><td>connector 扭波＋並聯電容凹陷</td><td>圖 2 ④ 的窮人版；15 ns 邊沿把它抹平（面積不變、高度攤薄）</td></tr>
+  <tr><td>B = 1 m 時架子糊進邊沿</td><td>解析度極限 (t_r/2)×v</td><td>15 ns 邊沿的空間解析度約 1.1 m——1 m 的架子剛好在極限上</td></tr>
+  <tr><td>練習 3 的「40 ns 後向下台階」</td><td>中途短路故障定位</td><td>標準 TDR 故障報告：「4 m 處，低阻抗性缺陷」</td></tr>
+</table>
+
+<h2>7. TDR 的三個極限（會用也要知道它哪裡不行）</h2>
+<ol>
+  <li><strong>解析度極限：</strong>比 (t_r/2)×v 近的兩個不連續會糊成一團；比邊沿「窄」很多的小寄生只剩淺淺的痕跡（面積守恆、高度攤薄）。</li>
+  <li><strong>遮蔽（masking）：</strong>波每過一個不連續就損失一部分能量、且產生多重反射，所以<strong>第一個大不連續之後的讀值越來越不準</strong>——曲線後段的「地形」是被前段濾波過的版本。實務對策：兩端各打一次 TDR（從 connector 端打一次、從 sensor 端打一次），互相比對。</li>
+  <li><strong>看不穿匹配點：</strong>ρ = 0 處無回波，之後的一切對 TDR 隱形（昨天的 50 Ω 終端器實驗）。同理，串聯 AC 耦合電容在 TDR 步階下是開路牆（低頻看電容＝斷路），要看電容之後的通道得靠 TDT 或 VNA——下下週量測週再展開。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「TDR 量出來 52 Ω，所以我的板子 52 Ω」</span>
+  <p>TDR 讀值也有量測鏈問題：儀器到板子之間的<strong>治具（fixture）、探針、SMA 轉接</strong>都在曲線前段佔一段距離，它們的不連續會遮蔽後面的讀值。正規流程是先對治具做「基準（reference）／去嵌（de-embed）」，或至少知道曲線上哪一段是治具、哪一段才是待測物。昨天的教訓換個馬甲又出現：<strong>先驗量測鏈，再驗電路</strong>——TDR 也不例外。</p>
+</div>
+
+<h2>8. 實務案例：這張曲線在你未來日常的三個位置</h2>
+<ul>
+  <li><strong>NB 主機板——驗板 coupon：</strong>每批板子邊緣都有阻抗測試 coupon，板廠用 TDR 量完附報告。現在你看得懂了：報告上那條在 50 Ω ± 幾 Ω 間游走的曲線，前段的扭波是探針座、中段平坦區才是 coupon 本體讀值；規格常寫 ±10%（45～55 Ω），對應曲線縱向 ±5% 的擺動（速算式反著用）。</li>
+  <li><strong>鏡頭模組——flex 斷裂 FA：</strong>客訴「相機間歇性黑畫面」，模組拆下來用 TDR 打 MIPI 線：曲線在距 connector 約 18 mm 處衝頂＝開路，換算正好落在 flex 彎折區——不用 X-ray 海底撈針，直接指定切片位置。這是 Apple/Google camera 團隊 FA 的日常武器，也是你履歷上「SI 量測經驗」最好的深化方向。</li>
+  <li><strong>面試白板：</strong>「Here's a TDR trace of our channel — walk me through it.」給你一條有扭波、凹陷、平台、衝頂的曲線要你講故事。今天的圖 2 指紋圖鑑就是題庫；答題順序建議「從左到右、先定距離再判性質、一過性 vs 持續性分開講」。</li>
+</ul>
+
+<h2>9. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（ρ→Z 讀圖）：TDR 基準線在 1.00（正規化到入射步階），曲線某段停在 (a) 1.10 (b) 0.90 (c) 1.50。各段阻抗多少？(d) 用速算式 Z ≈ Z₀(1+2ρ) 重算 (a)(b)，跟精確值差多少？</summary>
+<p><strong>解：</strong>(a) ρ = +0.10 → Z = 50×1.1/0.9 ≈ <strong>61.1 Ω</strong>。(b) ρ = −0.10 → Z = 50×0.9/1.1 ≈ <strong>40.9 Ω</strong>。(c) ρ = +0.50 → Z = 50×1.5/0.5 = <strong>150 Ω</strong>。(d) 速算：(a) 50×1.2 = 60 Ω（差約 1.8%）、(b) 50×0.8 = 40 Ω（差約 2.2%）——ρ = 0.1 時速算已經夠準；但 (c) 速算給 100 Ω 對 150 Ω，差 33%——<strong>速算只在小偏差時可靠</strong>，ρ 超過約 ±0.2 就乖乖用精確式。</p>
+</details>
+
+<details>
+<summary>練習 2（故障定位）：相機模組 flex 的 MIPI 走線，TDR（已對治具去嵌）顯示曲線在 240 ps（來回時間）處衝頂。flex 介質的等效傳播速度約 14 cm/ns。(a) 斷點在距打入端多遠？(b) 若儀器顯示的是「單程」模式的 240 ps 呢？(c) 曲線衝頂前先有一小段「整段墊高到約 1.06」，代表什麼？</summary>
+<p><strong>解：</strong>(a) 單程 t = 120 ps；距離 = 120 ps × 0.14 mm/ps = <strong>約 16.8 mm</strong>。(b) 單程模式就不再除以 2 → <strong>約 33.6 mm</strong>——差一倍，這就是第 2 節「先確認軸定義」的實戰後果。(c) ρ = +0.06 → Z ≈ 50×1.06/0.94 ≈ 56 Ω 的持續平台：斷點前那段走線阻抗整段偏高，可能是裂紋尚未全斷（截面變窄）或該段 flex 本來就偏高阻——比對良品曲線可分辨是缺陷還是設計常態。</p>
+</details>
+
+<details>
+<summary>練習 3（尖刺面積 → 寄生值）：50 Ω 系統，TDR 曲線上有個向下的三角形凹陷：峰值 ρ = −0.08、底寬 120 ps。(a) 多餘電容約多少？(b) 這個量級像什麼實物？(c) 同一顆寄生若改用兩倍快的步階量，凹陷的峰值與面積各怎麼變？</summary>
+<p><strong>解：</strong>(a) 三角形面積 = ½ × 0.08 × 120 ps = 4.8 ps；C ≈ (2/50) × 4.8 ps = <strong>約 0.19 pF</strong>。(b) 0.2 pF 量級：一個小 via pad、一個小測試點、或 connector 單腳焊盤——都是合理嫌疑人。(c) 步階變快 → 凹陷變<strong>深而窄</strong>（峰值上升）、<strong>面積不變</strong>（C 是元件屬性）。反過來說：報告比對時若兩台儀器步階不同，比「面積換算出的 pF 數」才公平，比峰值會吵架。</p>
+</details>
+
+<details>
+<summary>練習 4（指紋辨識）：從左到右描述一條 TDR 曲線：①貼基準線 300 ps → ②向上鼓起的平台（約 1.08）持續 150 ps → ③回基準線 200 ps → ④一個先上後下的扭波 → ⑤之後整段停在 1.04 → ⑥最後衝頂。講出這條通道的故事。</summary>
+<p><strong>解：</strong>①前 300 ps 是健康的 50 Ω 走線（或治具段）。②一段約 50×1.08/0.92 ≈ 59 Ω 的高阻抗區<strong>平台</strong>（持續性＝阻抗偏移不是集總寄生）：走線變細、離參考面變遠、或<strong>跨過參考平面開槽</strong>（PT2 Ch.6 的回流缺口——走線本身可能完全沒變！）。③恢復正常。④connector 或壓接的 L-C 扭波。⑤扭完<strong>回不到基準線</strong>、整段墊高 → 接觸電阻劣化（ρ=+0.04 → 約 54 Ω，含電阻性成分）——這顆 connector 是重點嫌疑人。⑥末端開路：若線末端本應接著負載，這就是斷點；位置＝衝頂時間 ÷2 × 波速。<strong>判讀骨架：先定位、再分「一過性/持續性」、最後用回不回得到基準線抓電阻性劣化。</strong></p>
+</details>
+
+<details>
+<summary>練習 5（解析度與遮蔽）：(a) 用 35 ps 步階的 TDR（FR-4 內層 v ≈ 15 cm/ns）能分辨相距 2 mm 的兩顆 via 嗎？(b) 昨天的窮人版（t_r ≈ 15 ns）要分辨兩個不連續，至少得隔多遠？(c) 為什麼「從兩端各打一次」能對付遮蔽？</summary>
+<p><strong>解：</strong>(a) 解析度 ≈ (35 ps/2) × 0.15 mm/ps ≈ <strong>2.6 mm</strong> —— 2 mm 的兩顆 via 會開始糊在一起（勉強可見一個加深的複合凹陷），要更快的步階（如 15 ps 級）才分得乾淨。(b) (15 ns/2) × 20 cm/ns ≈ <strong>1.5 m</strong>（同軸線速度）——所以昨天 10 m/5 m 的架子清清楚楚、1 m 就糊了。(c) 遮蔽是「排在後面的讀值被前面的不連續污染」——從另一端打，原本排最後的變成排最前，讀值最乾淨；兩條曲線各信前半段，拼起來就是整條通道的可靠地圖。FA 上這叫雙端比對，flex 兩端有 connector 時是標準動作。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>TDR 判讀是 camera HW／SI 職缺的高頻考題——它同時考理論（反射）、量測素養、與 FA 直覺。先用英文口頭回答，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Explain how a TDR works, and how you would read the impedance profile of a trace from the waveform."</summary>
+<p><strong>參考答案骨架：</strong>A TDR launches a fast step — tens of picoseconds rise time — into the channel through a 50-ohm source, and samples the voltage at the launch point. What it records is the incident step plus every reflection coming back, so each point in time maps to a location along the line: distance is half the round-trip time multiplied by the propagation velocity, roughly 15 centimeters per nanosecond in FR-4. The vertical axis maps to impedance: the reflection coefficient rho is the deviation from the incident level, and Z equals Z0 times (1+rho) over (1−rho). For small deviations there's a handy shortcut — Z is about Z0 times (1+2·rho), so a 4 percent bump means roughly 54 ohms. Reading the trace: sustained plateaus mean sections of different characteristic impedance; transient spikes mean lumped parasitics — an upward spike is series inductance, a downward dip is shunt capacitance, and the area under the spike gives the actual L or C value, independent of the step speed. An open shoots to the top rail, a short drops to zero, and a matched termination just stays flat — which also means TDR can't see anything beyond a matched point. Resolution is set by the rise time: about half the rise time times velocity, so a 35-picosecond system resolves a couple of millimeters.</p>
+<p><strong>加分點：</strong>主動提 masking——"Readings get less accurate after each big discontinuity because of multiple reflections, so for a long channel I'd TDR it from both ends and trust the near half of each trace."</p>
+</details>
+
+<details>
+<summary>Q2: "A camera module intermittently loses its MIPI link after drop testing. You suspect the flex. How would you use TDR in the failure analysis, and what signatures would you look for?"</summary>
+<p><strong>參考答案骨架：</strong>First I'd characterize a known-good module to get a golden TDR trace of the flex — the fixture section, the connector wiggle, the flex plateau, and the far-end signature. Then I'd measure the failing unit and overlay. Three signatures matter. A hard open — the trace shooting to the top rail — locates a full crack; half the round-trip time times the flex's propagation velocity gives the position, typically at the bend region or the stiffener edge, and that tells me exactly where to cross-section. A partial crack shows up earlier as a localized upward step or a raised plateau — the conductor cross-section narrows, so resistance and inductance rise before it fully opens; since the failure is intermittent, I'd measure while gently flexing the module and watch the trace move, which confirms a mechanical crack rather than a connector issue. Third, at the connector I'd check whether the wiggle returns to the baseline: if the level stays shifted up after the wiggle, that's contact resistance degradation from the drop, not the flex at all. I'd also TDR from both ends, because a discontinuity near one connector masks everything behind it. The result feeds directly into corrective action: relocate the bend, add a stiffener, or respecify the connector's normal force.（考點：golden-unit 比對、間歇性故障邊彎邊量、雙端打、以及把量測結論接回設計對策——這一步是 senior 與 junior 的分水嶺。）</p>
+</details>
+
+<h2>11. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：TDR 曲線的高度怎麼換算成阻抗？小偏差速算式？</p>
+  <p class="a">A1：讀出相對入射步階的偏差 → ρ = (V−V_i)/V_i → Z = Z₀(1+ρ)/(1−ρ)。速算（|ρ|≪1）：Z ≈ Z₀(1+2ρ)，即 50 Ω 系統每偏 1% ≈ 1 Ω；ρ 超過約 ±0.2 要用精確式。基準刻度：1.0→50 Ω、1.2→75 Ω、1.33→100 Ω、2.0→開路、0→短路。</p>
+  <p class="q">Q2：電感性與電容性不連續在 TDR 上的長相？怎麼反推 L/C 值？</p>
+  <p class="a">A2：「L 上 C 下」——串聯電感＝向上尖刺（減速丘）、並聯電容＝向下凹陷（小水坑），都是一過性；整段阻抗偏移則是持續平台。反推：L ≈ 2Z₀∫ρdt、C ≈ (2/Z₀)∫|ρ|dt——用面積不用高度（高度隨步階快慢變，面積是元件屬性）。</p>
+  <p class="q">Q3：TDR 的距離換算與解析度？</p>
+  <p class="a">A3：距離 = 來回時間 ÷2 × 波速（FR-4 內層約 15 cm/ns、約 6～7 ps/mm；先確認儀器顯示的是來回還是單程）。解析度 ≈ (t_r/2)×v：35 ps 步階約 2.6 mm；15 ns 的窮人版約 1.5 m。兩個不連續比這近就糊成一團。</p>
+  <p class="q">Q4：via 在 TDR 上長什麼樣？PT2 Ch.6 給的 via 優化三招？</p>
+  <p class="a">A4：via ＝ pad/anti-pad 電容（約 0.3～0.5 pF 量級）＋barrel 電感（約 1 nH 量級），通常呈向下凹陷，anti-pad 大／barrel 細時可偏電感性；有 stub 時凹陷更深（且頻域有 λ/4 諧振，宜 back-drill）。PT2 Ch.6：via 是電鍍顆粒銅、電阻比走線高、主要傷害是電感；對策＝做大、加厚電鍍、填實；clock 盡量不換層（現代版：不可避免就優化 via＋補回流 via）。</p>
+  <p class="q">Q5：TDR 的三個極限？connector 健康與劣化的判別？</p>
+  <p class="a">A5：①解析度受步階邊沿限制；②遮蔽——第一個大不連續之後讀值漸失真（對策：兩端各打一次）；③看不穿匹配點（ρ=0 無回波；AC 耦合電容對步階是開路）。connector＝L-C 扭波：扭完回基準線＝健康；回不到基準線（整段墊高）＝接觸電阻劣化，屬電阻性、非一過性。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 10（週日）：第 2 週複習與 20 題自我測驗</strong></p>
+  <p>傳輸線週收官：Z₀ 的本質、微帶線/帶狀線幾何、反射係數、四種端接、昨天的實驗數據、今天的 TDR 判讀——20 題混合計算與判讀題，附詳解。記得把 Day 8 的量測記錄表照片翻出來，有幾題會要你對自己的實測數據下判決。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 9 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

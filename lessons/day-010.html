@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 10｜第 2 週複習與 20 題自我測驗</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 2 週・第 10 天（週日複習日）</div>
+  <h1>Day 10：第 2 週複習與 20 題自我測驗</h1>
+  <div class="meta">2026-08-02（日）｜預估時間：90 分鐘（作答 50 分＋對詳解 40 分）｜範圍：Day 4–9（傳輸線理論全週）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標與規則</span>
+  <p>傳輸線週收官。這 20 題把 Z₀、幾何、反射、端接、實驗手感、TDR 判讀六塊拼圖拼成一張完整地圖。規則：</p>
+  <ol>
+    <li><strong>先刷一輪 Day 4–9 的 Anki 卡</strong>（10 分鐘），再開始作答</li>
+    <li>拿紙筆，<strong>先寫下自己的答案再展開詳解</strong>——面試考的是「自己寫得出來」，不是「看得懂」</li>
+    <li>計算題全部手算（面試白板上沒有計算機）；<strong>把 Day 8 的量測記錄表照片翻出來</strong>，Part D 會要你對自己的實測數據下判決</li>
+    <li>每題 1 分，答對標準是「詳解裡的粗體重點你都有講到」；最後對照文末評分表決定要不要回頭重讀</li>
+  </ol>
+</div>
+
+<h2>0. 考前 3 分鐘速查表（作答時請蓋住）</h2>
+<table>
+  <tr><th>公式 / 數字</th><th>意義</th><th>出處</th></tr>
+  <tr><td>Z₀ = √(L′/C′)；FR-4 50 Ω 線約 <strong>3.3 nH/cm、1.3 pF/cm</strong></td><td>特性阻抗＝前緣充電的暫態 V/I</td><td>Day 4</td></tr>
+  <tr><td>C′ = 1/(v·Z₀)、L′ = Z₀/v</td><td>從速度與阻抗反推分布參數</td><td>Day 4</td></tr>
+  <tr><td>微帶線約 <strong>18 cm/ns</strong>、帶狀線約 <strong>15 cm/ns</strong>；50 Ω 微帶線手感 <strong>W ≈ 2H</strong></td><td>幾何決定 Z₀，Dk 決定 v</td><td>Day 5</td></tr>
+  <tr><td>ρ = (Z_L−Z₀)/(Z_L+Z₀)；τ = 1+ρ</td><td>反射與穿透；開路 +1、短路 −1、匹配 0</td><td>Day 6</td></tr>
+  <tr><td>R_S = Z₀ − R_D（串聯）；R1‖R2 = Z₀（戴維寧）</td><td>端接設計式；R_S 距 driver ≤ t_r/10 飛行時間</td><td>Day 7</td></tr>
+  <tr><td>TDR：Z = Z₀(1+ρ)/(1−ρ)；速算 Z ≈ Z₀(1+2ρ)</td><td>台階高度 → 阻抗；每偏 1% ≈ 1 Ω（50 Ω 系統）</td><td>Day 9</td></tr>
+  <tr><td>距離 = 來回時間÷2×v；解析度 ≈ (t_r/2)×v</td><td>TDR 的距離軸與空間解析度</td><td>Day 8–9</td></tr>
+  <tr><td>L ≈ 2Z₀∫ρdt、C ≈ (2/Z₀)∫|ρ|dt</td><td>尖刺「面積」反推寄生（L 上 C 下）</td><td>Day 9</td></tr>
+</table>
+
+<h2>Part A｜觀念題（Q1–Q6）</h2>
+
+<p><strong>Q1.</strong> 一條無限長的理想銅走線，從入口看進去像一顆 50 Ω 電阻——但它明明是銅、也不發熱。請解釋特性阻抗 Z₀ 的物理意義：這個「50 Ω」是誰對誰的比值？為什麼與線長無關？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>Z₀ 是訊號<strong>前緣</strong>沿線推進時「每前進一小段，就要幫那段的 C′ 充電」所看到的<strong>暫態電壓/電流比值</strong>：V/I = √(L′/C′)。它不是 DC 電阻——能量沒有變成熱，而是<strong>暫存在沿線的電場與磁場裡</strong>，跟著波前往前走。與線長無關，因為前緣任何時刻都只「看得到」自己腳下那一小段的 L′、C′——後面還有多長它不知道也不在乎。這也是 Day 4 的關鍵推論：<strong>driver 出發的瞬間只看得到 Z₀，看不到終點的負載</strong>，所以首波電壓由 R_D 與 Z₀ 分壓決定。</p>
+</details>
+
+<p><strong>Q2.</strong> 把走線線寬加倍（其他不動），Z₀ 和傳播速度 v 各怎麼變？為什麼一個大動、一個幾乎不動？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>線變寬 → 對參考面的 C′ <strong>上升</strong>、L′ <strong>下降</strong> → Z₀ = √(L′/C′) <strong>明顯下降</strong>。而 v = 1/√(L′C′)：L′C′ 的乘積由<strong>介質的 Dk 決定、不由幾何決定</strong>，一升一降近乎抵消，所以 v <strong>幾乎不變</strong>。一句話總結：<strong>幾何調阻抗、材料調速度</strong>。（實務註腳：微帶線因場一半在空氣，線寬改變會輕微影響 Dk_eff，v 有小幅變化，但量級上仍是「幾乎不變」。）</p>
+</details>
+
+<p><strong>Q3.</strong> 微帶線與帶狀線各一句話定義，然後比三件事：速度、屏蔽/串擾、同樣 50 Ω 時誰的線寬較細？各給理由。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>微帶線＝<strong>外層</strong>走線、單參考面、場一半在空氣；帶狀線＝<strong>內層</strong>走線、上下雙參考面、場全在介質。比較：①速度——微帶線約 <strong>18 cm/ns</strong> 較快（空氣拉低 Dk_eff），帶狀線約 <strong>15 cm/ns</strong>；②屏蔽——帶狀線被兩片平面夾住，串擾與 EMI 表現遠優，高速差動與 clock 優先走內層；③同 Z₀ 線寬——<strong>帶狀線更細</strong>：上下兩面「雙面計費」使 C′ 偏大，要達到同樣 Z₀ 只能把線做細。這也是 stackup 表上各層 50 Ω 線寬本來就不同的原因（Day 5）。</p>
+</details>
+
+<p><strong>Q4.</strong> 為什麼業界單端阻抗慣用 50 Ω？MIPI 差動的 100 Ω 又是從哪裡來的？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>50 Ω 是<strong>歷史折衷＋生態系鎖定</strong>：空氣介質同軸線功率承受最佳約 30 Ω、損耗最低約 77 Ω，取中間值後整個儀器/線材/接頭生態系圍繞 50 Ω 建立；在 PCB 上它也剛好落在線寬、串擾、功耗的甜蜜區。MIPI 差動 100 Ω ≈ <strong>2 × 單線奇模阻抗</strong>（每線約 50 Ω 量級）——差動對兩線各自對地約 50 Ω，差模看進去就是串聯的 100 Ω；LVDS 端接電阻 R_T = 2Z₀ 同理（Perfect Timing II Ch.7）。</p>
+</details>
+
+<p><strong>Q5.</strong> 寫出反射係數 ρ 與穿透（負載端）係數 τ 的公式與三個極端值。開路端 τ = 2——端點電壓變兩倍，這違反能量守恆嗎？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>ρ = (Z_L−Z₀)/(Z_L+Z₀)、τ = 1+ρ = 2Z_L/(Z_L+Z₀)。開路 ρ=+1、τ=2；短路 ρ=−1、τ=0；匹配 ρ=0、τ=1。<strong>不違反能量守恆</strong>：τ 是「電壓」係數不是「功率」係數——開路端<strong>電流為 0</strong>，負載吸收的功率 P = V×I = 0，入射能量全部反射回去（電壓加倍正是入射波與反射波<strong>同相疊加</strong>的結果）。把「電壓加倍」誤會成「能量加倍」是面試常見陷阱題（Day 6）。</p>
+</details>
+
+<p><strong>Q6.</strong> 四種端接（串聯／戴維寧／並聯／AC）各用一行講完：設計式、DC 功耗、最適合的場景。哪一種是 clock 電路的預設首選、為什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>①<strong>串聯</strong>：R_S = Z₀−R_D 貼著 driver 放；<strong>無 DC 功耗</strong>；點對點、負載在線末端——<strong>clock 的預設首選</strong>（Perfect Timing II Ch.7 稱其為最普遍的 clock 端接），因為省電、省面積、一顆電阻搞定。②<strong>戴維寧</strong>：R1‖R2 = Z₀（對稱時各 2Z₀）；<strong>常駐燒電</strong>（上下拉恆有電流）；終點零反射、可沿線帶多負載、上升較快（t_R = 1.1·Z₀·C vs 串聯 2.2·Z₀·C）。③<strong>並聯</strong>：末端單顆 R = Z₀ 到地；driver 拉高時持續灌電流，須驗 I_OH；結構最簡單但對 CMOS driver 負擔大。④<strong>AC</strong>：R+C 在末端；無 DC 功耗但 C（典型 10 pF 量級）要求訊號 <strong>DC 平衡</strong>（50% duty），長線與資料訊號不宜。答題加分：串聯端接的天生限制——線中途只有半壓，<strong>不能帶中段負載</strong>（Day 7）。</p>
+</details>
+
+<h2>Part B｜計算題（Q7–Q12）</h2>
+
+<p><strong>Q7.</strong> 一條內層帶狀線 Z₀ = 50 Ω、v = 15 cm/ns。反推它的 C′ 與 L′（每公分）。再回答：這兩個數字在你日常工作裡各對應什麼「體感」？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>C′ = 1/(v·Z₀) = 1/(15 cm/ns × 50 Ω) ≈ <strong>1.33 pF/cm</strong>；L′ = Z₀/v = 50/15 ≈ <strong>3.33 nH/cm</strong>（驗算：√(3.33n/1.33p) = √2500 = 50 Ω ✓）。體感：①走線每長 1 cm，driver 就要多推約 1.3 pF——<strong>長走線＝重電容負載</strong>的來源；②1 cm 走線約 3.3 nH——跟一顆 0402 電阻的寄生電感同量級，這是為什麼「接地引線多繞 2 cm」就能讓量測波形長毛（Day 8 實驗的長接地線振鈴）。</p>
+</details>
+
+<p><strong>Q8.</strong> Z₀ = 50 Ω，分別算 Z_L = 75 Ω、25 Ω、100 Ω、150 Ω 的 ρ。其中哪兩個是「心算錨點」？各對應 TDR 曲線的什麼高度（正規化到入射步階）？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>75 Ω：25/125 = <strong>+0.2</strong>（TDR 停在 1.20）；25 Ω：−25/75 = <strong>−1/3</strong>（0.67）；100 Ω：50/150 = <strong>+1/3</strong>（1.33）；150 Ω：100/200 = <strong>+0.5</strong>（1.50）。心算錨點（Day 6）：<strong>Z_L = 3Z₀ → ρ = +1/2；Z_L = Z₀/3 → ρ = −1/2</strong>；再加 100 Ω → +1/3、75 Ω → +0.2，這四個值配上開路/短路/匹配三極端，TDR 讀圖九成場景不用按計算機。</p>
+</details>
+
+<p><strong>Q9.</strong> 白板彈跳題：R_D = 25 Ω 的 driver 打 1 V 步階進 50 Ω 走線，末端開路。(a) 首波（launch）電壓？(b) 負載端前三個電壓值？(c) 這個波形的病名與危害？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) S = 1 V × 50/(50+25) = <strong>2/3 V ≈ 0.667 V</strong>。(b) 開路端電壓加倍：第一階 <strong>1.333 V</strong>；回波 0.667 V 到源端，ρ_S = (25−50)/75 = <strong>−1/3</strong> → 反射 −0.222 V，負載端變化 2×(−0.222) → 第二階 1.333 − 0.444 = <strong>0.889 V</strong>；再一輪：−0.222×(−1/3) = +0.074 V，負載 +0.148 → 第三階 <strong>1.037 V</strong>——圍著 1 V 衰減振盪。(c) 病名：<strong>振鈴（underdamped）</strong>，R_D &lt; Z₀（源太強）的特徵；每格寬 2T_d。危害：擺盪跨過 V_IH/V_IL 會造成 <strong>false trigger / double clocking</strong>——clock 訊號上這是災難級（Perfect Timing II Ch.7 的 17 Ω 算例就是同款病，數字換成 3/4 V→1.5 V→−0.375 V）。</p>
+</details>
+
+<p><strong>Q10.</strong> driver 輸出阻抗 22 Ω（IBIS 模型查得）、走線 50 Ω、t_r = 500 ps、內層走線。(a) 串聯端接電阻選多少？(b) 這顆電阻最遠可以放離 driver 多遠？(c) 放太遠會發生什麼事？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) R_S = Z₀ − R_D = 50 − 22 = <strong>28 Ω</strong>（取 E24 的 27 Ω 即可；R_D 沿 I-V 曲線變動，本來就不存在完美值）。(b) 1/10 法則（Perfect Timing II Ch.7）：driver 到 R_S 的飛行時間 ≤ t_r/10 = 50 ps → 內層 15 cm/ns × 50 ps = <strong>7.5 mm</strong>。書中 2002 年以 2 ns 邊沿舉例可放到 1.14 吋；現代 500 ps 邊沿只剩不到 8 mm——<strong>實務上＝緊貼 driver 擺</strong>。(c) 放太遠：driver–R_S 之間那段自成一條「沒端接的小傳輸線」，在 R_S 與 driver 之間多重反射，邊沿上疊出毛刺（Day 7／Day 8 實驗 3 夾線寄生毛刺的放大版）。</p>
+</details>
+
+<p><strong>Q11.</strong> 3.3 V 系統、50 Ω 走線用對稱戴維寧端接（R1 = R2 = 100 Ω），driver 的 V_OH = 3.1 V、V_OL = 0.2 V。(a) 驗證等效端接阻抗。(b) 估算 R1、R2 的功耗與這條線的總靜態功耗。(c) 這個數字對 NB 平台意味著什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) R1‖R2 = 100‖100 = <strong>50 Ω = Z₀</strong> ✓。(b) 用 Day 7 公式（高低電平各半時間）：P(R1) = [(3.3−3.1)² + (3.3−0.2)²]/(2×100) = (0.04+9.61)/200 ≈ <strong>48 mW</strong>；P(R2) = [3.1²+0.2²]/(2×100) = (9.61+0.04)/200 ≈ <strong>48 mW</strong>；合計<strong>約 0.1 W——一條線、常駐燒</strong>。(c) NB 平台上這是致命傷：10 條線就是 1 W 的待機功耗，直接吃電池續航——所以 NB 主機板上 clock 幾乎清一色用<strong>串聯端接</strong>（零 DC 功耗），戴維寧只留給「非它不可」的多負載匯流排場景。功耗，才是端接選型表上最貴的那一欄。</p>
+</details>
+
+<p><strong>Q12.</strong> TDR 判讀計算：(a) 曲線某段停在 1.08（正規化），精確式與速算式各算一次阻抗，差多少？(b) 另一處有個向下三角形凹陷：峰值 ρ = −0.06、底寬 100 ps，多餘電容約多少？像什麼實物？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 精確：Z = 50×1.08/0.92 ≈ <strong>58.7 Ω</strong>；速算：Z ≈ 50×(1+2×0.08) = <strong>58 Ω</strong>——差約 1%，ρ = 0.08 的小偏差區速算完全夠用（ρ 超過約 ±0.2 才需要精確式，Day 9 練習 1(c) 示範過 33% 的翻車）。(b) 面積 = ½×0.06×100 ps = 3 ps → C ≈ (2/50)×3 ps = <strong>0.12 pF</strong>。實物：小號 via pad、單一測試點、connector 單腳焊盤的量級。加分句：報告比對要比<strong>面積換算出的 pF 數</strong>，不比峰值——峰值隨儀器步階快慢改變，面積是元件屬性（Day 9）。</p>
+</details>
+
+<h2>Part C｜讀圖題（Q13–Q15）</h2>
+
+<p><strong>Q13.</strong> 下圖是一條通道（已對治具去嵌）的 TDR 曲線，縱軸正規化到入射步階、橫軸為<strong>來回</strong>時間。請從左到右講出 ①～⑥ 每個特徵的故事，並指出哪一個特徵「走線本身可能完全沒變」。</p>
+
+<figure>
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q13：TDR 曲線判讀（縱軸：V/V<tspan font-size="11" baseline-shift="sub">i</tspan>；橫軸：來回時間）</text>
+  <!-- axes -->
+  <line x1="70" y1="280" x2="720" y2="280" stroke="#374151" stroke-width="1.5"/>
+  <line x1="70" y1="280" x2="70" y2="50" stroke="#374151" stroke-width="1.5"/>
+  <!-- baseline 1.0 at y=200 -->
+  <line x1="70" y1="200" x2="720" y2="200" stroke="#9ca3af" stroke-dasharray="5 3" stroke-width="1.3"/>
+  <text x="64" y="204" text-anchor="end" font-size="10" fill="#0e7490" font-weight="bold">1.00（50Ω）</text>
+  <line x1="70" y1="176" x2="720" y2="176" stroke="#e5e7eb"/>
+  <text x="64" y="180" text-anchor="end" font-size="10" fill="#6b7280">1.06</text>
+  <line x1="70" y1="60" x2="720" y2="60" stroke="#e5e7eb"/>
+  <text x="64" y="64" text-anchor="end" font-size="10" fill="#6b7280">2.00（開路）</text>
+  <text x="64" y="234" text-anchor="end" font-size="10" fill="#6b7280">0.94</text>
+  <line x1="70" y1="230" x2="720" y2="230" stroke="#e5e7eb"/>
+  <!-- time ticks -->
+  <text x="70" y="298" text-anchor="middle" font-size="10" fill="#6b7280">0</text>
+  <text x="270" y="298" text-anchor="middle" font-size="10" fill="#6b7280">1 ns</text>
+  <text x="470" y="298" text-anchor="middle" font-size="10" fill="#6b7280">2 ns</text>
+  <text x="670" y="298" text-anchor="middle" font-size="10" fill="#6b7280">3 ns</text>
+  <!-- curve -->
+  <path d="M70,280 L86,280 L92,200 L200,200 L212,232 L224,200 L320,200 L328,176 L430,176 L438,200 L500,200 L512,186 L524,212 L536,184 L640,184 L648,60 L720,60" fill="none" stroke="#dc2626" stroke-width="2.6"/>
+  <!-- annotations -->
+  <text x="146" y="190" text-anchor="middle" font-size="11" fill="#374151">①貼基準線</text>
+  <text x="212" y="252" text-anchor="middle" font-size="11" font-weight="bold" fill="#0e7490">②凹陷</text>
+  <text x="379" y="164" text-anchor="middle" font-size="11" font-weight="bold" fill="#b45309">③平台 1.06（約 1 ns 寬）</text>
+  <text x="524" y="236" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">④扭波</text>
+  <text x="588" y="182" text-anchor="middle" font-size="10.5" fill="#166534">⑤扭完停在 1.04</text>
+  <text x="684" y="48" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">⑥衝頂</text>
+</svg>
+<figcaption>圖 1：待判讀的 TDR 曲線。橫軸每格 1 ns（來回時間），通道為 FR-4 內層（v ≈ 15 cm/ns）。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>①前段貼基準線＝健康的 50 Ω 走線。②一過性向下凹陷＝<strong>並聯電容</strong>（L 上 C 下）——一顆 via 或測試點；凹陷深可查有無 via stub。③<strong>持續平台</strong> 1.06 → Z ≈ 50×1.06/0.94 ≈ 56 Ω 的整段偏高：走線變細、離參考面變遠、或<strong>跨過參考平面開槽</strong>——回流被迫繞路、路徑電感上升（Perfect Timing II Ch.6）。<strong>這就是「走線本身可能完全沒變」的特徵</strong>：元凶在另一層的開槽，TDR 是少數看得見它的量測。平台寬約 1 ns（來回）→ 單程 0.5 ns × 15 cm/ns = 這段約 7.5 cm 長。④先下後上的<strong>扭波</strong>＝connector／壓接的 L-C 連環套。⑤扭完<strong>回不到基準線</strong>、整段墊高 1.04 ＝ 接觸電阻劣化（電阻性、非一過性）——這顆 connector 是頭號嫌疑人。⑥末端衝頂＝開路；位置 = 3 ns÷2×15 cm/ns = <strong>22.5 cm</strong> 處。判讀骨架：<strong>先定位、再分一過性/持續性、最後用「回不回得到基準線」抓電阻性劣化</strong>（Day 9 練習 4 的正式考版）。</p>
+</details>
+
+<p><strong>Q14.</strong> 下圖是某 clock <strong>接收端</strong>的波形（無端接、負載高阻抗、內層走線 15 cm/ns），縱軸正規化到穩態值 1、橫軸每格 2 ns。請反推：(a) driver 輸出阻抗；(b) 走線長度；(c) 這個波形對時序的具體危害。</p>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q14：接收端波形判讀（水平每格 2 ns，縱軸正規化到穩態 1）</text>
+  <!-- grid -->
+  <g stroke="#e5e7eb" stroke-width="1">
+    <line x1="70" y1="60" x2="70" y2="250"/><line x1="150" y1="60" x2="150" y2="250"/>
+    <line x1="230" y1="60" x2="230" y2="250"/><line x1="310" y1="60" x2="310" y2="250"/>
+    <line x1="390" y1="60" x2="390" y2="250"/><line x1="470" y1="60" x2="470" y2="250"/>
+    <line x1="550" y1="60" x2="550" y2="250"/><line x1="630" y1="60" x2="630" y2="250"/><line x1="710" y1="60" x2="710" y2="250"/>
+    <line x1="70" y1="60" x2="710" y2="60"/><line x1="70" y1="108" x2="710" y2="108"/>
+    <line x1="70" y1="155" x2="710" y2="155"/><line x1="70" y1="203" x2="710" y2="203"/><line x1="70" y1="250" x2="710" y2="250"/>
+  </g>
+  <!-- reference lines -->
+  <line x1="70" y1="70" x2="710" y2="70" stroke="#9ca3af" stroke-dasharray="3 4"/>
+  <text x="706" y="64" text-anchor="end" font-size="12" fill="#6b7280">穩態 1.0</text>
+  <line x1="70" y1="124" x2="710" y2="124" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <text x="714" y="128" font-size="11" fill="#dc2626">V_IH≈0.7</text>
+  <!-- staircase: steps 0.5(y=160), 0.75(y=115), 0.875(y=92.5), 0.94(y=81), each 4ns = 160px wide, start x=150 -->
+  <path d="M70,250 L150,250 L150,160 L310,160 L310,115 L470,115 L470,92 L630,92 L630,81 L710,81" fill="none" stroke="#0e7490" stroke-width="3"/>
+  <text x="230" y="180" text-anchor="middle" font-size="12" font-weight="bold" fill="#0e7490">第一階 0.50</text>
+  <text x="390" y="140" text-anchor="middle" font-size="12" fill="#0e7490">0.75</text>
+  <text x="550" y="112" text-anchor="middle" font-size="12" fill="#0e7490">0.875</text>
+  <!-- step width marker -->
+  <line x1="150" y1="264" x2="310" y2="264" stroke="#374151" stroke-width="2"/>
+  <text x="230" y="284" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">每階寬 2 格 = 4 ns</text>
+</svg>
+<figcaption>圖 2：接收端量到的階梯波，第一階為穩態值的 0.50、每階寬 4 ns。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 開路端電壓加倍 → 第一階 0.5 代表 launch 電壓 S = 0.25V。分壓式 S = Z₀/(Z₀+R_D) = 1/4 → R_D = 3Z₀ = <strong>150 Ω</strong>——<strong>弱驅動（overdamped）</strong>，正是 Perfect Timing II Ch.7 的 150 Ω 高阻抗 driver 算例：launch 1/4 V、負載第一階 1/2 V、ρ_S = +1/2 為正所以<strong>不翻面、逐波補足</strong>成階梯。(b) 每階寬 = 2T_d = 4 ns → T_d = 2 ns → 2 ns × 15 cm/ns = <strong>30 cm</strong>。(c) 危害在<strong>時序</strong>：0.5→0.75 才跨過 V_IH ≈ 0.7，接收端要等到第<strong>二</strong>階（多等 4 ns）才觸發；若門檻剛好卡在階梯附近，雜訊會讓觸發時刻在兩階之間跳動——<strong>大幅延遲＋觸發抖動</strong>，clock 甚至可能根本爬不到 V_IH（Day 6／PT2 Ch.7）。對策方向：換低阻抗 driver 或 fanout buffer，不是加端接電阻（源已經太弱，串聯端接只會更弱）。</p>
+</details>
+
+<p><strong>Q15.</strong> 相機模組 flex 的 MIPI 走線（等效 v ≈ 14 cm/ns）TDR 顯示 2.4 ns 處衝頂。(a) 若橫軸是「來回時間」，斷點距打入端多遠？(b) 若儀器其實設在「單程顯示」模式呢？(c) 若把 flex 末端先接上 50 Ω 端接排阻再量，還能看到這個斷點嗎？為什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 單程 t = 1.2 ns → 1.2 ns × 14 cm/ns = <strong>約 16.8 cm</strong>。(b) 單程模式不再除以 2 → <strong>約 33.6 cm</strong>——差一倍。<strong>先確認軸定義</strong>是 TDR 報告判讀的第一動作，開錯位置的切片/X-ray 就是這樣來的（Day 9）。(c) <strong>還是看得到</strong>——這題考觀念反著問：斷點（開路）本身就是個大反射源，端接排阻接在斷點<strong>之後</strong>根本收不到訊號。「看不穿匹配點」的正確版本是：訊號走到 ρ=0 的匹配點會被全吸收、<strong>之後</strong>的世界隱形；斷點在匹配點之前，當然照樣衝頂。如果反過來——線是好的、末端接了 50 Ω——那 TDR 曲線平坦到底，你就看不到排阻之後還接著什麼（Day 8 的 50 Ω 終端器實驗）。</p>
+</details>
+
+<h2>Part D｜實驗數據對照題（Q16–Q17）——拿出你的 Day 8 記錄表</h2>
+
+<p><strong>Q16.</strong> 對照記錄表第 1、2 列（架子寬 2T_d 與反推線長）：(a) 用你的實測架子寬與速度因子 0.66 重算一次線長，寫出計算過程。(b) 若反推結果與線材標示長度差超過 10%，列出三個最可能的嫌疑並說明各自怎麼驗證。（沒做實驗的用範例值：實測 102 ns、標示 10 m）</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 範例：單程 T_d = 102/2 = 51 ns；v = 0.66×30 = 19.8 cm/ns；長度 ≈ 51 ns × 0.198 m/ns ≈ <strong>10.1 m</strong>——與標示相符。(b) 差超過 10% 的三個嫌疑：①<strong>速度因子不準</strong>——「約 0.66」是 RG-58 類的典型值，發泡介質線材可到 0.78 以上；驗證：查線材型號 datasheet 或用已知長度的短線段校正。②<strong>游標讀點不一致</strong>——架子寬應取<strong>邊沿 50% 位準到 50% 位準</strong>；邊沿慢時憑目測讀「角落」會差好幾 ns；驗證：用示波器游標鎖 50% 重讀。③<strong>線長標示本身粗糙</strong>（捲裝線常有 ±3～5% 裕量）或量到的是含跳線/轉接的總長；驗證：把轉接段拆掉重量、或對照另一捲同型線。這種「量測值 vs 標稱值對不上時先列嫌疑清單再逐一排除」的動作，就是 FA 思維的日常肌肉（Day 8）。</p>
+</details>
+
+<p><strong>Q17.</strong> 對照記錄表第 4、5 列（人造振鈴第一峰約 1.33、串 27 Ω 後過衝 ≈ 0）：(a) 從電路推導 1.33 是怎麼來的。(b) 為什麼串 27 Ω 就能把過衝治好？(c) 你的實測第一峰若是 1.28 而不是 1.33，給出兩個合理的偏差原因。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) T 接頭鎖 50 Ω 終端器讓源端變成 50‖50 = <strong>25 Ω</strong>；launch = 50/(50+25) = 2/3；末端開路加倍 → 第一峰 4/3 ≈ <strong>1.33</strong>（正規化到穩態 1）——跟 Q9 是同一題的實驗版。(b) 25 + 27 = 52 Ω ≈ Z₀：<strong>串聯端接</strong>成立，回波到源端遇 ρ_S ≈ 0 被全吸收，一步到位、過衝 ≈ 0（R_S = Z₀ − R_D 的活教材）。(c) 偏差原因：①終端器/電阻<strong>精度</strong>——50 Ω 終端器 ±2%、碳膜電阻 ±5%，源端阻抗偏離 25 Ω 第一峰就偏離 4/3；②<strong>夾線寄生電感與示波器輸入電容</strong>把峰的尖角磨圓，游標量到的峰值偏低（尤其邊沿 15 ns 的胖步階，峰還沒完全立起來就被下一段反射疊掉）。量級對就是成功——實驗課的評分標準永遠是「趨勢與量級」，不是小數點（Day 8）。</p>
+</details>
+
+<h2>Part E｜延伸題：Perfect Timing II（Q18–Q20）</h2>
+<div class="card intuition">
+  <span class="label">白話版：為什麼是這三題</span>
+  <p>本週課程織入了《Perfect Timing II》（Cypress, 2002）的 Ch.6「PCB Layout」與 Ch.7「Clock Termination」——clock 是全板<strong>最不允許反射</strong>的訊號（一個假邊沿＝一次 false clock＝系統當機），所以 clock 的端接教材就是反射理論的最佳實戰化身。這三題把書中算例當面試題重演一次：背景知識都在題目裡，考的是你能不能<strong>用本週的工具自己把數字生出來</strong>。</p>
+</div>
+
+<p><strong>Q18.</strong> Perfect Timing II Ch.7 的經典算例：17 Ω 輸出阻抗的 clock buffer、50 Ω 走線、末端高阻抗負載（近似 1 MΩ）、驅動電壓 V。請完整走一遍：(a) launch 電壓；(b) 負載端第一個電壓與反射回源端的量；(c) 源端反射係數與第二輪修正；(d) 書中對這種波形的定性描述與工程風險。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解（Perfect Timing II Ch.7）：</strong>(a) S = V×50/(50+17) = <strong>3/4 V</strong>。(b) 負載端 A_L = 2×(3/4 V) = <strong>1.5 V</strong>（50% 過衝！）；反射 R_L = 3/4 V 全額回頭（ρ_L ≈ +1）。(c) ρ_S = (17−50)/(17+50) ≈ <strong>−1/2</strong> → 反射 −0.375 V 再奔向負載，負載端跟著往下修 0.75 V。(d) 書中描述：負載端電壓<strong>在目標值 V 上下交替擺盪、逐漸逼近 V</strong>，每個擺盪脈衝寬 = 2×走線延遲（round trip time）；風險是反射脈衝夠大時會<strong>假觸發（false trigger）</strong>負載輸入——訊號是 clock 時後果是災難性的。加分：書中實測配置為 19.8 Ω driver＋6 吋 51.7 Ω stripline，2002 年的邊沿與頻率以現代標準需上修，但「R_D &lt; Z₀ → 振鈴、每格 2T_d」的讀圖法完全不過時。</p>
+</details>
+
+<p><strong>Q19.</strong> Perfect Timing II Ch.7 說 clock「最佳實務是一律端接」，若真的不端接，走線延遲必須比上升時間快至少 6 倍（T_d &lt; t_r/6）。(a) 以書中 2002 年的 2 ns 邊沿計算內層免端接長度上限。(b) 以現代 300 ps 邊沿重算。(c) 這條規則跟 Day 1 的 1/6 法則是什麼關係？書中還補了哪一句「保險絲」？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) T_d &lt; 2 ns/6 ≈ 333 ps → 333 ps × 15 cm/ns ≈ <strong>5 cm</strong>。(b) 300 ps/6 = 50 ps → <strong>7.5 mm</strong>——2002 年還能「短線免端接」，現代邊沿下幾乎等於「只要出了 BGA 遮蔽區就要端接」，跨板 clock 一律端接。(c) 同一條物理的兩種說法：Day 1 用「線長 vs 邊沿空間長度 ℓ = v·t_r 的 1/6」，PT2 用「T_d vs t_r/6」——兩邊都在比<strong>反射來回時間與上升時間</strong>，反射在邊沿還沒爬完時回來就被淹沒。保險絲：書中要求<strong>所有 clock 走線都要跑 IBIS 或 SPICE 模擬驗證端接</strong>（Perfect Timing II Ch.7）——rule of thumb 用來畫第一版，簽核靠模擬。</p>
+</details>
+
+<p><strong>Q20.</strong> Perfect Timing II Ch.6 的兩個 layout 警告：(a) via 對高速訊號的傷害本質是什麼？書中給的三招緩解與第一原則？2002 年的忠告放到今天要怎麼改寫？(b) 「走線沒改、TDR 卻出現一段向上鼓包」——用 Ch.6 的回流路徑觀念解釋，並說出兩個 layout 對策。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) via 由<strong>電鍍顆粒狀銅</strong>構成、電阻比等長走線高，但主要傷害是<strong>電感</strong>——效果像一顆「阻值隨 clock 速率上升的電阻」。三招：<strong>把 via 做大、外層電鍍加厚、把 via 填實</strong>；第一原則：<strong>clock 盡量同層走完、能不打 via 就不打</strong>（Perfect Timing II Ch.6）。現代改寫：高速 SerDes/MIPI 換層難以避免，重點從「避免 via」變成「<strong>優化 via</strong>」——back-drill 去 stub、換層處緊鄰補回流 via／stitching 電容、調 pad/anti-pad 讓 TDR 凹陷最淺。(b) 高速回流走<strong>最小電感路徑</strong>＝緊貼訊號線正下方的參考面；平面有開槽而訊號跨過時回流被迫繞路 → 路徑電感上升、該段等效 Z₀ 上升 → TDR 上是<strong>持續的向上平台</strong>，走線本身完全沒變（Ch.6 同時警告參考面在電源/地平面間切換處「極可能成為明顯阻抗不連續＝反射源」）。對策：①改走線繞開開槽、或把開槽補回；②換層/換參考面處補 stitching via（同為地）或旁路電容（地↔電源），給回流一條短路徑。這是 Q13 特徵③的設計端答案——TDR 幫你「看見」B 層的開槽。</p>
+</details>
+
+<h2>評分與行動</h2>
+<div class="card takeaway">
+  <span class="label">評分表</span>
+  <ul>
+    <li><strong>17–20 分</strong>：傳輸線這關過了，這是 SI 面試的最大題倉。明天放心進第 3 週的 stub 效應。把答錯的題做成 Anki 卡。</li>
+    <li><strong>13–16 分</strong>：過關。把錯題對應的課回去重讀（速查表右欄有出處），特別注意 Part C 的讀圖——面試給的永遠是圖不是公式。</li>
+    <li><strong>9–12 分</strong>：Day 6（反射）與 Day 7（端接）花一小時重讀，這兩天是全週的脊椎；明晚重考本卷 Part B、C。</li>
+    <li><strong>&lt; 9 分</strong>：停下來。第 3 週的 stub、第 4 週的串擾、第 5 週的眼圖全部蓋在「反射」這根柱子上。Day 4–7 完整重讀、Anki 全刷，寧可慢兩天。</li>
+  </ul>
+  <p>另提醒：Day 8 的實驗若還沒做（或記錄表有空格），<strong>下週找一天午休帶去公司補做</strong>——Part D 兩題你只能用範例值作答的話，手感這一塊還是零。</p>
+</div>
+
+<h2>今日 Anki 卡片（第 2 週總結卡）</h2>
+<div class="anki">
+  <p class="q">Q1：第 2 週的一句話總綱？</p>
+  <p class="a">A1：訊號前緣只看得到腳下的 Z₀=√(L′/C′)（幾何調阻抗、材料調速度）；撞上阻抗變化就按 ρ=(Z_L−Z₀)/(Z_L+Z₀) 反射；端接的本領就是把某一端做成 ρ=0；TDR 則反過來利用反射，把整條通道的阻抗畫成地形圖。</p>
+  <p class="q">Q2：五個必背數字：FR-4 內外層速度、50 Ω 線的 L′C′、微帶線 50 Ω 手感？</p>
+  <p class="a">A2：帶狀線約 15 cm/ns、微帶線約 18 cm/ns；約 3.3 nH/cm 與 1.3 pF/cm（C′=1/(vZ₀)、L′=Z₀/v）；W ≈ 2H。</p>
+  <p class="q">Q3：接收端看到「振鈴」vs「階梯」各代表什麼？一格寬度是什麼？</p>
+  <p class="a">A3：振鈴＝R_D＜Z₀（源太強，ρ_S 為負、交替翻面）；階梯＝R_D＞Z₀（源太弱，ρ_S 為正、逐波補足，危害是延遲與觸發抖動）；一格寬＝2T_d，可反推線長（PT2 Ch.7 的 17 Ω／150 Ω 兩算例）。</p>
+  <p class="q">Q4：端接選型 30 秒版？</p>
+  <p class="a">A4：點對點 clock → 串聯 R_S=Z₀−R_D 貼 driver（≤t_r/10 飛行時間）、零 DC 功耗；多負載匯流排 → 戴維寧 R1‖R2=Z₀（代價：一條線約 0.1 W 量級常駐功耗，NB 上很傷）；DC 平衡訊號可用 AC 端接；一律 IBIS/SPICE 模擬簽核（PT2 Ch.7）。</p>
+  <p class="q">Q5：TDR 判讀四步骨架？</p>
+  <p class="a">A5：①先確認橫軸是來回還是單程（距離=來回÷2×v）；②高度→ρ→Z（速算每偏 1%≈1 Ω）；③分「一過性尖刺」（L 上 C 下，比面積反推 L/C）與「持續平台」（阻抗偏移，含回流開槽）；④扭波回不回得到基準線＝connector 接觸電阻健康度。極限：解析度 (t_r/2)v、遮蔽（雙端各打一次）、看不穿匹配點。</p>
+</div>
+
+<h2>明日預告</h2>
+<div class="card">
+  <p><strong>Day 11（週一）：stub 效應——掛在線上的每一小段，都在偷你的邊沿</strong></p>
+  <p>第 3 週正式進入反射實戰。走線分岔出去接測試點、bifurcated trace 一驅二、via 穿層留下的尾巴——這些「一小段沒人走的線」統統叫 stub。明天算給你看：為什麼 stub 短的時候只是一顆電容（邊沿變鈍），長到某個門檻就變成 λ/4 諧振腔（特定頻率整個被吸掉）；門檻在哪、怎麼量、layout 上怎麼躲。Day 9 埋的「via stub 凹陷特別深」伏筆，明天正式收割。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 10 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 2/6）｜週日複習日</span>
+</footer>
+
+</div>
+</body>
+</html>

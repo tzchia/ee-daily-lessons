@@ -1,10 +1,11 @@
 {
-  "current_day": 10,
-  "current_week": 2,
+  "current_day": 11,
+  "current_week": 3,
   "phase": 1,
-  "last_lesson_date": "2026-08-02",
-  "last_topic": "Day 10（週日複習日）：第 2 週複習與 20 題自我測驗附詳解——範圍 Day 4–9 傳輸線理論全週：Z₀ 本質、微帶線/帶狀線、反射係數、四種端接、Day 8 實驗數據判讀、TDR 讀圖；含兩題 TDR/接收端波形 SVG 讀圖題與三題 PT2 Ch.6/Ch.7 延伸題",
-  "next_day": 11,
-  "next_topic": "Day 11（週一新觀念課，第 3 週反射實戰開始）：stub 效應——分支走線/測試點/bifurcated trace 的電容性負載模型、stub 何時從『一顆電容』變『λ/4 開路諧振腔』（f = v/4ℓ 推導與量級計算）、t_r/6 stub 長度門檻、via stub 深挖與 back-drill（收 Day 9 伏筆）、layout 對策；對應 PT2 Ch.6（daisy-chain vs 分支）與 Ch.7（多負載三條路的深化）",
-  "notes": "Day10（2026-08-02 週日）已考：20 題測驗涵蓋 Day4-9。Part A 觀念（Z₀ 暫態 V/I 與線長無關、線寬加倍→Z₀ 降 v 不變『幾何調阻抗材料調速度』、微帶 vs 帶狀三比較、50Ω 歷史折衷＋MIPI 100Ω=2×奇模、τ=2 不違反能量守恆〔I=0 故 P=0〕、四種端接一行版＋clock 首選串聯）；Part B 計算（反推 C′≈1.33pF/cm L′≈3.33nH/cm 與體感、ρ 心算錨點 75/25/100/150Ω、R_D=25Ω 開路振鈴前三值 1.333/0.889/1.037、R_S=28Ω＋1/10 法則現代版 7.5mm、戴維寧 100+100 功耗約 0.1W/線→NB 選串聯的真正理由、TDR 速算 vs 精確 1% 差＋凹陷面積 0.12pF）；Part C 讀圖（六特徵 TDR 曲線完整判讀含回流開槽平台＋connector 墊高、接收端 0.5 階梯波反推 R_D=150Ω 線長 30cm＝PT2 Ch.7 弱驅動算例、flex 斷點 16.8cm＋單程/來回陷阱＋『斷點在匹配點之前照樣看得到』反向觀念題）；Part D 對照 Day8 記錄表（線長反推偏差三嫌疑清單、人造振鈴 1.33 推導＋27Ω 治振鈴＋實測 1.28 偏差原因）；Part E PT2 延伸（Ch.7 17Ω 算例完整走一遍 3/4V→1.5V→−0.375V、T_d<t_r/6 免端接 2ns→5cm vs 現代 300ps→7.5mm＋『所有 clock 線 IBIS/SPICE 模擬』、Ch.6 via 三招＋回流開槽 TDR 平台與兩對策）。明日 Day11 進第 3 週：stub 效應（電容負載 vs λ/4 諧振、f=v/4ℓ、via stub/back-drill 收割 Day9 伏筆）。已引用 PT2 章節累計：Ch2、Ch3、Ch6（via 三招＋回流路徑/參考面切換；crosstalk/guard trace 留週4）、Ch7（單端端接用畢，多負載/差動部分留 Day11 與週4）、Ch11（量測鏈 RSS；探棒負載留週6）。學員注意事項：白話優先規則（intuition 卡先行）持續有效；實作日排週五；Day 8 實驗若未完成需在平日補做。"
+  "last_lesson_date": "2026-08-03",
+  "last_topic": "Day 11（週一新觀念課，第 3 週反射實戰開始）：stub 效應——四種 stub（T 型分支/測試點/via stub/bifurcated trace）、短 stub＝電容 C≈t_d/Z₀（1 ps≈0.02 pF@50Ω）、t_r/6 門檻（PT2 Ch.7）與時代換算（2 ns→5 cm vs 150 ps→約 4 mm）、λ/4 開路諧振 Z_in=−jZ₀/tan(βℓ)、f₀=v/4ℓ 與奇數倍諧波、via stub 三解法（back-drill/盲埋孔/層安排）收 Day 9 伏筆、PT2 Ch.7 多負載三條路（合併電容/雙線雙電阻 R_D+R_S1∥R_S2=Z₀/2/fanout buffer）＋bifurcated trace t_r/10 規則、stub 三宗罪（電容/陷波/EMI 駐波天線 PT2 Ch.6）",
+  "next_day": 12,
+  "next_topic": "Day 12（週二新觀念課）：connector 不連續——板對板 connector/ZIF 座/SMA launch 的 L-C 等效模型、Day 9 扭波指紋的內部結構、pad 過渡與參考層掏空補償、launch 設計、鏡頭模組 BTB connector 選型眉角、connector 引腳尾巴＝stub 的延伸應用；視內容需要可回引 PT2 Ch.6（回流路徑/參考面）",
+  "notes": "Day11（2026-08-03 週一）已教：stub 效應完整一課。①stub 圖鑑四種：T 型分支（互為對方 stub）、測試點分支、via stub（唯一不畫也存在）、bifurcated trace（PT2 Ch.7 點名應避免）；②短 stub＝並聯電容 C≈t_d/Z₀，心算 1 ps≈0.02 pF@50Ω，例：5 mm 測試分支≈0.6 pF＋pad≈1 pF；③t_r/6 門檻（PT2 Ch.7『stub 延遲須比 t_r 快六倍』）＋時代換算表（2 ns→5 cm、1 ns→2.5 cm、100～150 ps→2.5～4 mm）＋『規則不變數字要重算』觀念；④λ/4 諧振：來回 2ℓ=λ/2 反相抵銷、Z_in=−jZ₀/tan(βℓ)、βℓ=π/2 時開路變短路、f₀=v/4ℓ＋奇數倍諧波梳狀 notch、量級表（25 mm→1.5 GHz、1.6 mm 板 via stub→27 GHz 量級、3 mm 厚板→12 GHz 量級）；⑤via stub 三解法：back-drill（殘留約 0.2～0.3 mm）、盲埋孔 HDI、層安排（高速線走近打入面）——收割 Day 9 伏筆；⑥PT2 Ch.7 多負載三條路：路1 合併電容（t_R=2.2ZC、Fig 7.12 實例 19.8Ω driver＋31.9Ω 串阻＋6 吋 51.7Ω 帶狀線＋負載距 1 吋）、路2 雙線雙電阻 R_D+R_S1∥R_S2=Z₀/2＋三坑（Z₀/2<R_D 無解、須等長、共用段<t_r/10 否則 bifurcated）、路3 fanout buffer（NB clock 樹的 33Ω 排阻）、番外 daisy-chain/fly-by vs T 型星狀；⑦stub 三宗罪含 EMI 駐波天線（PT2 Ch.6 λ/4 整數倍駐波輻射）；⑧實務：NB 高速線 inline pad 測試點政策、鏡頭模組 flex MIPI lane 誤開 pad 案例；練習 5 題（stub 電容/門檻換算/陷波頻率/PT2 路 2 電阻設計含三負載無解/via stub 綜合含 back-drill 後 f₀）；面試題 2（via stub 完整敘事、4.5 Gbps MIPI 測試點談判）。明日 Day12：connector 不連續（L-C 模型、掏空補償、launch、BTB 選型；connector 引腳尾巴＝stub 延伸）。已引用 PT2 章節累計：Ch2、Ch3、Ch6（via 三招＋回流路徑＋本日新增 λ/4 駐波 EMI 天線；crosstalk/guard trace 留週4）、Ch7（單端端接＋本日多負載/stub 門檻/bifurcated 全數用畢；差動 LVDS/LVPECL 端接留週4）、Ch11（量測鏈 RSS；探棒負載留週6）。學員注意事項：白話優先規則持續有效；實作日排週五（本週五 Day15 應出 stub/反射相關實驗指引，可用公司示波器＋訊號產生器做分支線 vs 直線對比實驗）；Day 8 實驗若未完成需平日補做。",
+  "pt2_chapters_cited": ["Ch2", "Ch3", "Ch6", "Ch7", "Ch11"]
 }

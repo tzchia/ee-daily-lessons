@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 11｜Stub 效應——那根「沒人用的分岔」如何從一顆小電容變成吃訊號的諧振腔</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 11 天（週一新觀念課）</div>
+  <h1>Day 11：Stub 效應——那根「沒人用的分岔」如何從一顆小電容變成吃訊號的諧振腔</h1>
+  <div class="meta">2026-08-03（一）｜預估學習時間：90 分鐘｜難度：★★★★☆（用到 Day 6 反射＋Day 9 TDR＋一點點新的頻域思維）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>第 3 週「反射實戰」正式開跑。Day 9 留了一個伏筆——「TDR 凹陷特別深的 via，先查有沒有 stub」——今天整根拔起來講清楚。讀完你要能夠：</p>
+  <ol>
+    <li>一眼認出板子上四種常見 stub：<strong>分支走線、測試點、via stub、bifurcated trace</strong>，並知道它們電氣上是同一種東西</li>
+    <li>掌握 stub 的雙面人格：<strong>短的時候是一顆電容</strong>（C ≈ t<sub>d</sub>/Z₀），<strong>長的時候是 λ/4 開路諧振腔</strong>（f₀ = v/4ℓ），並會算兩種情況的量級</li>
+    <li>背下並會活用 stub 長度門檻：<strong>stub 的延遲 &lt; t_r/6 才能當集總電容看</strong>（Perfect Timing II Ch.7 原則）——以及為什麼 2002 年的 2.5 cm 到今天縮成幾 mm</li>
+    <li>把 via stub 與 back-drill 的完整故事講給面試官聽：stub 哪來的、諧振頻率怎麼算、back-drill/盲埋孔/換層策略怎麼選</li>
+    <li>會用 PT2 Ch.7 的「多負載三條路」決策：兩負載夠近當一顆電容、拉兩條各自端接的線（小心 bifurcated trace）、或乾脆上 fanout buffer</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：Day 9 埋的那根刺</h2>
+<p>Day 9 講 via 指紋時說過：訊號從表層打到內層後，via 繼續往下穿到底層的那段「沒人用的尾巴」叫 stub，它讓 TDR 凹陷更深，而且「頻域裡它是一支 λ/4 開路諧振腔，在特定頻率把訊號吸掉」。當時只給了預告；今天把數學、量級、layout 對策一次補齊。而且 stub 不只藏在 via 裡——<strong>板面上每一根分岔出去卻沒有端接的短線，都是 stub</strong>。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：水管上的死巷</span>
+  <p>把訊號線想成一條水管、訊號是水鎚波。主水管從 A 通到 B 一路順暢；但如果中途有人接了一小段<strong>通往死巷的支管</strong>（末端封死＝電路的開路），水鎚波經過岔口時會分一股進支管、撞到封死的底、再彈回來岔口——<strong>晚了一步才歸隊的回波，跟主流疊在一起，把原本乾淨的波形攪渾</strong>。支管很短的時候，回波幾乎立刻歸隊，只是讓岔口「多吞了一小口水」（＝多了一點電容，邊沿變鈍一點）；支管夠長的時候，回波跟主流剛好差半拍，<strong>某些特定節奏的水鎚會被它完全抵銷</strong>——這就是諧振。今天整堂課就是在算「支管多短算短、多長算災難、剛好多長最致命」。</p>
+</div>
+
+<h2>1. Stub 圖鑑：板子上的四種死巷</h2>
+<p>Stub 的正式定義：<strong>從訊號主路徑分岔出去、末端沒有端接（通常開路）的一段傳輸線</strong>。四種常見長相：</p>
+<ol>
+  <li><strong>分支走線（branch / T 型分岔）：</strong>一個 driver 想同時餵兩個接收端，layout 圖省事直接開個 T 字。兩段分岔互為對方的 stub。這是 PT2 Ch.7 花最多篇幅警告的型態（第 5 節細講）。</li>
+  <li><strong>測試點（test point）：</strong>為了 ICT/量測方便，從高速線上岔一小段線出去接個圓 pad。pad＋那段短線就是一根 stub——NB 主機板上最常見、也最常被 SI 工程師跟測試工程師吵架的東西。</li>
+  <li><strong>via stub：</strong>Day 9 的老朋友。訊號從 L1 走到 L3，但通孔 via 一路鑽到 L8——L3 到 L8 那段 barrel 是垂直方向的 stub。你沒畫它，但它就在那裡，<strong>是唯一「不畫也會存在」的 stub</strong>。</li>
+  <li><strong>bifurcated trace（分岔端接線）：</strong>PT2 Ch.7 點名的特例——用兩顆串聯電阻端接兩條分支時，若「driver 到電阻」那段共用線太長，它自己變成一段傳輸線，電阻端接點以前的分岔結構照樣反射（Perfect Timing II Ch.7：「應避免」）。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Stub 圖鑑：四種長相，同一種本質——「分岔出去的開路短線」</text>
+  <!-- 1 branch -->
+  <text x="40" y="58" font-size="12.5" font-weight="bold" fill="#dc2626">① T 型分支</text>
+  <line x1="40" y1="90" x2="180" y2="90" stroke="#374151" stroke-width="3"/>
+  <line x1="180" y1="90" x2="300" y2="90" stroke="#374151" stroke-width="3"/>
+  <line x1="180" y1="90" x2="180" y2="140" stroke="#dc2626" stroke-width="3"/>
+  <rect x="24" y="82" width="16" height="16" fill="#0e7490"/>
+  <rect x="300" y="82" width="16" height="16" fill="#16a34a"/>
+  <rect x="172" y="140" width="16" height="16" fill="#16a34a"/>
+  <text x="32" y="76" text-anchor="middle" font-size="10" fill="#0e7490">Drv</text>
+  <text x="308" y="76" text-anchor="middle" font-size="10" fill="#16a34a">RX1</text>
+  <text x="210" y="152" font-size="10" fill="#16a34a">RX2</text>
+  <text x="150" y="128" text-anchor="end" font-size="10" fill="#dc2626">互為對方的 stub</text>
+  <!-- 2 test point -->
+  <text x="420" y="58" font-size="12.5" font-weight="bold" fill="#b45309">② 測試點</text>
+  <line x1="420" y1="90" x2="700" y2="90" stroke="#374151" stroke-width="3"/>
+  <line x1="560" y1="90" x2="560" y2="122" stroke="#b45309" stroke-width="3"/>
+  <circle cx="560" cy="132" r="10" fill="none" stroke="#b45309" stroke-width="3"/>
+  <text x="586" y="136" font-size="10" fill="#b45309">TP pad（短線＋pad ＝ stub）</text>
+  <!-- 3 via stub cross-section -->
+  <text x="40" y="205" font-size="12.5" font-weight="bold" fill="#7c3aed">③ via stub（剖面圖）</text>
+  <line x1="40" y1="240" x2="150" y2="240" stroke="#374151" stroke-width="3"/>
+  <text x="90" y="232" text-anchor="middle" font-size="9.5" fill="#374151">L1 進</text>
+  <line x1="150" y1="240" x2="150" y2="280" stroke="#374151" stroke-width="5"/>
+  <line x1="150" y1="280" x2="300" y2="280" stroke="#374151" stroke-width="3"/>
+  <text x="225" y="272" text-anchor="middle" font-size="9.5" fill="#374151">L3 出（訊號真正的路）</text>
+  <line x1="150" y1="280" x2="150" y2="360" stroke="#7c3aed" stroke-width="5"/>
+  <text x="162" y="330" font-size="10" fill="#7c3aed">L3→L8：沒人用的尾巴 ＝ stub</text>
+  <line x1="120" y1="240" x2="120" y2="360" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="330" y1="240" x2="330" y2="360" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="125" y="372" font-size="9" fill="#9ca3af">板厚方向</text>
+  <!-- back-drill hint -->
+  <path d="M150,362 L142,378 L158,378 Z" fill="#16a34a"/>
+  <text x="168" y="380" font-size="10" fill="#16a34a">back-drill：從板底把尾巴鑽掉（第 4 節）</text>
+  <!-- 4 bifurcated -->
+  <text x="420" y="205" font-size="12.5" font-weight="bold" fill="#0e7490">④ bifurcated trace（PT2 Ch.7 點名要避免）</text>
+  <rect x="404" y="252" width="16" height="16" fill="#0e7490"/>
+  <line x1="420" y1="260" x2="530" y2="260" stroke="#dc2626" stroke-width="3"/>
+  <text x="475" y="250" text-anchor="middle" font-size="9.5" fill="#dc2626">共用段太長＝問題根源</text>
+  <line x1="530" y1="260" x2="560" y2="235" stroke="#374151" stroke-width="2.5"/>
+  <line x1="530" y1="260" x2="560" y2="285" stroke="#374151" stroke-width="2.5"/>
+  <rect x="560" y="228" width="22" height="12" fill="#f59e0b"/>
+  <rect x="560" y="280" width="22" height="12" fill="#f59e0b"/>
+  <text x="596" y="238" font-size="9.5" fill="#b45309">R_S1</text>
+  <text x="596" y="290" font-size="9.5" fill="#b45309">R_S2</text>
+  <line x1="582" y1="234" x2="690" y2="215" stroke="#374151" stroke-width="2.5"/>
+  <line x1="582" y1="286" x2="690" y2="305" stroke="#374151" stroke-width="2.5"/>
+  <rect x="690" y="208" width="14" height="14" fill="#16a34a"/>
+  <rect x="690" y="298" width="14" height="14" fill="#16a34a"/>
+  <text x="470" y="330" font-size="10" fill="#374151">規則：driver→電阻的共用段延遲須 &lt; t_r/10，</text>
+  <text x="470" y="346" font-size="10" fill="#374151">否則共用段自己變傳輸線、電阻前就反射（PT2 Ch.7）</text>
+</svg>
+<figcaption>圖 1：四種 stub。共同點：訊號的一部分會跑進去、撞到開路末端、再彈回來晚一步歸隊。差別只在「多晚」——這決定它是電容還是諧振腔。</figcaption>
+</figure>
+
+<h2>2. 短 stub 的人格：一顆電容</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：先懂結論再看公式</span>
+  <p>支管很短的時候，水鎚波「進去→撞底→彈回」只花一眨眼，回波幾乎跟主流同時到——效果上就是岔口那裡「多吞一口水才走得動」。電路語言：<strong>短 stub ＝ 掛在主線上的一顆並聯小電容</strong>。它做三件壞事：①讓當地阻抗瞬間變低（Day 9 的 TDR 向下凹陷，「小水坑」）；②把經過的邊沿充電拖慢（t_r 變鈍）；③產生一個小反射打回 driver。多短算短？門檻就是下一節的 t_r/6。公式看不懂可以先跳過，記住「<strong>短 stub＝一顆 C，長度換算成 pF 的方法是：走完 stub 要幾 ps，除以 50</strong>」就夠用。</p>
+</div>
+
+<p>一段長 ℓ、特性阻抗 Z₀ 的開路短線，低頻下看進去就是它的總電容（Day 4 教過：傳輸線本質是一串 L′C′；末端開路、線又短時 L′ 不起作用，剩下 C′ 全掛在岔口）：</p>
+<div class="formula">C_stub ≈ ℓ × C′ = t_d / Z₀　（t_d ＝ 訊號走完 stub 的單程延遲）</div>
+<p><em>白話翻譯：stub 越長、或 stub 的阻抗越低（線越寬），這顆隱形電容越大。50 Ω 系統心算法：每 1 ps 的 stub 延遲 ≈ 0.02 pF。</em></p>
+<p>代量級（FR-4 表層約 6 ps/mm、內層約 6～7 ps/mm）：一根 <strong>5 mm 的測試點分支</strong>（含 pad）在 50 Ω 線上：t_d ≈ 30 ps → C ≈ 30/50 = <strong>0.6 pF</strong>，再加測試 pad 本身約 0.2～0.5 pF 量級——合計接近 1 pF。掛在 1 GHz 級的訊號上，這顆「免費電容」的容抗只剩百餘 Ω 量級，足以在 TDR 上挖出一個明顯凹陷、在眼圖上咬掉一口。這正是 Day 9 練習 3 那個「0.19 pF 凹陷」的親戚——現在你知道嫌疑人名單為什麼永遠有「測試點」了。</p>
+
+<div class="card takeaway">
+  <span class="label">和 Day 7 的容性負載連起來</span>
+  <p>Day 7 講端接時說過接收端輸入電容會把 t_r 拖慢（t_R = 2.2·Z·C 的 RC 充電式，PT2 Ch.7 同式）。短 stub 的效果完全同型：<strong>它就是一顆你沒畫在原理圖上的 C</strong>。差別是接收端的 C 是 datasheet 白紙黑字，stub 的 C 是 layout 送你的「驚喜」。SI 檢查清單裡「找出所有隱形電容」這一條，stub 永遠排前三。</p>
+</div>
+
+<h2>3. 門檻線：t_r/6——短電容與長災難的分界</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：回波「趕不趕得上邊沿」</span>
+  <p>判斷 stub 是「一顆電容」還是「一段會鬧事的傳輸線」，標準跟 Day 1 判斷「要不要當傳輸線」一模一樣：<strong>比的是回波的來回時間 vs 邊沿的上升時間</strong>。邊沿還在爬坡的途中，stub 的回波就已經來回好幾趟、把自己攤平在邊沿裡＝看起來只是邊沿鈍一點（電容人格）；邊沿都爬完了回波才姍姍來遲＝波形上多出一個獨立的階梯或凹陷（傳輸線人格，開始鬧事）。</p>
+</div>
+
+<p>《Perfect Timing II》Ch.7 給的工程門檻很明確：<strong>「stub 的走線延遲必須比訊號上升時間快六倍」</strong>——即：</p>
+<div class="formula">t_stub（單程延遲） &lt; t_r / 6　⟹　ℓ_max ≈ (t_r / 6) × v</div>
+<p><em>白話翻譯：邊沿爬完的時間裡，回波至少要能來回跑三趟，才能「攤平在邊沿裡」被當成一顆電容。（Perfect Timing II Ch.7：這讓過渡中的訊號能在 stub 上快速來回傳播、看起來像單一脈衝。）</em></p>
+<p>代數字感受時代差（FR-4 內層 v ≈ 15 cm/ns）：</p>
+<table>
+  <tr><th>訊號世代</th><th>t_r</th><th>ℓ_max = (t_r/6)×v</th><th>意義</th></tr>
+  <tr><td>2002 年 PT2 時代的 clock</td><td>約 2 ns</td><td>約 5 cm</td><td>測試點、短分支隨便開，幾乎無感</td></tr>
+  <tr><td>百 MHz 級 LVCMOS（今日低速線）</td><td>約 1 ns</td><td>約 2.5 cm</td><td>一般測試點仍安全</td></tr>
+  <tr><td>MIPI D-PHY HS / 高速 SerDes</td><td>約 100～150 ps 量級</td><td><strong>約 2.5～4 mm</strong></td><td>連一個像樣的測試點分支都塞不下——所以高速線上「不開分支測試點」是鐵律</td></tr>
+</table>
+<p>這張表就是「2002 年的忠告以現代標準需上修」的最好例子：書中的規則（t_r/6）<strong>本身不過時</strong>，過時的是當年的 t_r——邊沿快了一個數量級，允許的 stub 就縮短一個數量級。面試時把「規則不變、數字要重算」這個觀念講出來，比背任何一個 mm 數都加分。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「我的 clock 才 100 MHz，stub 沒差吧？」</span>
+  <p>Day 1 就打過的疫苗再打一次：<strong>鬧事的是邊沿（t_r），不是頻率</strong>。100 MHz 的 clock 若由現代 buffer 驅動，t_r 可能只有幾百 ps——stub 門檻照樣是 mm 級。頻率只決定「多久撞一次牆」，t_r 決定「撞牆時多痛」。</p>
+</div>
+
+<h2>4. 長 stub 的人格：λ/4 開路諧振腔</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：盪鞦韆盪到剛好抵銷</span>
+  <p>stub 一旦超過門檻，就要用頻域的眼光看它。關鍵畫面：訊號的某個頻率成分走到岔口，一份直行、一份進 stub。進 stub 的那份走到開路末端、原封不動反彈（Day 6：開路 ρ = +1）、回到岔口——<strong>一來一回多走了 2ℓ 的路</strong>。如果這 2ℓ 剛好等於<strong>半個波長</strong>，回波跟主流<strong>正好反相（差 180°）</strong>，在岔口把該頻率的訊號抵銷掉一大塊——像你在鞦韆盪到最高點時反方向推一把，能量互相打架。2ℓ = λ/2 換句話說就是 <strong>ℓ = λ/4</strong>，所以叫「λ/4（四分之一波長）諧振」。結論一句話：<strong>每根長 stub 都自帶一個「吸收特定頻率」的陷阱，陷阱頻率 f₀ = v/(4ℓ)——stub 越長，陷阱頻率越低、越容易咬到你的訊號</strong>。公式推導看不懂沒關係，f₀ = v/4ℓ 這條要會算。</p>
+</div>
+
+<h3>4.1 數學：開路 stub 的輸入阻抗</h3>
+<p>用 Day 6 的相量觀點，長 ℓ 的開路傳輸線從岔口看進去的輸入阻抗是（無損近似）：</p>
+<div class="formula">Z_in = −j Z₀ / tan(βℓ)　，其中 β = 2πf / v</div>
+<p><em>白話翻譯：這條式子是「stub 在不同頻率下扮演什麼元件」的劇本——tan 很小（低頻/短線）時 Z_in 是很大的容抗＝一顆小電容（第 2 節的人格）；隨頻率升高容抗變小；當 βℓ = π/2（即 ℓ = λ/4）時 tan → ∞，<strong>Z_in = 0——開路的 stub 從岔口看進去竟然是短路！</strong></em></p>
+<div class="formula">諧振（陷波）頻率：f₀ = v / (4ℓ)　；奇數倍諧波 3f₀、5f₀… 同樣中招</div>
+<p>「開路變短路」就是 λ/4 諧振最反直覺、也最致命的一點：在 f₀ 附近，岔口等於被一根隱形短路棒接地，該頻率成分被大量反射＋吸收，通道的 S21（穿透）曲線在 f₀ 挖出一個深谷（notch）。訊號的頻譜（Day 2：頻寬 ≈ 0.35/t_r）只要有能量落在谷裡，眼圖就塌。</p>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">λ/4 諧振：回波多走 2ℓ ＝ 半個波長 → 反相抵銷 → S21 深谷</text>
+  <!-- left: mechanism -->
+  <line x1="50" y1="110" x2="360" y2="110" stroke="#374151" stroke-width="3"/>
+  <line x1="200" y1="110" x2="200" y2="200" stroke="#7c3aed" stroke-width="3"/>
+  <text x="212" y="160" font-size="10.5" fill="#7c3aed">stub 長 ℓ</text>
+  <text x="212" y="208" font-size="10" fill="#7c3aed">開路端 ρ=+1</text>
+  <path d="M70,95 q20,-16 40,0" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <path d="M110,95 q20,-16 40,0" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <text x="105" y="70" text-anchor="middle" font-size="10" fill="#0e7490">入射波（頻率 f₀ 成分）</text>
+  <path d="M188,128 q-14,18 0,36" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <path d="M212,164 q14,-18 0,-36" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="146" y="150" text-anchor="end" font-size="9.5" fill="#dc2626">分流進 stub ↓</text>
+  <text x="300" y="150" font-size="9.5" fill="#16a34a">撞開路底反彈 ↑</text>
+  <text x="205" y="248" text-anchor="middle" font-size="10.5" fill="#374151">來回 2ℓ ＝ λ/2 → 回到岔口時<tspan font-weight="bold" fill="#dc2626">相位差 180°</tspan></text>
+  <text x="205" y="266" text-anchor="middle" font-size="10.5" fill="#374151">與主流反相疊加 → 該頻率被「吃掉」</text>
+  <text x="205" y="292" text-anchor="middle" font-size="11" font-weight="bold" fill="#7c3aed">等效：岔口在 f₀ 看見一根短路棒（Z_in = 0）</text>
+  <!-- right: S21 notch -->
+  <line x1="440" y1="360" x2="720" y2="360" stroke="#374151" stroke-width="1.5"/>
+  <line x1="440" y1="360" x2="440" y2="90" stroke="#374151" stroke-width="1.5"/>
+  <text x="700" y="380" text-anchor="middle" font-size="10" fill="#374151">頻率</text>
+  <text x="436" y="86" text-anchor="end" font-size="10" fill="#374151">S21（穿透量）</text>
+  <path d="M440,120 L520,124 L560,132 L586,160 L600,230 L610,320 L618,230 L632,160 L658,140 L720,150" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <path d="M440,118 L720,136" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <text x="560" y="106" font-size="9.5" fill="#6b7280">沒有 stub：平緩滾降（只剩損耗）</text>
+  <line x1="610" y1="320" x2="610" y2="360" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="610" y="398" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#dc2626">f₀ = v/4ℓ 深谷（notch）</text>
+  <text x="612" y="344" font-size="9.5" fill="#dc2626"> stub 越長 → 谷越往左（低頻）</text>
+</svg>
+<figcaption>圖 2：λ/4 諧振機制（左）與它在頻域的指紋（右）。stub 在 f₀ 把開路變短路，通道穿透曲線出現深谷；訊號頻譜若覆蓋到谷，眼圖直接塌陷。TDR 上它只顯示為「凹陷偏深」，完整殺傷力要看頻域——這是 Day 9 說「TDR 只給暗示」的原因。</figcaption>
+</figure>
+
+<h3>4.2 量級計算：哪些 stub 咬得到哪些訊號</h3>
+<p>用 f₀ = v/(4ℓ)、FR-4 的 v ≈ 15 cm/ns = 150 mm/ns 心算幾個代表案例：</p>
+<table>
+  <tr><th>stub 實例</th><th>ℓ</th><th>f₀ = v/4ℓ</th><th>咬得到誰</th></tr>
+  <tr><td>板面分支走線</td><td>25 mm</td><td>約 1.5 GHz</td><td>GHz 級 clock／MIPI HS 的基頻直接中彈</td></tr>
+  <tr><td>長測試點分支</td><td>10 mm</td><td>約 3.8 GHz</td><td>2.5 Gbps 以上的資料線（頻譜主瓣覆蓋到）</td></tr>
+  <tr><td>1.6 mm 厚板的 via stub（近全長）</td><td>約 1.4 mm</td><td>約 27 GHz 量級</td><td>25 Gbps+ SerDes；MIPI 4.5 Gbps 尚可存活但凹陷（C 效應）仍在</td></tr>
+  <tr><td>伺服器級厚板 via stub</td><td>約 3 mm</td><td>約 12 GHz 量級</td><td>10 Gbps 級就開始痛——back-drill 在厚板上是標配的原因</td></tr>
+</table>
+<p>注意 via stub 的 f₀ 估算要用<strong>板厚方向的等效介電常數與速度</strong>，且 via 周圍場型複雜，以上是「量級」估計；正式設計一律 3D 模擬（HFSS 級）驗證。但量級心算已足以在會議上判斷「這根 stub 要不要處理」。</p>
+
+<h3>4.3 via stub 的解法：back-drill 與它的朋友們（收 Day 9 伏筆）</h3>
+<ul>
+  <li><strong>back-drill（背鑽）：</strong>板子做完電鍍後，用比 via 孔徑略大的鑽頭從板底把沒用到的 barrel 段鑽掉，只留必要深度。殘留 stub 一般可控制在約 0.2～0.3 mm 量級（依板廠能力，標「約」）——f₀ 被推到遠超訊號頻寬。代價：製程費用、鑽深公差管理、back-drill 孔佔用底層 routing 空間。</li>
+  <li><strong>盲孔／埋孔（blind/buried via）＋ HDI：</strong>根本不產生 stub，但疊構成本高——手機／鏡頭模組板常用（本來就是 HDI），NB 主機板看成本等級。</li>
+  <li><strong>換層策略：</strong>最便宜的一招——<strong>把高速訊號安排在靠近打入面的層</strong>。從 L1 進、L2 出，stub 幾乎是全板厚；從 L1 進、最底層出，stub 趨近零。Layout review 時「高速線用哪兩層」永遠是第一個問題。呼應 PT2 Ch.6 的第一原則：「clock 走線盡量留在同一層、能不打 via 就不打」（Perfect Timing II Ch.6）——2002 年是「避免 via」，現代版是「避免不了就把 stub 設計掉」。</li>
+</ul>
+
+<h2>5. PT2 Ch.7 的多負載三條路：分支這件事，前人早就吵完了</h2>
+<p>「一個 driver 餵兩個負載」是 stub 問題最常見的源頭。《Perfect Timing II》Ch.7 的立場先講清楚：<strong>理想上每個負載都該有自己專屬的點對點連線（用 clock fanout buffer 達成）</strong>；真的只有一路輸出時，才走下面的替代方案（Perfect Timing II Ch.7）。</p>
+
+<h3>路 1：兩負載靠很近 → 當「一顆合併電容」</h3>
+<p>兩負載間的短線段（stub）滿足 t_stub &lt; t_r/6 時，兩顆輸入電容＋短線電容合併成一顆集總負載，照 Day 7 的串聯端接算就行。代價是上升時間變慢：t_R = 2.2·Z·C，C 翻倍、t_R 跟著變慢（Perfect Timing II Ch.7）。書中給了實測佐證——<strong>Figure 7.12 的條件：driver 輸出阻抗 19.8 Ω＋串聯電阻 31.9 Ω，驅動 6 吋長、等效 51.7 Ω 的帶狀線，末端兩負載相距 1 吋</strong>——波形可用，但書中同頁叮嚀「一律建議模擬驗證」（Perfect Timing II Ch.7）。注意 1 吋（2.54 cm）在 2002 年的 t_r 下剛好過關；用第 3 節的表換算，現代高速訊號同樣的 1 吋間距早就爆表。</p>
+
+<h3>路 2：拉兩條線、各配一顆串聯電阻 → 小心三個坑</h3>
+<p>讓兩負載可以離得遠：driver 出來馬上分成兩條各自完整的傳輸線，每條配自己的 R_S。電阻計算要改（Perfect Timing II Ch.7）：</p>
+<div class="formula">R_D + (R_S1 ∥ R_S2) = Z₀ ∥ Z₀ = Z₀/2</div>
+<p><em>白話翻譯：driver 看出去是兩條線並聯，阻抗砍半；所以「driver 內阻＋兩顆電阻的並聯」要湊到 Z₀/2，R_S 會比單負載時小。</em>三個坑：</p>
+<ol>
+  <li><strong>Z₀/2 &lt; R_D 就無解：</strong>並聯後阻抗若比 driver 輸出阻抗還低，任何 R_S 都端接不了（電阻不能是負的）——只能換低輸出阻抗的 driver 或上 buffer（Perfect Timing II Ch.7）。負載越多越容易踩到：三條 50 Ω 並聯只剩 16.7 Ω。</li>
+  <li><strong>兩條線要等長：</strong>否則先回來的反射波穿過電阻網路跑進另一條線繼續作亂（Perfect Timing II Ch.7）。</li>
+  <li><strong>bifurcated trace：</strong>電阻要貼著 driver 放——若「driver 到電阻」的共用段延遲超過 <strong>t_r 的 1/10</strong>，這段自己變成一條傳輸線，訊號撞到電阻先反射一次，整個端接破功。PT2 Ch.7 的原話結論：這種結構「應避免（should be avoided）」。</li>
+</ol>
+
+<h3>路 3：fanout buffer——用一顆 IC 買回所有乾淨</h3>
+<p>每個負載一條專屬點對點線、各自端接，SI 最乾淨、skew 由 buffer 規格保證。代價：BOM＋一顆 IC、buffer 自身的 additive jitter（第 5 週講 jitter 時算給你看）。NB 主機板的 clock 樹就是這樣長出來的：clock generator → 多路 buffer → 每路串聯電阻——你天天看到的那排 33 Ω，就是「路 3」的實體。</p>
+
+<div class="card takeaway">
+  <span class="label">還有一條「路 2.5」：daisy-chain（菊鏈）</span>
+  <p>把負載串成一條線依序經過（每個負載掛在主線上、stub 極短），末端做一次並聯／戴維寧端接——DDR 的 fly-by 拓撲、多顆 sensor 共用 I²C 都是這個思路。它的本質是「把每個負載的 stub 縮到 t_r/6 以內＋主線一路走到底」，等於路 1 的多負載延伸。對照組是 T 型星狀分支（每支都是彼此的 stub）——高速設計裡 <strong>fly-by 勝過 T 型</strong>的原因，今天你已經有完整的理論工具可以自己推出來了。</p>
+</div>
+
+<h2>6. Stub 的第三宗罪：EMI 天線（PT2 Ch.6）</h2>
+<p>除了時域（電容拖邊沿）與頻域（λ/4 陷波），stub 還有第三重身分。《Perfect Timing II》Ch.6 警告：若走線長度等於訊號基頻電氣長度的 <strong>1/4、1/2、1 倍或其整數倍</strong>，線上會站著接近最大幅度的<strong>駐波</strong>，構成「接近理想的輻射源」——表層走線三面都是空氣，輻射條件更好（Perfect Timing II Ch.6）。λ/4 開路 stub 正是教科書級的單極天線結構：諧振時 stub 上電壓駐波最大，EMI 掃描時常常就是那根「忘了拔掉的測試點分支」在 f₀ 的奇數倍頻率上超標。<strong>同一根 stub、同一個 f₀，時域吃邊沿、頻域挖 notch、空域放輻射</strong>——三宗罪一次記住。</p>
+
+<h2>7. 實務案例：stub 在你日常的三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——測試點政策：</strong>ICT 覆蓋率 vs SI 的經典拉鋸。低速線（GPIO、I²C、電源）測試點隨便放；高速線（PCIe、USB3、DP、記憶體）的規範通常是：<strong>不准開分支</strong>——測試 pad 直接「串」在主線路徑上（inline pad，訊號流過 pad 而非岔出去），pad 直徑縮小、必要時下方掏空參考層補償電容（Day 5 的幾何調阻抗）。你板子上高速線的測試點長得跟低速線不一樣，現在你知道為什麼了。</li>
+  <li><strong>鏡頭模組——MIPI flex 上的分岔：</strong>模組廠有時為了 EEPROM 燒錄或 sensor 除錯在 flex 上留 pad。低速的 I²C/GPIO 沒事；若有人把 pad 開到 MIPI HS lane 上，2～3 mm 的分支在 4.5 Gbps 級的 D-PHY 上就逼近 t_r/6 門檻（第 3 節表格）——bring-up 時眼圖 margin 莫名偏小，回頭查 flex 光罩常常就是它。FA 時 TDR 打進去：分岔處一個偏深的電容性凹陷（Day 9 指紋），就是呈堂證供。</li>
+  <li><strong>面試白板：</strong>「Why do we back-drill vias?」是 camera HW／SI 面試的高頻題，因為它一題同時考：傳輸線（stub 是什麼）、反射（開路 ρ=+1）、頻域（λ/4 notch 會算 f₀）、製程（back-drill 怎麼做、殘留公差）、與 trade-off（成本 vs 盲埋孔 vs 換層）。今天第 4 節就是完整答案骨架。</li>
+</ul>
+
+<h2>8. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（短 stub 電容）：50 Ω 微帶線上有一根 6 mm 的測試點分支（表層約 6 ps/mm），末端 pad 約 0.3 pF。(a) 分支線本身的等效電容？(b) 合計電容掛上去後，用 Day 9 的面積觀念，TDR 會看到什麼？(c) 這顆合計電容在 3 GHz 的容抗約多少？對 50 Ω 系統嚴不嚴重？</summary>
+<p><strong>解：</strong>(a) t_d = 6 mm × 6 ps/mm = 36 ps → C ≈ t_d/Z₀ = 36/50 ≈ <strong>0.72 pF</strong>。(b) 合計約 1.0 pF 的並聯電容 → 向下凹陷，面積 ≈ (Z₀/2)×C = 25 × 1.0 pF = 25 ps（以 ρ 計）——比 Day 9 練習 3 那顆 0.19 pF（4.8 ps）大五倍，是條明顯的「深水坑」。(c) X_C = 1/(2πfC) = 1/(2π×3G×1p) ≈ <strong>53 Ω</strong>——跟系統阻抗同量級，等於在線上並聯了「另一條線」，該頻率的訊號被分走一半量級的電流，非常嚴重。結論：GHz 級訊號的測試點不能用分支式。</p>
+</details>
+
+<details>
+<summary>練習 2（t_r/6 門檻）：(a) t_r = 500 ps 的訊號，FR-4 內層（15 cm/ns），分支 stub 最長幾 mm 能當集總電容？(b) 同一條線換到 flex（v ≈ 14 cm/ns）呢？(c) PT2 Figure 7.12 的「兩負載相距 1 吋」在 2002 年（t_r ≈ 2 ns）合格嗎？在 (a) 的訊號下呢？</summary>
+<p><strong>解：</strong>(a) t_stub &lt; 500/6 ≈ 83 ps → ℓ &lt; 83 ps × 0.15 mm/ps ≈ <strong>12.5 mm</strong>。(b) ℓ &lt; 83 × 0.14 ≈ <strong>11.7 mm</strong>——速度慢一點，允許長度就短一點。(c) 1 吋 = 25.4 mm → t_stub ≈ 25.4/0.15 ≈ 169 ps（帶狀線）。2002 年門檻：2 ns/6 ≈ 333 ps → 169 ps 合格 ✓（所以書中波形可用）。500 ps 訊號門檻：83 ps → 169 ps <strong>爆表兩倍</strong> ✗——同一份 layout，換一代 driver 就從合格變違規，「規則不變、數字要重算」。</p>
+</details>
+
+<details>
+<summary>練習 3（λ/4 陷波）：(a) 18 mm 的板面分支 stub（v ≈ 15 cm/ns），陷波頻率 f₀？(b) 它咬得到 2.5 Gbps NRZ 訊號嗎？（提示：NRZ 基頻 = 資料率的一半，且頻譜能量延伸到基頻的 3～5 倍）(c) 要把 f₀ 推到 10 GHz 以上，stub 得剪到多短？(d) 除了 f₀，還有哪些頻率會中招？</summary>
+<p><strong>解：</strong>(a) f₀ = v/4ℓ = 150 mm/ns ÷ (4×18 mm) ≈ <strong>2.1 GHz</strong>。(b) 2.5 Gbps 的基頻 1.25 GHz、能量主要分布到約 3.75～6 GHz——2.1 GHz 正落在頻譜的黃金地段，<strong>咬得到，而且咬在要害</strong>；眼圖會明顯閉合。(c) ℓ &lt; v/(4×10 GHz) = 150/(40) = <strong>3.75 mm</strong>。(d) 奇數倍諧波：3f₀ ≈ 6.3 GHz、5f₀ ≈ 10.5 GHz……開路 stub 在每個奇數倍 λ/4 都再次「開路變短路」，S21 是一排等距的梳狀深谷。</p>
+</details>
+
+<details>
+<summary>練習 4（PT2 路 2 的電阻設計）：driver 輸出阻抗 R_D = 19.8 Ω（沿用 PT2 數據），要驅動兩條 51.7 Ω 的線（路 2 拓撲）。(a) 每顆 R_S 該配多少？(b) 若改成三條 51.7 Ω 的線呢？(c) 路 2 還要守哪兩條規矩才不會變 bifurcated trace？</summary>
+<p><strong>解：</strong>(a) R_D + R_S/2 = Z₀/2 = 25.85 Ω → R_S = 2×(25.85 − 19.8) = <strong>12.1 Ω</strong>（兩條等長線、電阻對稱時 R_S1∥R_S2 = R_S/2）。(b) 三條並聯：Z₀/3 ≈ 17.2 Ω <strong>&lt; R_D = 19.8 Ω</strong> → 需要 R_S 為負值，<strong>無解</strong>——這正是 PT2 Ch.7 警告的「並聯阻抗低於 driver 輸出阻抗就無法端接」，只能換更強的 driver 或上 fanout buffer（路 3）。(c) ①兩條線等長（否則反射竄線）；②R_S 貼 driver 放，共用段延遲 &lt; t_r/10——超過就是 bifurcated trace，電阻之前先反射，端接破功（Perfect Timing II Ch.7）。</p>
+</details>
+
+<details>
+<summary>練習 5（via stub 綜合題）：3 mm 厚背板，訊號從 L1 打到 L2（距頂面約 0.2 mm），通孔 via 貫穿全板。(a) stub 約多長？f₀ 量級？（板厚方向 v 取約 14 cm/ns 估）(b) 10 Gbps NRZ 過這顆 via 危不危險？(c) 列出三個對策並各給一句 trade-off。(d) back-drill 後殘留 0.25 mm，f₀ 變多少？</summary>
+<p><strong>解：</strong>(a) stub ≈ 3 − 0.2 ≈ 2.8 mm；f₀ ≈ 140 mm/ns ÷ (4×2.8 mm) ≈ <strong>12.5 GHz 量級</strong>。(b) 10 Gbps 基頻 5 GHz、能量延伸至 15 GHz 級——notch 落在頻譜內，<strong>危險</strong>；且 stub 電容（t_d ≈ 20 ps → 量級 0.4 pF，via 阻抗偏低實際更大）本身就把凹陷挖深。(c) ①back-drill：便宜有效，但佔底層空間、有鑽深公差；②盲埋孔 HDI：無 stub 但疊構成本高；③改層安排（訊號走靠底面的層、從底面打入）：免費，但受整體 routing 規劃限制。(d) f₀ ≈ 140 ÷ (4×0.25) = <strong>140 GHz 量級</strong>——遠超訊號頻寬，等效上 stub 消失。這就是 back-drill 的全部意義：不是消滅 via，是把 f₀ 踢出頻譜。</p>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+<p>stub 與 back-drill 是 SI 面試的必考區——一題可以從直覺追殺到 3D 模擬。先用英文口頭回答，再看參考答案。</p>
+
+<details>
+<summary>Q1: "What is a via stub, and why does it matter at high data rates? Walk me through the math and the mitigation options."</summary>
+<p><strong>參考答案骨架：</strong>When a signal enters a through-hole via on the top layer and exits on an inner layer, the unused portion of the barrel below the exit layer is a stub — an open-ended transmission line hanging off the signal path. At low speeds it just adds shunt capacitance, roughly the stub's one-way delay divided by its impedance, so it shows up as a capacitive dip on a TDR. The real damage appears in the frequency domain: the open end reflects with a coefficient of plus one, and when the round trip through the stub equals half a wavelength — that is, when the stub is a quarter wavelength long — the reflected wave comes back exactly out of phase. The open stub transforms into a short at the junction, and the channel's insertion loss shows a deep notch at f₀ equals v over four times the stub length, plus notches at odd harmonics. For example, a 3-millimeter stub in a thick backplane notches around 12 gigahertz — right in the band of a 10-gig NRZ signal. Mitigations: back-drilling removes the unused barrel and typically leaves a residual stub of a couple hundred microns, pushing the notch far above the signal bandwidth; blind and buried vias avoid the stub entirely at higher fab cost; and the cheapest fix is layer assignment — route high-speed signals on layers close to the entry surface so the stub is inherently short. In practice I'd estimate f₀ by hand to decide whether to care, then verify with a 3D solver, because the via's effective dielectric and pad/anti-pad geometry shift the resonance.</p>
+<p><strong>加分點：</strong>主動提「TDR 只給暗示、S 參數才見全貌」與 back-drill 的公差管理（stub 殘留量是要跟板廠議定的規格項目）。</p>
+</details>
+
+<details>
+<summary>Q2: "The test team wants probe points on a 4.5 Gbps MIPI lane on your camera flex. How do you respond?"</summary>
+<p><strong>參考答案骨架：</strong>First I'd quantify why a branched test pad is a problem at this rate. With a rise time in the ballpark of 100 picoseconds, the classic rule that a stub's delay must be under one sixth of the rise time allows only fifteen-odd picoseconds of stub — about 2 millimeters on flex — so even a small branch plus its pad is marginal: it adds roughly half a picofarad to a full picofarad of shunt capacitance, and a longer branch puts a quarter-wave notch inside the signal's spectrum. So my answer isn't a flat no — it's a set of options with trade-offs. Option one, inline pads: the signal routes through a slightly widened pad instead of branching to it, and I compensate the extra capacitance by cutting back the reference plane under the pad to keep the impedance flat — then I verify the discontinuity on TDR. Option two, put probe points only on the low-speed lines — I2C, GPIO, power — and cover the high-speed lanes by protocol-level BIST or the receiver's internal eye monitor instead of physical probing. Option three, if physical access is truly mandatory for bring-up, use a connector-based or interposer-based access point designed for controlled impedance rather than an open pad. And whichever option we pick, it goes into the SI simulation before tape-out, because a test point that closes the eye costs more retests than it saves.（考點：把 t_r/6 與 λ/4 兩個門檻講出數字、給替代方案而非硬擋、最後收在「模擬驗證」——這是 senior 的答法。）</p>
+</details>
+
+<h2>10. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：stub 是什麼？板上四種常見長相？</p>
+  <p class="a">A1：從訊號主路徑分岔、末端開路（未端接）的一段傳輸線。四種：①T 型分支走線；②測試點分支；③via stub（訊號換層後沒用到的 barrel 尾巴——唯一「不畫也存在」的 stub）；④bifurcated trace（雙串聯電阻端接時共用段太長）。三宗罪：時域加電容拖邊沿、頻域 λ/4 陷波、空域駐波天線（EMI）。</p>
+  <p class="q">Q2：短 stub 的等效電容怎麼算？門檻是什麼？</p>
+  <p class="a">A2：C_stub ≈ t_d/Z₀（t_d＝stub 單程延遲）；50 Ω 系統心算：每 1 ps 延遲 ≈ 0.02 pF。門檻（PT2 Ch.7）：t_stub &lt; t_r/6 才能當集總電容——邊沿爬升期間回波至少來回三趟。FR-4 換算：t_r=2 ns（2002）→ 約 5 cm；t_r=100～150 ps（MIPI HS 級）→ 約 2.5～4 mm。規則不變、數字隨 t_r 重算。</p>
+  <p class="q">Q3：λ/4 諧振的機制與公式？為什麼開路 stub 會「變短路」？</p>
+  <p class="a">A3：進 stub 的波在開路端以 ρ=+1 反彈，來回多走 2ℓ；當 2ℓ=λ/2（即 ℓ=λ/4）回波與主流反相抵銷。數學：Z_in = −jZ₀/tan(βℓ)，βℓ=π/2 時 Z_in=0——岔口等效短路。陷波頻率 f₀ = v/4ℓ，奇數倍（3f₀、5f₀…）同樣中招。TDR 只顯示凹陷偏深，殺傷力要看 S21 的 notch。</p>
+  <p class="q">Q4：via stub 的三種解法與 trade-off？</p>
+  <p class="a">A4：①back-drill：鑽掉沒用的 barrel，殘留約 0.2～0.3 mm 量級，f₀ 被推出頻寬外；代價＝製程費、鑽深公差、佔底層空間。②盲埋孔/HDI：根本無 stub，疊構成本高（手機/模組板常用）。③層安排：高速訊號走靠打入面的層，stub 天生短——免費但受 routing 規劃限制。PT2 Ch.6 原則「clock 盡量同層、能不打 via 就不打」的現代版＝「避不掉就把 stub 設計掉」。</p>
+  <p class="q">Q5：PT2 Ch.7 多負載三條路？路 2 的公式與兩個陷阱？</p>
+  <p class="a">A5：路 1＝兩負載夠近（t_stub&lt;t_r/6）當一顆合併電容，t_R=2.2·Z·C 變慢（實例：19.8 Ω driver＋31.9 Ω 串阻、6 吋 51.7 Ω 帶狀線、負載距 1 吋）；路 2＝雙線雙電阻：R_D + R_S1∥R_S2 = Z₀/2；陷阱①Z₀/2 &lt; R_D 無解（三負載更慘：Z₀/3）、陷阱②共用段 &gt; t_r/10 變 bifurcated trace 應避免、且兩線須等長；路 3＝fanout buffer 點對點最乾淨（代價：BOM＋additive jitter）。番外：daisy-chain/fly-by＝路 1 的多負載延伸。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 12（週二）：connector 不連續——訊號跨過「機構件」時的劫難與補償</strong></p>
+  <p>板對板 connector、ZIF 座、SMA launch……訊號離開乾淨的走線、鑽進金屬彈片與塑膠殼的瞬間發生什麼事？Day 9 的「扭波」指紋只是表象，明天拆開講：connector 的 L-C 等效模型、pad 過渡與掏空補償、launch 設計，以及鏡頭模組 BTB connector 的選型眉角。今天的 stub 觀念會再出場——connector 的引腳尾巴，本質上也是一根 stub。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 11 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

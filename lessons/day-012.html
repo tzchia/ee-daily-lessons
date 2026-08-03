@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 12｜Connector 不連續——訊號跨過「機構件」的劫難：L-C 模型、回流路徑與掏空補償</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 12 天（週二新觀念課）</div>
+  <h1>Day 12：Connector 不連續——訊號跨過「機構件」的劫難：L-C 模型、回流路徑與掏空補償</h1>
+  <div class="meta">2026-08-04（二）｜預估學習時間：90 分鐘｜難度：★★★★☆（Day 9 扭波指紋＋Day 11 stub 的綜合應用，外加一個全新主角：回流路徑）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 9 講 TDR 指紋時，connector 只給了一個外號——「扭波（wiggle）」。今天把 connector 整顆拆開，看清楚扭波的內部結構，並學會怎麼把它「設計掉」。讀完你要能夠：</p>
+  <ol>
+    <li>把任何 connector（BTB、ZIF 座、SMA）拆解成 <strong>C–L–C 的等效模型</strong>：pad＝並聯電容、引腳＝串聯電感，並解釋 Day 9 扭波的三段內部結構</li>
+    <li>會用一條核心公式做補償設計：<strong>局部阻抗 Z ≈ √(L/C)</strong>——工程師不是消滅寄生，是把 L 和 C 的比例調回 Z₀²</li>
+    <li>理解 connector 的「另一半戰場」：<strong>回流路徑</strong>——為什麼 ground pin 的數量與位置決定成敗（Perfect Timing II Ch.6 的回流原則直接適用）</li>
+    <li>會解釋<strong>參考層掏空（void）補償</strong>：為什麼在 pad 下方挖掉參考層反而讓阻抗變平——以及挖過頭的代價</li>
+    <li>能列出<strong>鏡頭模組 BTB connector 選型檢查清單</strong>，並把 connector 引腳尾巴用 Day 11 的 stub 理論算一遍</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：兩條伏筆在此會合</h2>
+<p>Day 9 圖 2 的指紋 ④：「connector／flex 壓接＝L-C 連環套，先刺後陷的扭波；扭完回不到基準線＝接觸電阻劣化」。當時只教你<strong>認</strong>，今天教你<strong>拆</strong>與<strong>治</strong>。Day 11 剛學完的 stub 也會再出場——connector 的引腳尾巴，本質上就是一根垂直的 stub。這兩天的工具（L 上 C 下、面積反推 L/C、t_r/6 門檻、f₀ = v/4ℓ）今天全部派上用場。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：高速公路上的收費站</span>
+  <p>一條均勻的走線像高速公路：每一公尺的「路況」（單位長度的 L′ 和 C′）都一樣，所以阻抗 √(L′/C′) 一路恆定，車流（訊號）順暢無比。connector 是收費站：訊號得<strong>下交流道（走線→焊盤 pad）、過閘門（金屬彈片或插針）、再上交流道（pad→走線）</strong>。每一段的「路況」都不一樣——pad 是一大片銅貼著參考層（電容特多）、彈片是一根細長的懸空金屬（電感特多、而且腳下沒有參考層陪跑）。<strong>路況忽然變來變去＝阻抗忽低忽高＝Day 9 看到的扭波。</strong>今天的主線任務：算出每一段差多少、然後動手把路修平。</p>
+</div>
+
+<h2>1. 解剖 connector：扭波的內部結構</h2>
+<p>以最常見的板對板（board-to-board, BTB）connector 為例，訊號的完整旅程是：</p>
+<p><strong>板 A 走線 → SMT 焊盤 pad → connector 引腳（彈片＋插針的接觸對）→ 板 B 的 pad → 板 B 走線</strong></p>
+<p>逐段看電氣性質：</p>
+<ul>
+  <li><strong>SMT pad：並聯電容 C。</strong>pad 通常比走線寬（要吃錫、要對位），一大片銅緊貼下方參考層——這跟 Day 11 測試點 pad 是同一回事：多餘的 C，局部阻抗被拉低。</li>
+  <li><strong>引腳（彈片/插針）：串聯電感 L。</strong>細長的金屬柱直立於空中，離參考回流層最遠、迴路面積最大——多餘的 L，局部阻抗被拉高。connector 越高（堆疊高度越大）、引腳越細長，L 越大。</li>
+  <li><strong>對面的 pad：又一顆並聯電容 C。</strong></li>
+</ul>
+<p>所以一顆 connector 的最簡等效模型是 <strong>C–L–C 的 π 型網路</strong>。這就是 Day 9 扭波的內部結構：<strong>凹（pad C）→ 尖（pin L）→ 凹（pad C）</strong>。TDR 步階夠快（解析度夠細）時三段分得開；邊沿較胖時三段糊成一個「扭一下」——Day 9 說「扭一下是 connector」的原因，今天看到了骨架。</p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">BTB connector 解剖：實體（上）→ C–L–C 等效模型（中）→ TDR 扭波（下）</text>
+  <!-- physical cross-section -->
+  <rect x="60" y="70" width="260" height="14" fill="#94a3b8"/>
+  <text x="70" y="64" font-size="10" fill="#475569">板 A（下板）</text>
+  <rect x="440" y="70" width="260" height="14" fill="#94a3b8"/>
+  <text x="640" y="64" font-size="10" fill="#475569">板 B（上板，畫成同高方便對照）</text>
+  <line x1="90" y1="70" x2="270" y2="70" stroke="#374151" stroke-width="3"/>
+  <text x="150" y="58" font-size="9.5" fill="#374151">走線</text>
+  <rect x="270" y="62" width="44" height="8" fill="#b45309"/>
+  <text x="292" y="52" text-anchor="middle" font-size="9.5" fill="#b45309">pad（寬）</text>
+  <!-- connector body -->
+  <rect x="314" y="40" width="132" height="46" fill="#e5e7eb" stroke="#9ca3af"/>
+  <path d="M320,70 q20,-24 50,-22 q40,3 56,14 l14,4" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="380" y="36" text-anchor="middle" font-size="9.5" fill="#dc2626">彈片＋插針：細長、懸空、離參考層遠 ＝ L</text>
+  <rect x="446" y="62" width="44" height="8" fill="#b45309"/>
+  <text x="468" y="52" text-anchor="middle" font-size="9.5" fill="#b45309">pad（寬）</text>
+  <line x1="490" y1="70" x2="670" y2="70" stroke="#374151" stroke-width="3"/>
+  <rect x="60" y="96" width="640" height="8" fill="#0e7490"/>
+  <text x="70" y="118" font-size="9.5" fill="#0e7490">參考層（回流走這裡——但 connector 段沒有它！回流被迫改走 ground pin，第 3 節）</text>
+  <!-- equivalent circuit -->
+  <text x="60" y="164" font-size="12.5" font-weight="bold" fill="#0f4c5c">等效電路（π 型）：</text>
+  <line x1="90" y1="200" x2="280" y2="200" stroke="#374151" stroke-width="2.5"/>
+  <text x="180" y="192" text-anchor="middle" font-size="9.5" fill="#374151">Z₀ 走線</text>
+  <line x1="280" y1="200" x2="280" y2="236" stroke="#b45309" stroke-width="2.5"/>
+  <line x1="268" y1="236" x2="292" y2="236" stroke="#b45309" stroke-width="2.5"/>
+  <line x1="272" y1="242" x2="288" y2="242" stroke="#b45309" stroke-width="2.5"/>
+  <text x="300" y="234" font-size="10" fill="#b45309">C_pad</text>
+  <path d="M280,200 q10,-14 20,0 q10,-14 20,0 q10,-14 20,0 q10,-14 20,0" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="330" y="176" text-anchor="middle" font-size="10" fill="#dc2626">L_pin</text>
+  <line x1="360" y1="200" x2="360" y2="236" stroke="#b45309" stroke-width="2.5"/>
+  <line x1="348" y1="236" x2="372" y2="236" stroke="#b45309" stroke-width="2.5"/>
+  <line x1="352" y1="242" x2="368" y2="242" stroke="#b45309" stroke-width="2.5"/>
+  <text x="380" y="234" font-size="10" fill="#b45309">C_pad</text>
+  <line x1="360" y1="200" x2="560" y2="200" stroke="#374151" stroke-width="2.5"/>
+  <text x="470" y="192" text-anchor="middle" font-size="9.5" fill="#374151">Z₀ 走線</text>
+  <text x="600" y="204" font-size="10.5" fill="#7c3aed" font-weight="bold">Z_local ≈ √(L/C)</text>
+  <text x="600" y="220" font-size="9.5" fill="#7c3aed">補償設計的核心：調比例</text>
+  <!-- TDR trace -->
+  <text x="60" y="292" font-size="12.5" font-weight="bold" fill="#0f4c5c">對應的 TDR 波形：</text>
+  <line x1="90" y1="400" x2="700" y2="400" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="704" y="404" font-size="9" fill="#9ca3af">50 Ω</text>
+  <path d="M90,400 L250,400 L270,418 L300,400 L318,368 L348,400 L368,418 L398,400 L560,400" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="284" y="438" text-anchor="middle" font-size="9.5" fill="#b45309">凹：pad C</text>
+  <text x="333" y="358" text-anchor="middle" font-size="9.5" fill="#dc2626">尖：pin L</text>
+  <text x="383" y="438" text-anchor="middle" font-size="9.5" fill="#b45309">凹：pad C</text>
+  <text x="480" y="390" font-size="9.5" fill="#16a34a">健康：扭完回基準線</text>
+  <path d="M90,330 L250,330 L272,342 L318,318 L368,342 L398,330 L560,330" fill="none" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="480" y="322" font-size="9.5" fill="#6b7280">邊沿較胖：三段糊成一個「扭」（Day 9 看到的樣子）</text>
+</svg>
+<figcaption>圖 1：connector 的三層視角。實體的「寬 pad—細長彈片—寬 pad」對應等效電路的 C–L–C π 型，再對應 TDR 上「凹—尖—凹」。快邊沿看得到三段、胖邊沿糊成一個扭波——高度會變、但每段的面積（∝ L、C 本身）不變（Day 9 的面積不變性）。</figcaption>
+</figure>
+
+<h3>1.1 量級感：一顆 BTB 引腳「值多少」L 和 C</h3>
+<p>細長導體的電感量級可以用一個粗略的經驗感覺：<strong>約 1 nH/mm 量級</strong>（孤立細導線；有鄰近回流導體時會低不少）。一顆堆疊高度 1 mm 內外的低背 BTB connector，單一引腳的迴路電感常在<strong>零點幾到約 1 nH 量級</strong>；SMT pad 加彈片座的並聯電容在<strong>0.1～0.5 pF 量級</strong>（依 pad 尺寸與下方是否掏空，此處標量級、實際以模型或量測為準）。這些數字單獨看都不大——但用下一節的公式一算，你會發現它們剛好在「50 Ω 系統會有感」的邊界上。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「connector 廠有給 S 參數模型，我幹嘛學手算？」</span>
+  <p>三個理由。①廠商模型是「connector 本體＋建議 footprint」的組合，<strong>你板子上實際的 pad、掏空、走線頸縮跟人家的參考設計不一樣</strong>——模型只是起點；②FA 現場沒有模型：TDR 量出一個 60 Ω 尖峰，你要當場判斷「這是 connector 本體還是我的 launch 沒做好」，靠的是手算量級；③面試白板上更沒有模型。工具鏈是「手算定方向 → 模型精算 → TDR 驗證」，三層缺一不可。</p>
+</div>
+
+<h2>2. 核心公式：Z ≈ √(L/C)——補償不是消滅，是配平</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：蹺蹺板</span>
+  <p>Day 4 教過：傳輸線的阻抗 Z₀ = √(L′/C′)——是<strong>電感和電容的比例</strong>決定阻抗，不是誰的絕對值。connector 這種「集總的一小段」也一樣：這一小段的等效阻抗約是 √(L/C)。所以補償的思路像調蹺蹺板：<strong>C 太多（pad 太肥）→ 阻抗掉下去；L 太多（彈片太長）→ 阻抗翹上來；兩邊剛好配平（L/C = Z₀²）→ TDR 曲線平的，訊號無感通過。</strong>工程上你幾乎不可能把寄生做到零——但你可以讓多出來的 L 和多出來的 C 互相抵帳。這就是「補償（compensation）」兩個字的全部含義。公式看不懂沒關係，記住蹺蹺板：<strong>凹了就減 C 或加 L；尖了就減 L 或加 C。</strong></p>
+</div>
+
+<p>把 connector 的一小段當成微型傳輸線段，其局部阻抗：</p>
+<div class="formula">Z_local ≈ √(L/C)　；配平條件：L = Z₀² · C　（50 Ω 系統：L[nH] = 2.5 × C[pF]）</div>
+<p><em>白話翻譯：在 50 Ω 的世界裡，每 1 pF 的多餘電容要配 2.5 nH 的電感才「打平」；反過來每 1 nH 要配 0.4 pF。手上有 TDR 量到的凹陷或尖峰面積（Day 9 的積分式），就能反推出「還欠多少」。</em></p>
+<p>代入第 1.1 節的量級：pad C ≈ 0.4 pF 配 pin L ≈ 1.0 nH → Z_local ≈ √(1.0n/0.4p) = 50 Ω——<strong>剛好打平，這不是巧合，是 connector 廠的高速系列本來就朝這個比例設計</strong>。而如果換一顆高背（堆疊 4 mm 級）的 connector，L 翻幾倍、C 沒跟上 → Z_local 衝到 70～80 Ω 量級，TDR 一根明顯的尖刺——「低背比高背對 SI 友善」的物理根據就在這條公式裡。</p>
+
+<div class="card takeaway">
+  <span class="label">這條公式一魚三吃</span>
+  <p>①<strong>判讀：</strong>TDR 尖峰 → 用 Day 9 面積式反推 L_excess → 換算欠多少 C；②<strong>補償：</strong>決定 pad 掏空多大、或 pad 縮多小（第 4 節）；③<strong>選型：</strong>比較兩顆 connector 的 SI 體質——看它的結構是「肥 pad＋短彈片」還是「瘦 pad＋長彈片」，比例對不對。同一條 √(L/C)，Day 4 用它定義了整條線的 Z₀，今天用它修一個點的不連續——尺度差三個數量級，物理一模一樣。</p>
+</div>
+
+<h2>3. 另一半戰場：回流路徑——connector 是參考層的「斷橋」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：來回都要有路</span>
+  <p>Day 4 就說過：訊號電流是「去程走訊號線、回程走參考層」的<strong>一個完整迴圈</strong>。在板子上，回程電流像影子一樣緊貼在訊號線正下方的參考層裡跑。但訊號跨過 connector 時——<strong>參考層斷了</strong>。connector 裡沒有「一整面地」，回程電流只能擠進你指定的那幾根 <strong>ground pin</strong>。如果最近的 ground pin 離訊號 pin 很遠，回程電流就得繞遠路——去程與回程之間圈出一塊大面積的「迴圈」，電感暴增：阻抗尖峰更高、相鄰訊號互相串門（串擾）、迴圈本身變成一支發射天線（EMI）。<strong>所以 connector 的 SI 一半看引腳本體，一半看 pin map（腳位安排）</strong>——而 pin map 是你畫原理圖時就決定的，layout 神仙也救不回來。</p>
+</div>
+
+<p>《Perfect Timing II》Ch.6 的回流原則在這裡逐字適用：<strong>「低速時回流電流走電阻最小路徑；高速時回流電流走電感最小路徑」——即緊貼訊號走線正下方的參考層（Perfect Timing II Ch.6）</strong>。書中還給了一個很有畫面的警告：<strong>若回流訊號在地平面裡遭遇一段 5 Ω 的路徑，那條 50 Ω 走線上的訊號完整性就可能被破壞（Perfect Timing II Ch.6）</strong>——回程只佔訊號迴路的一半，卻有一票否決權。connector 就是整條通道上「回流最容易出事」的一段，對策全部圍繞一件事：<strong>讓每根高速訊號 pin 的旁邊就有 ground pin</strong>。</p>
+
+<ul>
+  <li><strong>G-S-S-G（差動對）／G-S-G（單端）交錯配置：</strong>差動對兩腳相鄰、兩側各夾一根地。回流就近、迴圈最小，同時 ground pin 兼作相鄰訊號間的隔離（Day 9 提過 connector 串擾，第 4 週細講）。</li>
+  <li><strong>signal:ground 比例：</strong>高速 lane 區域常見約 2:1 到 1:1（每對差動配 1～2 根地）；低速訊號可以鬆。地不夠分配時，<strong>犧牲低速訊號的地、絕不犧牲高速 lane 的地</strong>。</li>
+  <li><strong>板端的呼應：</strong>connector ground pin 落到板上後要就近打 via 進地平面（呼應 PT2 Ch.6 的 ground island 打 via 原則：每根地腳至少一個 via、貼著放，兩個以上收益遞減但仍有幫助（Perfect Timing II Ch.6））。ground pin 接了一條細長線才進地＝親手製造那段「5 Ω 路徑」。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Pin map 決定回流迴圈：好與壞的兩種腳位安排</text>
+  <!-- bad -->
+  <text x="60" y="60" font-size="12.5" font-weight="bold" fill="#dc2626">✗ 壞：高速訊號堆一起、地擠在角落</text>
+  <g>
+    <rect x="60" y="76" width="300" height="120" fill="#f8fafc" stroke="#9ca3af"/>
+    <!-- pins row -->
+    <rect x="80" y="96" width="20" height="30" fill="#dc2626"/><text x="90" y="142" text-anchor="middle" font-size="9">D0+</text>
+    <rect x="112" y="96" width="20" height="30" fill="#dc2626"/><text x="122" y="142" text-anchor="middle" font-size="9">D0−</text>
+    <rect x="144" y="96" width="20" height="30" fill="#dc2626"/><text x="154" y="142" text-anchor="middle" font-size="9">D1+</text>
+    <rect x="176" y="96" width="20" height="30" fill="#dc2626"/><text x="186" y="142" text-anchor="middle" font-size="9">D1−</text>
+    <rect x="208" y="96" width="20" height="30" fill="#f59e0b"/><text x="218" y="142" text-anchor="middle" font-size="9">CLK+</text>
+    <rect x="240" y="96" width="20" height="30" fill="#f59e0b"/><text x="250" y="142" text-anchor="middle" font-size="9">CLK−</text>
+    <rect x="300" y="96" width="20" height="30" fill="#16a34a"/><text x="310" y="142" text-anchor="middle" font-size="9">GND</text>
+    <path d="M90,90 q110,-36 220,0" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+    <text x="200" y="168" text-anchor="middle" font-size="9.5" fill="#dc2626">D0 的回流得繞到最角落的 GND：大迴圈 ＝ 大 L ＝ 尖峰／串擾／EMI</text>
+    <text x="200" y="186" text-anchor="middle" font-size="9.5" fill="#dc2626">而且所有 lane 共用一根地 ＝ 共同阻抗耦合（互相污染）</text>
+  </g>
+  <!-- good -->
+  <text x="60" y="240" font-size="12.5" font-weight="bold" fill="#16a34a">✓ 好：G-S-S-G 交錯，每對差動旁邊就是地</text>
+  <g>
+    <rect x="60" y="256" width="640" height="120" fill="#f8fafc" stroke="#9ca3af"/>
+    <rect x="80" y="276" width="20" height="30" fill="#16a34a"/><text x="90" y="322" text-anchor="middle" font-size="9">GND</text>
+    <rect x="112" y="276" width="20" height="30" fill="#dc2626"/><text x="122" y="322" text-anchor="middle" font-size="9">D0+</text>
+    <rect x="144" y="276" width="20" height="30" fill="#dc2626"/><text x="154" y="322" text-anchor="middle" font-size="9">D0−</text>
+    <rect x="176" y="276" width="20" height="30" fill="#16a34a"/><text x="186" y="322" text-anchor="middle" font-size="9">GND</text>
+    <rect x="208" y="276" width="20" height="30" fill="#f59e0b"/><text x="218" y="322" text-anchor="middle" font-size="9">CLK+</text>
+    <rect x="240" y="276" width="20" height="30" fill="#f59e0b"/><text x="250" y="322" text-anchor="middle" font-size="9">CLK−</text>
+    <rect x="272" y="276" width="20" height="30" fill="#16a34a"/><text x="282" y="322" text-anchor="middle" font-size="9">GND</text>
+    <rect x="304" y="276" width="20" height="30" fill="#dc2626"/><text x="314" y="322" text-anchor="middle" font-size="9">D1+</text>
+    <rect x="336" y="276" width="20" height="30" fill="#dc2626"/><text x="346" y="322" text-anchor="middle" font-size="9">D1−</text>
+    <rect x="368" y="276" width="20" height="30" fill="#16a34a"/><text x="378" y="322" text-anchor="middle" font-size="9">GND</text>
+    <rect x="430" y="276" width="20" height="30" fill="#6b7280"/><text x="440" y="322" text-anchor="middle" font-size="9">I²C</text>
+    <rect x="462" y="276" width="20" height="30" fill="#6b7280"/><text x="472" y="322" text-anchor="middle" font-size="9">GPIO</text>
+    <rect x="524" y="276" width="20" height="30" fill="#0e7490"/><text x="534" y="322" text-anchor="middle" font-size="9">PWR</text>
+    <rect x="556" y="276" width="20" height="30" fill="#0e7490"/><text x="566" y="322" text-anchor="middle" font-size="9">PWR</text>
+    <rect x="618" y="276" width="20" height="30" fill="#16a34a"/><text x="628" y="322" text-anchor="middle" font-size="9">GND</text>
+    <path d="M122,270 q-16,-18 -32,0" fill="none" stroke="#16a34a" stroke-width="1.8" stroke-dasharray="5 3"/>
+    <text x="380" y="348" text-anchor="middle" font-size="9.5" fill="#16a34a">回流就在隔壁：小迴圈 ＝ 小 L；ground pin 同時是 lane 之間的隔離牆；高速區與電源／低速區分開兩端</text>
+  </g>
+  <text x="380" y="404" text-anchor="middle" font-size="10.5" fill="#374151">PT2 Ch.6：高速回流走「電感最小」路徑——你給它多近的地，它就能圈多小的迴圈</text>
+  <text x="380" y="424" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">Pin map 在原理圖階段就定生死——這是 SI 工程師要在「畫圖之前」介入的原因</text>
+</svg>
+<figcaption>圖 2：同一顆 connector、同一批訊號，pin map 不同命運就不同。上：訊號擠在一起、地在天邊——每條 lane 的回流都繞大圈，還共用一根地互相污染。下：G-S-S-G 交錯——回流最短、隔離兼得，電源與低速訊號安排在另一端。</figcaption>
+</figure>
+
+<h2>4. pad 過渡與參考層掏空補償：合法的「挖地」</h2>
+<p>知道了 C 太多會凹，就有兩條修法：<strong>把 C 做小</strong>，或<strong>把 L 補大</strong>。實務上兩招常常同時發生在同一個動作裡——<strong>在 pad 正下方把參考層挖一個洞（void／cutout）</strong>：</p>
+<ul>
+  <li>pad 對參考層的距離變遠（電力線要跨到更深一層才找到參考）→ <strong>C 變小</strong>；</li>
+  <li>回流被迫從洞的邊緣繞 → 迴路略增 → <strong>L 變大</strong>；</li>
+  <li>兩個效果都朝「阻抗升高」推——把原本被肥 pad 拉低的 Z_local 頂回 50 Ω。</li>
+</ul>
+<p>等等——Day 11 才引用過《Perfect Timing II》Ch.6 的警告：「<strong>地平面的挖空（cutout）必須避免</strong>：訊號跨過挖空區時回流被迫繞行，電感增加、上升時間變慢、串擾變大（Perfect Timing II Ch.6）」。矛盾嗎？不矛盾——關鍵差在<strong>有沒有算過</strong>：</p>
+<div class="card pitfall">
+  <span class="label">「掏空補償」與「地平面破洞」的一線之隔</span>
+  <p>PT2 警告的是<strong>意外的、訊號「跨越」的大挖空</strong>——回流繞遠路、純害無利。補償用的 void 是<strong>刻意的、只在 pad 正下方、尺寸經過計算（或模擬）的小洞</strong>——目的就是「精準地加一點 L、減一點 C」。判斷標準三條：①洞不超出 pad 邊緣太多（洞比 pad 大很多＝L 加過頭，凹陷變尖峰）；②訊號路徑上洞的「長度」遠小於 t_r 對應的空間長度（它仍是集總元件，不是一段高阻抗線）；③下一層還有完整的參考層接手（挖第一參考層、讓 pad 參考到第二層——不是把所有層都挖穿）。<strong>同一把刀，外科手術和捅刀子的差別在於量測與計算。</strong>Day 11 高速測試點的 inline pad 下方掏空、今天 connector pad 下方掏空，正是同一招的兩個現場。</p>
+</div>
+<p>掏多少？工程流程通常是：模擬（或參考 connector 廠 footprint 指南）給第一版 → 打樣 → TDR 驗證 → 微調。手算可以先估方向：pad 多出的 C 若約 0.3 pF，配平需要 L = 2.5 × 0.3 ≈ 0.75 nH——「洞要挖到讓回流多繞出約 0.75 nH」這種精度手算不可能，但它告訴你<strong>該往哪個方向調、調整量是大是小</strong>，這正是面試白板要的層次。</p>
+
+<h2>5. Launch 設計：訊號進出「另一個世界」的關口</h2>
+<p>launch 泛指訊號在「非 PCB 世界 ↔ PCB 世界」之間的過渡結構——最典型的是 <strong>SMA/同軸接頭上板</strong>（量測治具、eval board 上滿滿都是）。一個好 launch 的檢查清單，其實就是今天所有觀念的濃縮：</p>
+<ol>
+  <li><strong>中心針到走線的過渡：</strong>SMA 中心針比走線粗——接腳 pad 該縮該掏空，讓 √(L/C) 過渡平順（第 2、4 節）。</li>
+  <li><strong>ground via 環（via fence）：</strong>同軸線的回流走 360° 的外殼；上板後回流要交接給參考層——在訊號針周圍打一圈地 via，讓「圓筒狀的回流」平順過渡成「平面的回流」，這是第 3 節回流觀念的立體版。</li>
+  <li><strong>via stub 與引腳尾巴：</strong>through-hole SMA 的中心針穿出板底的部分＝一根 stub（Day 11）——高頻 launch 治具常見「把針尾剪平、磨平」的手工藝；改用 SMT／壓接式 launch 或 back-drill 是正規解。</li>
+  <li><strong>頸縮漸變：</strong>走線接近大 pad 時漸變線寬，避免阻抗階梯（Day 9 的「平台」指紋）。</li>
+</ol>
+<p>為什麼要學 launch？因為<strong>量測的公信力建立在 launch 上</strong>：你量到的 S 參數／TDR 永遠是「launch＋待測物＋launch」的總和。launch 做爛了，量出來的爛數據會被誤判成待測物的罪——第 6 週講 de-embedding（把治具效應扣掉）時會回收今天這一段。</p>
+
+<h2>6. connector 引腳尾巴＝stub：Day 11 的立體應用</h2>
+<p>Day 11 的判斷流程直接套用——先算尾巴多長、再算 f₀ 咬不咬得到訊號：</p>
+<ul>
+  <li><strong>through-hole／press-fit 引腳穿出板底的尾巴：</strong>一段 2～3 mm 的金屬尾在板厚方向立著，f₀ = v/4ℓ 量級落在十幾 GHz（混合介質、幾何複雜，標量級）——對 10 Gbps 級訊號已經是威脅。這是高速背板 connector 都改用<strong>壓接（press-fit）＋ back-drill</strong> 或 SMT 的原因之一。</li>
+  <li><strong>BTB 彈片的雙接觸點：</strong>不少 BTB 為了可靠度做「兩點接觸」——電流主要走其中一條路徑時，另一條接觸臂就是一小根分岔 stub。尺寸小（mm 級以下），一般要到極高頻才有感，但 26 GHz 級的毫米波模組選型時這種細節就上檯面了。</li>
+  <li><strong>ZIF 座與 flex 指端：</strong>flex 金手指插入 ZIF 後，接觸點之後多出的指端尾巴＝stub；訊號從 flex 面換到接觸彈片的瞬間也有一次微型的 C-L-C。好消息是這些結構都在 1 mm 上下——對 MIPI 4.5 Gbps 級（頻譜主要能量在約 10 GHz 內）通常是「有感但可活」，用 Day 11 的 t_r/6 與 f₀ 心算就能自己下判斷。</li>
+</ul>
+
+<h2>7. 鏡頭模組 BTB connector 選型眉角</h2>
+<p>相機模組跟主板之間那顆小小的 BTB（業界常見 pitch 約 0.35～0.4 mm、堆疊高度約 0.6～1 mm 量級的低背窄距系列），是你未來面試的主場之一。選型檢查清單——每一條都對應今天或前幾天的一個觀念：</p>
+<table>
+  <tr><th>檢查項</th><th>看什麼</th><th>對應觀念</th></tr>
+  <tr><td>高速規格</td><td>廠商有無標示支援的資料率／有無高速系列（結構上做過阻抗優化）；有無提供 S 參數模型</td><td>第 2 節 √(L/C) 配平</td></tr>
+  <tr><td>堆疊高度</td><td>越低背 → 引腳越短 → L 越小；但要跟機構的疊構需求打架</td><td>第 1 節 pin L</td></tr>
+  <tr><td>pin 數與 pin map 自由度</td><td>夠不夠讓每對 MIPI lane 做 G-S-S-G？電源腳夠不夠（大電流要並多腳）？</td><td>第 3 節回流</td></tr>
+  <tr><td>接觸設計</td><td>接觸點數、正向力、鍍層（金厚）——決定接觸電阻與劣化壽命</td><td>Day 9「墊高＝接觸劣化」指紋</td></tr>
+  <tr><td>mating 次數</td><td>產線重工、RMA 拆裝都在消耗壽命（常見規格數十次量級，依系列而異）</td><td>可靠度</td></tr>
+  <tr><td>retention／抗震</td><td>卡扣力、有無金屬鎖扣——手機跌落測試的常客</td><td>機構</td></tr>
+  <tr><td>屏蔽</td><td>有無金屬外殼（EMI shield）版本——camera 模組緊鄰天線時的救命稻草</td><td>Day 11 三宗罪之 EMI</td></tr>
+</table>
+<p>實務上的 pin map 慣例（呼應圖 2）：<strong>MIPI 高速 lane 集中一端、每對夾地；電源與地佔另一端（電源腳並聯多根降壓降），I²C／GPIO／strobe 等低速訊號當兩區之間的緩衝帶</strong>。還有一條血淚經驗：<strong>模組 EEPROM 燒錄、AF/OIS 除錯用的訊號盡量安排在低速區</strong>——不要為了測試方便去動高速 lane 附近的腳位（Day 11 測試點談判的續集）。</p>
+
+<h2>8. 實務案例：connector 在你日常的三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——daughter board 與模組介面：</strong>主板上的 BTB／FPC 介面（USB、DP、camera、觸控）每一個都是今天的考題。板廠出貨前的阻抗 coupon 量的是走線，<strong>connector 段的品質要靠整機通道 TDR／眼圖驗證</strong>——bring-up 時眼圖 margin 不夠，先量「跨過 connector 前後」兩段：問題在板上還是在跨接處，一次定位。SO-DIMM、M.2 插槽的金手指其實也是同一套物理：pad（C）＋彈片（L）＋回流交接。</li>
+  <li><strong>鏡頭模組——BTB 接觸劣化 FA：</strong>客訴「相機偶發雪花畫面／condition 重插即好」。TDR 打進 MIPI lane：connector 位置的扭波<strong>扭完回不到基準線、整段墊高</strong>（Day 9 指紋）＝接觸電阻上升——氧化、異物、或彈片正向力衰退。對策鏈：換料驗證 → 切片看接觸點 → 檢討鍍層規格與 mating 次數管理。這一套走完，就是一個完整漂亮的 FA 故事（面試 STAR 素材＋1）。</li>
+  <li><strong>面試白板：</strong>「Design the pin assignment for this camera connector.」——考的不是背腳位，是第 3 節的回流思維：高速夾地、電源並腳、低速當緩衝、留 debug 腳。把「為什麼」講出來（迴路面積→L→尖峰/串擾/EMI），就是 senior 跟 junior 的分水嶺。</li>
+</ul>
+
+<h2>9. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（π 模型與配平）：某 BTB connector 每腳等效 L_pin = 2.0 nH、兩端 pad 合計 C = 0.3 pF（50 Ω 系統）。(a) 這顆 connector 的局部阻抗量級？偏感性還是偏容性？(b) 用「配平條件」算：0.3 pF 的 C 只能打平多少 L？多出來的 L_excess 是多少？(c) 用 Day 9 的面積式，TDR 上這根尖刺的面積（以 ρ 計）約多少 ps？</summary>
+<p><strong>解：</strong>(a) Z ≈ √(L/C) = √(2.0 nH / 0.3 pF) = √6667 ≈ <strong>82 Ω</strong>——明顯偏感性，TDR 會是一根向上尖刺。(b) 配平：L_matched = 2.5 × 0.3 = 0.75 nH → L_excess = 2.0 − 0.75 = <strong>1.25 nH</strong>。(c) Day 9 面積式反過來用：面積 = L_excess/(2Z₀) = 1.25 nH / 100 Ω = <strong>12.5 ps</strong>（ρ·時間的面積）——比 Day 9 算過的單顆 via（約 5 ps）大一倍多，是條清楚可見的尖刺。對策方向：pad 下方<strong>不要</strong>掏空（保住 C）、甚至加大 pad／緊鄰處加一小段低阻抗線補 C，或直接換低背系列砍 L。</p>
+</details>
+
+<details>
+<summary>練習 2（掏空補償的方向感）：50 Ω 線進入一個寬 pad，pad 多貢獻 C_excess ≈ 0.4 pF、pin 只多貢獻 L ≈ 0.3 nH。(a) 現在局部偏 L 還是偏 C？TDR 長相？(b) 要配平，需要「補」多少 L 或「刪」多少 C？(c) 說出掏空參考層為什麼同時往「加 L、減 C」兩個方向推。(d) 掏過頭會發生什麼事？用 PT2 Ch.6 的警告說明。</summary>
+<p><strong>解：</strong>(a) 配平 0.4 pF 需要 1.0 nH，實際只有 0.3 nH → <strong>偏容性</strong>：Z ≈ √(0.3n/0.4p) ≈ 27 Ω 量級，TDR 一個深凹陷。(b) 兩條路：補 L 到 1.0 nH（差 0.7 nH），或把 C 刪到 0.3/2.5 = 0.12 pF（差 0.28 pF）——實務通常兩者混合。(c) 掏空讓 pad 的電力線要跨到更遠的下一層參考層才閉合 → C 掉；回流電流繞洞緣走 → 迴路變大 → L 升。一個動作、兩個方向、都朝阻抗升高推。(d) 洞開太大＝過補償：凹陷變尖刺；更糟的是若洞大到<strong>相鄰走線也跨過它</strong>，那些線的回流被迫繞行——PT2 Ch.6 警告的「cutout 必須避免」情境：電感增加、上升時間變慢、串擾上升。補償 void 的紀律：只蓋在 pad 正下方、算過（或模擬過）、TDR 驗證。</p>
+</details>
+
+<details>
+<summary>練習 3（回流迴圈）：一顆 40 pin BTB，方案 A 把某高速訊號 pin 安排在距最近 ground pin 僅一腳之隔（約 0.4 mm）；方案 B 因為「順手」把它排到離最近地 5 腳遠（約 2 mm）。(a) 定性說明 B 比 A 差在哪三件事。(b) 若因此回流迴圈電感多了約 1 nH（量級假設），用配平觀念說明 TDR 會多出什麼。(c) 引用 PT2 Ch.6 的哪兩句話可以支持你在設計 review 上退回方案 B？</summary>
+<p><strong>解：</strong>(a) ①迴路面積變大 → 迴路電感變大 → connector 段阻抗尖峰更高、邊沿變慢；②回流繞遠路時與其他訊號的回流共用路徑 → 共同阻抗耦合＋互感 → 串擾上升；③大迴圈＝大天線 → EMI 輻射與感受都變差。(b) 多 1 nH 的未配平電感 → 尖刺面積多 1 nH/100 Ω = 10 ps（ρ 面積）——疊在原本的扭波上，眼圖 margin 直接被咬。(c) ①「高速回流電流走電感最小路徑（緊貼訊號下方）」——你不給近的地，它就被迫圈大迴圈；②「回流若遭遇 5 Ω 的路徑，50 Ω 訊號的完整性就可能被破壞」——回程有一票否決權（皆 Perfect Timing II Ch.6）。</p>
+</details>
+
+<details>
+<summary>練習 4（引腳尾巴＝stub）：through-hole connector 的引腳穿出板底 2.5 mm（板厚方向 v 取約 14 cm/ns 估，尾巴一半在板內一半在空氣中，取混合值、標量級）。(a) 這根尾巴的 λ/4 陷波頻率量級？(b) 它對 10 Gbps NRZ（基頻 5 GHz、能量延伸至約 15 GHz）危險嗎？(c) 給三個對策。(d) 為什麼同一顆 connector 用在 1 Gbps 的舊產品上從來沒人抱怨？</summary>
+<p><strong>解：</strong>(a) f₀ ≈ 140 mm/ns ÷ (4 × 2.5 mm) = <strong>14 GHz 量級</strong>（空氣段速度較快，實際會偏高一些——所以標量級）。(b) 15 GHz 的頻譜尾端會掃到 notch，且尾巴本身的電容（t_d 約 18 ps → 約 0.35 pF 量級）就足以加深凹陷——<strong>邊緣危險，模擬確認</strong>。(c) ①改用 SMT 或壓接短尾系列；②press-fit＋back-drill 把板內段鑽短；③治具類可把針尾剪平磨短（工程樣品的手工藝）。(d) 1 Gbps 的基頻 0.5 GHz、能量大致在 2～3 GHz 內就衰減——14 GHz 的 notch 根本掃不到；同時 t_r 慢、t_r/6 門檻寬，尾巴連電容效應都輕微。<strong>「換個資料率，同一顆料從無罪變主犯」——Day 11 的『規則不變、數字重算』第三次出現</strong>。</p>
+</details>
+
+<details>
+<summary>練習 5（選型綜合題）：你要為 4-lane MIPI D-PHY（每 lane 約 2.5 Gbps）的新相機模組選 BTB connector 並定 pin map。列出：(a) 選型時最重要的四個檢查項與理由；(b) 高速區 pin map 的安排原則（畫出一排腳位示意）；(c) 給測試部門的 debug 腳你會怎麼安排？</summary>
+<p><strong>解：</strong>(a) ①高速規格／S 參數模型（√(L/C) 體質，2.5 Gbps × 頻譜延伸要求通道平坦到約 5～8 GHz 量級）；②堆疊高度（低背→pin L 小；但要配合模組厚度）；③pin 數與 map 自由度（4 lane＋1 clock 共 5 對差動，G-S-S-G 至少要 5×2＋6 根地 → 高速區就吃掉 16 腳量級）；④接觸可靠度（鍍金厚度、正向力、mating 次數——對應現場「重插即好」的雪花畫面 FA）。(b) 例：<strong>G, D0+, D0−, G, D1+, D1−, G, CLK+, CLK−, G, D2+, D2−, G, D3+, D3−, G</strong>——每對夾地、clock 放中間（到各 lane 的 skew 較平均）；電源與地在另一端、電源並多腳；I²C/GPIO 夾在中間當緩衝帶。(c) debug／燒錄腳（EEPROM、AF 測試點）一律排在<strong>低速區</strong>，絕不與高速 lane 相鄰；若測試部門要求 MIPI 探測，回 Day 11 Q2 的談判方案（inline pad＋掏空補償、或協定層 BIST），不開分支。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>connector 是 camera HW 面試的必考區——它同時考模型、量測、FA 與跨部門判斷。先用英文口頭回答，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Here's a TDR of a camera module channel. There's a wiggle at the board-to-board connector, and after the wiggle the trace settles about 8% higher than the baseline and stays there. Walk me through your interpretation and next steps."</summary>
+<p><strong>參考答案骨架：</strong>I'd separate the two features, because they have different physics. The wiggle itself — a dip, a peak, and a dip — is the connector's normal signature: the SMT pads add shunt capacitance, the contact beams add series inductance, so you get a C-L-C structure. As long as the areas are small and the trace returns to baseline, that's a design characteristic, not a defect. What worries me is the second feature: the trace settling higher than baseline and staying there. A level shift that persists is resistive, not reactive — parasitic L and C only show up while the edge is transitioning, so they can't hold the trace up. A persistent step up right at the connector means added series resistance: degraded contact — oxidation, contamination, worn plating, or insufficient normal force. Next steps: first, re-mate the connector and re-measure — if the step disappears, that's strong evidence of a contact issue; second, compare against a known-good unit to bound the healthy wiggle signature; third, measure from both ends since discontinuities mask what's behind them; and finally, if it reproduces, cross-section the contact area and review the plating spec and mating-cycle history. I'd also quantify it: an 8% rho shift on 50 ohms is roughly a few ohms of series resistance — consistent with a failing contact rather than a broken trace, which would go full open.</p>
+<p><strong>加分點：</strong>把「一過性 vs 持續性」的判別講成物理原理（L、C 只在邊沿現形），並主動提「重插重量、兩端各打一次、對照 known-good」三個動作——這是有 FA 實戰的人才會講的順序。</p>
+</details>
+
+<details>
+<summary>Q2: "You're assigning pins on a fine-pitch board-to-board connector for a 4-lane MIPI camera. How do you decide the pin map, and why does it matter so much?"</summary>
+<p><strong>參考答案骨架：</strong>The pin map matters because inside the connector there is no reference plane — the return current can only flow through the ground pins I assign. Every high-speed signal's return has to find the nearest ground pin, and the loop area between the signal path and its return sets the parasitic inductance. A big loop means a big impedance spike, more crosstalk between lanes through shared return paths, and a bigger radiating antenna for EMI. So my rules are: first, every differential pair gets guarded — ground, plus, minus, ground — so the return is always adjacent and the grounds double as isolation walls between lanes; second, I never let multiple high-speed lanes share a single distant ground, because a shared return is a shared impedance and lanes will talk to each other through it; third, power pins are paralleled at the far end of the connector for current capacity, with low-speed signals like I2C and GPIO placed between the power zone and the high-speed zone as a buffer; and fourth, on the PCB side each ground pin gets its own via straight into the ground plane right at the pad — a long skinny trace to ground would recreate exactly the high-impedance return path I'm trying to avoid. And the reason I fight for this at the schematic stage is that pin assignment is decided before layout even starts — no amount of routing skill can fix a return path that doesn't exist.</p>
+<p><strong>加分點：</strong>最後一句「原理圖階段就定生死」是 senior 視角；再補一句 camera 特有的實務——debug/燒錄腳排低速區、高速 lane 附近不開測試分支（呼應 stub 課），會讓面試官知道你真的做過模組。</p>
+</details>
+
+<h2>11. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：connector 的等效模型？Day 9 的扭波內部結構是什麼？</p>
+  <p class="a">A1：C–L–C π 型：SMT pad＝並聯電容（寬銅面貼參考層）、引腳彈片＝串聯電感（細長、懸空、離回流遠）、對面 pad 再一顆 C。TDR 上＝凹（C）→尖（L）→凹（C）；邊沿胖時糊成一個「扭波」。健康扭完回基準線；回不來（整段墊高）＝接觸電阻劣化（電阻性，與 L/C 的一過性本質不同）。</p>
+  <p class="q">Q2：不連續補償的核心公式與思路？50 Ω 系統的配平換算？</p>
+  <p class="a">A2：Z_local ≈ √(L/C)——補償不是消滅寄生，是把 L/C 比例調回 Z₀²。50 Ω 配平：L[nH] = 2.5 × C[pF]（1 pF 配 2.5 nH；1 nH 配 0.4 pF）。凹了（C 多）→縮 pad／掏空／補 L；尖了（L 多）→砍高度／加 C。搭配 Day 9 面積式可從 TDR 反推「還欠多少」。</p>
+  <p class="q">Q3：為什麼 connector 的 pin map 決定 SI 成敗？依據哪兩句 PT2 Ch.6？</p>
+  <p class="a">A3：connector 內沒有參考平面，回流只能走 ground pin——訊號到最近地腳的距離＝迴路面積＝電感（尖峰、串擾、EMI 三害）。PT2 Ch.6：①高速回流走「電感最小」路徑（緊貼訊號正下方）；②回流遭遇 5 Ω 路徑就能毀掉 50 Ω 訊號。對策：差動對 G-S-S-G 夾地、不共用遠端地、地腳落板就近打 via、電源/低速排另一端。pin map 在原理圖階段就定生死。</p>
+  <p class="q">Q4：參考層掏空補償的原理？跟 PT2 Ch.6「cutout 必須避免」怎麼共存？</p>
+  <p class="a">A4：pad 正下方挖 void：電力線跨到更深參考層→C 降；回流繞洞緣→L 升——兩效應都把被肥 pad 拉低的阻抗頂回 50 Ω。與 PT2 警告的差別＝「有沒有算過」：補償 void 只蓋 pad 正下方、尺寸經計算/模擬、下一層有完整參考層接手、TDR 驗證；PT2 罵的是訊號「跨越」的意外大挖空（回流繞行→L 增、t_r 變慢、串擾升）。掏過頭：凹陷變尖刺。</p>
+  <p class="q">Q5：connector 引腳尾巴的 stub 效應？鏡頭模組 BTB 選型四大項？</p>
+  <p class="a">A5：through-hole/press-fit 尾巴＝垂直 stub，f₀ = v/4ℓ（2.5 mm 尾→約 14 GHz 量級）；10 Gbps 級開始危險，對策：SMT/短尾系列、press-fit＋back-drill、治具剪針。BTB 選型：①高速規格與 S 參數模型（√(L/C) 體質）；②堆疊高度（低背→L 小）；③pin 數/pin map 自由度（G-S-S-G 排得下）；④接觸可靠度（鍍層、正向力、mating 次數——「重插即好」雪花畫面的 FA 對應）。debug/燒錄腳一律排低速區。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 13（週三）：把 TDR 曲線拉平——阻抗不連續的補償設計學總整理</strong></p>
+  <p>本週你已經收集齊了所有反派：via（Day 9）、stub（Day 11）、connector（Day 12）。明天換位子——從「判讀者」變成「設計者」：把 anti-pad、掏空、頸縮漸變、via 出線、back-drill、pad 瘦身這些散落各課的招式，整理成一套「看到什麼指紋、開什麼藥方」的系統化補償方法論，並談談補償的極限——什麼時候該認輸改走別條路。這也是週五實作日（動手量 stub 與分支）之前的最後一塊理論拼圖。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 12 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

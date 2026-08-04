@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 13｜把 TDR 曲線拉平——阻抗不連續的補償設計學總整理：指紋分診、藥方櫃與補償的極限</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 13 天（週三新觀念課）</div>
+  <h1>Day 13：把 TDR 曲線拉平——阻抗不連續的補償設計學總整理：指紋分診、藥方櫃與補償的極限</h1>
+  <div class="meta">2026-08-05（三）｜預估學習時間：90 分鐘｜難度：★★★★☆（本週總整理課——不出新反派，把 via、stub、connector 三天的散裝招式收成一套方法論）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 9 到 Day 12 你認識了所有反派（via、stub、connector），也零星學了幾招對策（back-drill、掏空、G-S-S-G）。今天換位子——從「判讀者」升級成「開藥方的設計者」。讀完你要能夠：</p>
+  <ol>
+    <li>背出補償設計的<strong>三條公理</strong>：面積反推寄生量、配平條件 L = Z₀²C、集總條件（結構要夠短補償才成立）</li>
+    <li>拿到任何一張 TDR 曲線先做<strong>分診</strong>：五種指紋裡，哪三種是「補償可治」、哪兩種是「補償禁忌症」——開錯藥比不開藥更糟</li>
+    <li>打開<strong>藥方櫃</strong>：anti-pad 加大、非功能 pad 移除、back-drill、參考層掏空、pad 瘦身、頸縮漸變、回流 via——每一味藥往哪個方向推（L↑ L↓ C↑ C↓）、劑量怎麼估</li>
+    <li>會算<strong>補償的頻寬極限</strong>：f_c ≈ 1/(π√(LC))——為什麼配平只保證「反射小」、不保證「頻寬夠」；「小而平衡」為何永遠贏「大而平衡」</li>
+    <li>知道<strong>什麼時候該認輸改架構</strong>，並能引用《Perfect Timing II》Ch.6 的原文說明「最好的補償是根本不需要補償」</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：反派集齊，該輪到我們出手了</h2>
+<p>這一週的劇情線：Day 9 學會「認指紋」（凹陷、尖峰、台階、墊高、扭波）；Day 11 拆了 stub（諧振腔、f₀ = v/4ℓ、t_r/6 門檻）；Day 12 拆了 connector（C–L–C π 模型、配平公式、回流 pin map、掏空補償）。散落三課的工具今天全部上桌，收攏成一張<strong>「指紋 → 分診 → 藥方」</strong>的對照表——這正是資深 SI 工程師和「會量 TDR 的人」之間的差距：前者看到波形，腦中同時浮現病理與處方。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：TDR 是聽診器，今天教你當醫生</span>
+  <p>前幾天你學的是「聽診」：心雜音（凹陷）、心律不整（尖峰）、心跳整個變調（台階）。今天學的是<strong>醫生的完整流程：分診 → 診斷 → 開藥 → 回診</strong>。醫生最重要的能力不是背藥名，而是知道<strong>哪些病吃藥會好、哪些病吃藥沒用得開刀</strong>——阻抗補償也一樣：有三種指紋是「調一調 L 和 C 就能治」，有兩種指紋是「補償完全無效、必須動結構」。開錯藥（比如對著一段阻抗做錯的走線拚命掏參考層）不但治不好，還會把板子越修越爛。今天的表格就是你的《診斷手冊》。</p>
+</div>
+
+<h2>1. 補償設計的三條公理</h2>
+<p>所有藥方共用的三條地基，前幾天各出現過一次，今天正式並列。<em>公式看不懂可以先跳過，每條下面的白話翻譯懂了就好。</em></p>
+
+<h3>公理一：面積反推寄生量（Day 9）</h3>
+<div class="formula">L_excess = 2Z₀ × A_尖峰　；　C_excess = (2/Z₀) × A_凹陷　（A 為 TDR 上 ρ 對時間的面積）</div>
+<p><em>白話翻譯：TDR 上尖刺或凹陷的「面積」直接告訴你多了幾 nH 或幾 pF——高度會被儀器邊沿快慢騙，面積不會（Day 9 面積不變性）。這是「診斷書上的數字」：知道欠多少，才知道藥下多重。</em></p>
+
+<h3>公理二：配平條件（Day 12）</h3>
+<div class="formula">Z_local ≈ √(L/C)　→　配平：L = Z₀²·C　（50 Ω 系統：L[nH] = 2.5 × C[pF]）</div>
+<p><em>白話翻譯：補償不是消滅寄生，是調蹺蹺板——每 1 pF 的多餘電容配 2.5 nH 的電感就打平。凹了就減 C 或加 L；尖了就減 L 或加 C。所有藥方都只是「往蹺蹺板的某一端加減砝碼」的不同手段。</em></p>
+
+<h3>公理三：集總條件（Day 11 的 t_r/6 門檻，換個說法）</h3>
+<div class="formula">結構的電氣長度 ℓ ≪ t_r 對應的空間長度（工程門檻：ℓ &lt; 空間長度/6 量級）</div>
+<p><em>白話翻譯：「把 L 和 C 互相抵帳」這件事，只有在整個結構<strong>短到訊號邊沿「一眼看不出內部細節」</strong>時才成立——邊沿同時罩住整個 C-L-C，三個元件才能合起來扮演一小段 50 Ω 線。結構一旦長到邊沿「走進去還沒走出來」，它就是一段真的錯阻抗傳輸線，配平魔法失效。這條公理決定了第 5 節「補償的極限」。</em></p>
+
+<div class="card takeaway">
+  <span class="label">三公理串成一句話</span>
+  <p><strong>先用面積算出欠多少（公理一），再用配平算出補多少（公理二），最後檢查結構夠不夠短、補償有沒有資格成立（公理三）。</strong>面試白板上把這三步講清楚，補償題就拿下八成分數。</p>
+</div>
+
+<h2>2. 分診：五種指紋，三種可治、兩種禁忌</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：吃藥會好的，跟必須開刀的</span>
+  <p>補償的本質是「拿 L 抵 C、拿 C 抵 L」——所以它<strong>只治得了「集總的 L/C 失衡」這一種病</strong>。TDR 上五種指紋裡：凹陷（C 多）、尖峰（L 多）、扭波（C-L-C 沒配平）是這種病，可治。但<strong>台階</strong>（一整段線的阻抗就是錯的）是「體質問題」——錯的是分布參數，你在一個點上加減 L/C 救不了一整段線；<strong>週期性深凹（stub 諧振）</strong>是「結構問題」——諧振是能量在一根分岔裡來回震盪，你配平它的入口電容也擋不住 f₀ 的能量被吸走；<strong>墊高（電阻性）</strong>更不用說——R 跟 L/C 是不同物種，蹺蹺板上根本沒有它的位置。對這三種「不可補償」的病，藥方分別是：改幾何/疊構、移除 stub、FA 修接觸。<strong>分診分錯，後面全錯。</strong></p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">指紋 → 分診 → 藥方：一張圖收攏本週所有課</text>
+  <!-- column headers -->
+  <text x="150" y="52" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">TDR 指紋</text>
+  <text x="390" y="52" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">病理</text>
+  <text x="620" y="52" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">藥方</text>
+  <!-- row 1: dip -->
+  <rect x="40" y="64" width="220" height="72" fill="#f0fdf4" stroke="#16a34a"/>
+  <path d="M60,96 L110,96 L128,122 L146,96 L240,96" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="150" y="130" text-anchor="middle" font-size="9.5" fill="#16a34a">凹陷（一過性）</text>
+  <text x="390" y="92" text-anchor="middle" font-size="10" fill="#374151">並聯 C 過多</text>
+  <text x="390" y="106" text-anchor="middle" font-size="9" fill="#6b7280">via pad／測試點／connector pad</text>
+  <text x="620" y="88" text-anchor="middle" font-size="9.5" fill="#16a34a">✓ 可補償：減 C（anti-pad、掏空、</text>
+  <text x="620" y="102" text-anchor="middle" font-size="9.5" fill="#16a34a">pad 瘦身、除非功能 pad）或加 L（頸縮）</text>
+  <!-- row 2: spike -->
+  <rect x="40" y="148" width="220" height="72" fill="#f0fdf4" stroke="#16a34a"/>
+  <path d="M60,192 L110,192 L128,164 L146,192 L240,192" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="150" y="214" text-anchor="middle" font-size="9.5" fill="#16a34a">尖峰（一過性）</text>
+  <text x="390" y="176" text-anchor="middle" font-size="10" fill="#374151">串聯 L 過多</text>
+  <text x="390" y="190" text-anchor="middle" font-size="9" fill="#6b7280">高背 pin／回流繞遠路／細長頸縮</text>
+  <text x="620" y="172" text-anchor="middle" font-size="9.5" fill="#16a34a">✓ 可補償：減 L（低背選型、就近地）</text>
+  <text x="620" y="186" text-anchor="middle" font-size="9.5" fill="#16a34a">或加 C（pad 略放大、少掏一點）</text>
+  <!-- row 3: wiggle -->
+  <rect x="40" y="232" width="220" height="72" fill="#f0fdf4" stroke="#16a34a"/>
+  <path d="M60,276 L100,276 L114,290 L134,258 L154,290 L168,276 L240,276" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="150" y="298" text-anchor="middle" font-size="9.5" fill="#16a34a">扭波（凹-尖-凹）</text>
+  <text x="390" y="260" text-anchor="middle" font-size="10" fill="#374151">C-L-C 比例沒配平</text>
+  <text x="390" y="274" text-anchor="middle" font-size="9" fill="#6b7280">connector／SMA launch</text>
+  <text x="620" y="256" text-anchor="middle" font-size="9.5" fill="#16a34a">✓ 可補償：調比例回 L=Z₀²C</text>
+  <text x="620" y="270" text-anchor="middle" font-size="9.5" fill="#16a34a">（掏空配 pad、footprint 微調）</text>
+  <!-- row 4: step -->
+  <rect x="40" y="316" width="220" height="72" fill="#fef2f2" stroke="#dc2626"/>
+  <path d="M60,372 L130,372 L130,344 L240,344" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="150" y="398" text-anchor="middle" font-size="9.5" fill="#dc2626">台階（持續的新水平）</text>
+  <text x="390" y="344" text-anchor="middle" font-size="10" fill="#374151">一整段線 Z₀ 錯</text>
+  <text x="390" y="358" text-anchor="middle" font-size="9" fill="#6b7280">線寬錯／疊構錯／跨層沒重算</text>
+  <text x="620" y="340" text-anchor="middle" font-size="9.5" fill="#dc2626">✗ 禁忌：分布性的錯，點補償無效</text>
+  <text x="620" y="354" text-anchor="middle" font-size="9.5" fill="#dc2626">→ 改線寬／改疊構（結構刀）</text>
+  <!-- row 5: resonance / level shift -->
+  <rect x="40" y="400" width="220" height="72" fill="#fef2f2" stroke="#dc2626"/>
+  <path d="M60,428 L100,428 L114,452 L126,428 L150,428 L150,420 L240,420" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="150" y="484" text-anchor="middle" font-size="9.5" fill="#dc2626">stub 諧振／墊高不回基準</text>
+  <text x="390" y="428" text-anchor="middle" font-size="10" fill="#374151">諧振腔吸能量／串聯 R</text>
+  <text x="390" y="442" text-anchor="middle" font-size="9" fill="#6b7280">via stub、分支線／接觸劣化</text>
+  <text x="620" y="424" text-anchor="middle" font-size="9.5" fill="#dc2626">✗ 禁忌：back-drill／剪 stub／改 layout；</text>
+  <text x="620" y="438" text-anchor="middle" font-size="9.5" fill="#dc2626">R → FA（重插、切片、鍍層）不是補償</text>
+  <rect x="40" y="496" width="680" height="44" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="380" y="514" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">分診口訣：一過性的凹／尖／扭 → 蹺蹺板可治；持續的台階、會諧振的 stub、電阻性的墊高 → 動結構、動刀、做 FA</text>
+  <text x="380" y="530" text-anchor="middle" font-size="9.5" fill="#7c3aed">補償的適應症只有一種：集總的 L/C 失衡</text>
+</svg>
+<figcaption>圖 1：本週總複習濃縮成一張分診表。綠色三列是補償的「適應症」（拿 L 抵 C、拿 C 抵 L 有效）；紅色兩列是「禁忌症」——台階是分布參數的錯、諧振是能量儲存結構、墊高是電阻，三者都不在 √(L/C) 蹺蹺板的管轄範圍內。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「TDR 有凹就掏參考層」</span>
+  <p>掏空是好藥，但先分診。三個真實的誤用場景：①凹陷其實是<strong>台階的開頭</strong>（後面沒有回到基準線）——那是一段線寬畫錯的線，掏 pad 下方那一小塊救不了整段，反而在錯的位置多加一個尖峰；②凹陷是<strong>stub 的入口電容</strong>——掏空能把入口的凹修淺，但 f₀ 的諧振吸收一點都不會少，眼圖照樣塌（Day 11：諧振是能量問題不是阻抗問題）；③凹陷後面墊高——那是接觸電阻，掏了地還是墊高。<strong>藥方永遠跟著病理走，不是跟著波形長相走。</strong></p>
+</div>
+
+<h2>3. 藥方櫃：每一味藥往哪個方向推</h2>
+<p>把散落 Day 9～12 的招式集中上架。每味藥只做一件事：<strong>把某個位置的 L 或 C 往某個方向推</strong>——記住方向，劑量用公理一、二估。</p>
+
+<table>
+  <tr><th>藥方</th><th>動作</th><th>推的方向</th><th>典型場景</th><th>注意事項</th></tr>
+  <tr><td>anti-pad 加大</td><td>把 via 與參考層之間的環形隔離孔加大</td><td>C↓（via barrel 對平面的電容減少）</td><td>via 過孔偏容性（TDR 凹陷）</td><td>過大＝在參考層開洞，回流繞行——見下方 PT2 引文</td></tr>
+  <tr><td>非功能 pad 移除</td><td>刪掉 via 在「沒有接線的內層」上的環形 pad</td><td>C↓</td><td>厚板多層 via，每層 pad 都貢獻一點 C</td><td>板廠製程能力要確認（有的板廠要求留 pad 抓孔）</td></tr>
+  <tr><td>back-drill（背鑽）</td><td>從板背把 via 沒用到的桶身鑽掉</td><td>移除諧振結構（不是調 L/C——治的是禁忌症那一類）</td><td>via stub（Day 11 主角）</td><td>殘樁仍有約 0.2 mm 量級（依板廠能力，標「約」）；成本增加</td></tr>
+  <tr><td>參考層掏空（void）</td><td>pad 正下方挖掉第一參考層</td><td>C↓ 且 L↑（雙向推高阻抗）</td><td>connector pad、測試點 pad、SMA launch（Day 12）</td><td>三判準：只蓋 pad 正下方／長度遠小於 t_r 空間長度／下層有完整參考層接手</td></tr>
+  <tr><td>pad 瘦身</td><td>在焊接可靠度允許內縮小 pad</td><td>C↓</td><td>0402/0201 元件 pad、connector SMT pad</td><td>跟製程（錫量、對位）談判——SI 不是唯一持份者</td></tr>
+  <tr><td>頸縮漸變（taper／neck-down）</td><td>走線接近大 pad 時漸變收窄；或刻意用一小段細線</td><td>漸變＝消除阻抗階梯；細線段＝L↑ C↓</td><td>SMA 中心針過渡、BGA 出線區</td><td>細線段本身是高阻抗——長度要短（公理三），否則自己變尖峰</td></tr>
+  <tr><td>回流 via（return via／stitching via）</td><td>訊號換層 via 旁邊緊貼一顆地 via</td><td>L↓（回流迴圈縮小）</td><td>任何訊號換參考層的位置</td><td>距離越近越有效；換層前後參考層若是不同網路，需就近提供回流橋</td></tr>
+  <tr><td>低背／短尾選型</td><td>換低堆疊 connector、SMT 取代 through-hole</td><td>L↓（兼移除引腳尾 stub）</td><td>Day 12 選型清單</td><td>跟機構的堆疊高度需求打架——原理圖階段就要吵完</td></tr>
+</table>
+
+<div class="card intuition">
+  <span class="label">白話版：藥櫃的抽屜只分四格</span>
+  <p>看起來八味藥很多，其實抽屜只有四格：<strong>減 C</strong>（anti-pad、除 pad、瘦身、掏空）、<strong>減 L</strong>（回流 via、低背、就近地）、<strong>加 L / 加 C</strong>（頸縮細線、pad 略放大——用得少但存在）、<strong>移除結構</strong>（back-drill、剪針、不開分支——這格治的是「禁忌症」，嚴格說不是補償，是開刀）。拿到病例先問：我要推哪個方向？再從那格抽屜裡挑一味在你的板子上「動得了」的藥——很多時候不是最有效的藥先用，而是<strong>談判成本最低的藥先用</strong>（改 anti-pad 不用跟任何人吵；瘦 pad 要跟製程吵；換 connector 要跟機構吵）。</p>
+</div>
+
+<h2>4. Via 的出線與《Perfect Timing II》的三招——2002 年藥方的現代校訂</h2>
+<p>《Perfect Timing II》Ch.6 對 via 的第一句話其實是「別用」：<strong>「佈clock 走線時，訊號應該留在同一個訊號層。用 via 轉到其他層會劣化 clock 的訊號品質——因此應避免使用 via。」（Perfect Timing II Ch.6）</strong>這就是藥方櫃之外的<strong>第零藥方：最好的補償，是讓不連續根本不存在</strong>。能不換層就不換層、能不開測試分支就不開（Day 11 談判）、能用 SMT 就不用 through-hole——每一個省下來的不連續，都是省下來的補償工程與量測驗證。</p>
+<p>當 via 躲不掉時，PT2 Ch.6 給了三招（原文照列）：</p>
+<ol>
+  <li><strong>「把 via 做得越大越好（面積越大，電感與電阻越小）」（Perfect Timing II Ch.6）</strong></li>
+  <li><strong>「外層以最大銅厚電鍍」（Perfect Timing II Ch.6）</strong></li>
+  <li><strong>「將 via 孔電鍍加厚或填實（filling solid）」（Perfect Timing II Ch.6）</strong></li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">2002 年的藥方，2026 年要校訂——「加大 via」不再一體適用</span>
+  <p>PT2 成書時的主戰場是<strong>百 MHz 量級的 clock</strong>：那個年代 via 的病主要是 <strong>R 與 L</strong>（granular copper 的電阻、細桶身的電感），所以「加大、鍍厚、填實」三招全部往 R↓ L↓ 推，完全正確。但現代多 Gbps serial（MIPI、USB4、PCIe）的 via，病常常反過來是 <strong>C 與 stub</strong>：大 via 意味著大 pad、大桶身對參考層的電容——「加大 via」在今天的高速訊號 via 上<strong>可能把凹陷挖得更深</strong>。以現代標準需修訂為：<strong>訊號 via 傾向小孔徑＋優化 anti-pad＋back-drill；「加大、鍍厚、填實」三招保留給電源 via（那裡 R 與 L 仍是主要敵人，PT2 的邏輯原封不動成立）</strong>。這是「引用經典要帶年份」的標準示範——面試時能講出「這個建議的適用前提」比背出建議本身值錢得多。</p>
+</div>
+
+<p>還有一段 PT2 原文正好是 anti-pad 加大的「另一面」，兩相對照非常精彩：<strong>「在穿過參考平面的孔周圍留過大的間隙（clearance）也許讓製造容易，但可能迫使回流電流走非最佳路徑——間隙孔的效應應該被分析。」（Perfect Timing II Ch.6）</strong>換句話說：anti-pad 是「減 C 的藥」，也是「在回流平面上開的洞」——<strong>同一個幾何、兩個效應，加大到某個程度後回流繞行的 L↑ 會反超 C↓ 的好處</strong>。這跟 Day 12 掏空補償「外科手術 vs 捅刀子」是同一堂課：劑量，永遠是劑量。</p>
+
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">一顆換層 via 的完整補償配置（剖面）</text>
+  <!-- board cross section -->
+  <rect x="80" y="60" width="480" height="14" fill="#e5e7eb" stroke="#9ca3af"/>
+  <text x="52" y="71" font-size="9" fill="#475569">L1 訊號</text>
+  <rect x="80" y="102" width="480" height="10" fill="#0e7490"/>
+  <text x="52" y="111" font-size="9" fill="#0e7490">L2 GND</text>
+  <rect x="80" y="144" width="480" height="10" fill="#94a3b8"/>
+  <text x="52" y="153" font-size="9" fill="#475569">L3 PWR</text>
+  <rect x="80" y="186" width="480" height="14" fill="#e5e7eb" stroke="#9ca3af"/>
+  <text x="46" y="197" font-size="9" fill="#475569">L4 訊號</text>
+  <rect x="80" y="228" width="480" height="10" fill="#0e7490"/>
+  <text x="52" y="237" font-size="9" fill="#0e7490">L5 GND</text>
+  <rect x="80" y="270" width="480" height="14" fill="#e5e7eb" stroke="#9ca3af"/>
+  <text x="46" y="281" font-size="9" fill="#475569">L6（底層）</text>
+  <!-- signal trace on L1 into via -->
+  <line x1="90" y1="63" x2="250" y2="63" stroke="#374151" stroke-width="3"/>
+  <text x="160" y="54" font-size="9.5" fill="#374151">訊號 L1 →</text>
+  <!-- via barrel -->
+  <rect x="250" y="60" width="16" height="140" fill="#f59e0b" stroke="#b45309"/>
+  <!-- backdrilled part -->
+  <rect x="250" y="200" width="16" height="84" fill="none" stroke="#dc2626" stroke-dasharray="4 3"/>
+  <path d="M258,284 L258,206" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="330" y="252" font-size="9.5" fill="#dc2626">back-drill：把 L4 以下沒用到的桶身鑽掉</text>
+  <text x="330" y="266" font-size="9.5" fill="#dc2626">（殘樁約 0.2 mm 量級，依板廠能力）</text>
+  <!-- trace out on L4 -->
+  <line x1="266" y1="193" x2="470" y2="193" stroke="#374151" stroke-width="3"/>
+  <text x="380" y="184" font-size="9.5" fill="#374151">→ 訊號 L4 出線</text>
+  <!-- antipads -->
+  <rect x="234" y="102" width="16" height="10" fill="#fff"/>
+  <rect x="266" y="102" width="16" height="10" fill="#fff"/>
+  <rect x="234" y="144" width="16" height="10" fill="#fff"/>
+  <rect x="266" y="144" width="16" height="10" fill="#fff"/>
+  <rect x="234" y="228" width="16" height="10" fill="#fff"/>
+  <rect x="266" y="228" width="16" height="10" fill="#fff"/>
+  <text x="150" y="127" font-size="9.5" fill="#7c3aed">anti-pad：加大 → C↓</text>
+  <text x="150" y="140" font-size="9.5" fill="#7c3aed">但過大＝回流平面破洞（PT2 警告）</text>
+  <!-- nonfunctional pad -->
+  <circle cx="258" cy="149" r="3" fill="#dc2626"/>
+  <text x="470" y="140" font-size="9.5" fill="#dc2626">✗ L3 非功能 pad：沒接線就移除 → C↓</text>
+  <!-- return via -->
+  <rect x="320" y="102" width="12" height="136" fill="#16a34a" stroke="#15803d"/>
+  <text x="410" y="96" font-size="9.5" fill="#16a34a">回流 via（地）：緊貼訊號 via，</text>
+  <text x="410" y="110" font-size="9.5" fill="#16a34a">L2 GND ↔ L5 GND 的回流電梯 → L↓</text>
+  <path d="M300,70 q26,60 26,120" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="380" y="330" text-anchor="middle" font-size="10.5" fill="#374151">訊號走 via 換層時，回流也要「換層」——沒有回流 via，回流得繞到最近的層間連接處，迴圈暴增（尖峰＋EMI）</text>
+  <rect x="80" y="352" width="600" height="66" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="380" y="374" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">PT2 Ch.6 第零藥方：「訊號應留在同一層——via 應避免使用」</text>
+  <text x="380" y="392" text-anchor="middle" font-size="9.5" fill="#7c3aed">躲不掉時：小孔徑＋anti-pad 優化＋非功能 pad 移除＋back-drill＋回流 via（現代高速 serial 校訂版）</text>
+  <text x="380" y="408" text-anchor="middle" font-size="9.5" fill="#7c3aed">「加大／鍍厚／填實」三招（PT2 原文）保留給電源 via——那裡 R 與 L 仍是主要敵人</text>
+  <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#dc2626"/></marker></defs>
+</svg>
+<figcaption>圖 2：一顆 L1→L4 換層 via 的完整補償配置。四味藥同時上：anti-pad 加大（減 C，但別過量）、L3 非功能 pad 移除（減 C）、back-drill 掉 L4 以下的殘桶（移除 stub 諧振）、緊鄰回流 via（減回流 L）。每一味都對應藥方櫃的一格抽屜。</figcaption>
+</figure>
+
+<h2>5. 補償的極限：配平只保證反射小，不保證頻寬夠</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：減速丘鋪得再平順，還是減速丘</span>
+  <p>把 C-L-C 配平到 50 Ω，好比把馬路上的減速丘鋪上漂亮的緩坡——低速開過去完全無感（低頻訊號看不到它）。但坡就是坡：車速夠快（頻率夠高）時，再平順的坡也會讓車子飛起來。<strong>配平消滅的是「反射」，消滅不了「這裡有一坨 L 和 C」的事實</strong>——一段集總的 LC 結構天生是個低通濾波器，頻率高過它的截止頻率，訊號就是過不去。所以補償有一條硬天花板：<strong>結構的 LC 越大，天花板越低——這就是為什麼「小而平衡」永遠贏「大而平衡」，也是為什麼到了某個速率，你只能換掉整顆 connector 而不是繼續調 pad。</strong></p>
+</div>
+
+<p>配平後的不連續段等效於一節 LC 低通（把它看成人工傳輸線的一節），其截止頻率量級：</p>
+<div class="formula">f_c ≈ 1 / (π√(LC))</div>
+<p><em>白話翻譯：L 和 C 相乘開根號＝這個結構的「時間體積」；體積越大，能通過的頻率越低。配平（L/C 的「比例」）管反射，√(LC)（L 與 C 的「總量」）管頻寬——比例和總量是兩個獨立的自由度，補償只調了前者。</em></p>
+<p>代兩組 Day 12 的數字感受一下（都是<strong>完美配平</strong>的 50 Ω 結構）：</p>
+<ul>
+  <li>低背 BTB：L = 1.0 nH、C = 0.4 pF → √(LC) = 20 ps → <strong>f_c ≈ 16 GHz 量級</strong>——對 MIPI 4.5 Gbps（能量主要在 10 GHz 內）綽綽有餘。</li>
+  <li>高背 connector 硬補到配平：L = 2.5 nH、C = 1.0 pF → √(LC) = 50 ps → <strong>f_c ≈ 6 GHz 量級</strong>——TDR 上看起來「平了」，可是跑 10 Gbps 級的訊號眼圖照樣塌。<strong>TDR 拉平 ≠ 通道合格</strong>，這是本課最重要的一句警語。</li>
+</ul>
+<p>這也解釋了公理三的另一面：配平的 C-L-C 要「扮演一小段 50 Ω 線」，前提是訊號的頻率成分對它而言都是「低頻」——f_c 就是這場扮演穿幫的頻率。於是「何時該認輸改架構」有了定量判準：</p>
+
+<div class="card takeaway">
+  <span class="label">認輸判準：補償 vs 改架構</span>
+  <p>①算出結構配平後的 f_c，跟訊號的頻寬需求（NRZ 常抓到 0.75×資料率以上、加上餘裕，量級估算）比——<strong>f_c 沒有明顯高於需求，補償這條路直接放棄</strong>，換低背、換 SMT、換更短的結構，把 √(LC) 本身砍小；②禁忌症三種（台階／諧振／電阻）從一開始就不進補償流程；③補償迭代兩輪（改版→TDR）還收不斂，通常代表模型漏了什麼（常見：回流路徑沒進模型）——停下來重看，不要進入第三輪玄學調參。改架構聽起來成本高，但比起連改三版 PCB，換一顆料常常是便宜的那條路。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">兩顆「都配平」的 connector：反射一樣小，頻寬天差地遠</text>
+  <!-- axes -->
+  <line x1="90" y1="270" x2="700" y2="270" stroke="#374151" stroke-width="1.5"/>
+  <line x1="90" y1="60" x2="90" y2="270" stroke="#374151" stroke-width="1.5"/>
+  <text x="700" y="290" text-anchor="end" font-size="10" fill="#374151">頻率 →</text>
+  <text x="60" y="70" font-size="10" fill="#374151" transform="rotate(-90 60 70)"></text>
+  <text x="86" y="52" text-anchor="end" font-size="10" fill="#374151">通過量（示意）</text>
+  <!-- small connector curve -->
+  <path d="M90,90 L420,90 Q520,92 580,130 Q640,180 690,250" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="440" y="80" font-size="10" fill="#16a34a">小而平衡：√(LC)=20 ps → f_c 約 16 GHz 量級</text>
+  <!-- big connector curve -->
+  <path d="M90,96 L250,96 Q330,100 380,140 Q440,200 500,258" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="210" y="120" font-size="10" fill="#dc2626">大而平衡：√(LC)=50 ps → f_c 約 6 GHz 量級</text>
+  <!-- signal band -->
+  <rect x="90" y="60" width="330" height="210" fill="#0e7490" opacity="0.07"/>
+  <line x1="420" y1="60" x2="420" y2="270" stroke="#0e7490" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="255" y="255" text-anchor="middle" font-size="10" fill="#0e7490">訊號需要的頻寬（示意：10 Gbps 級）</text>
+  <text x="380" y="310" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">配平（L/C 比例）管反射；√(LC)（總量）管頻寬——TDR 拉平了，眼圖不一定開</text>
+  <text x="380" y="328" text-anchor="middle" font-size="9.5" fill="#374151">紅色曲線在訊號頻帶內就開始掉：這顆 connector 再怎麼補償都不合格 → 改架構</text>
+</svg>
+<figcaption>圖 3：補償的天花板（曲線為觀念示意、非實測）。兩顆結構都完美配平、TDR 都近乎平坦，但大結構的 f_c 落在訊號頻帶內——高頻成分直接被吃掉，眼圖照塌。此時唯一的藥是把 √(LC) 本身做小：換低背、換更短的過渡、少一次換層。</figcaption>
+</figure>
+
+<h2>6. 把它變成流程：手算 → 模擬 → TDR 回診</h2>
+<p>方法論最後一塊：藥方不是一次開到位，是一個閉環。</p>
+<ol>
+  <li><strong>分診（本課第 2 節）：</strong>TDR 指紋 → 可補償 or 禁忌症。禁忌症走各自的路（改幾何／back-drill／FA）。</li>
+  <li><strong>手算定方向與量級（公理一、二）：</strong>面積 → 欠多少 pF 或 nH → 該往哪格抽屜拿藥、劑量是大是小。手算的精度大約只有 ±幾十 %，但它決定「方向對不對」——方向錯了，模擬跑得再準都是精確地走錯路。</li>
+  <li><strong>模擬精算：</strong>3D 場解算器（HFSS 類）算 connector/via 結構、2D 場解算器算走線——第 6 週講量測時再展開工具鏈。模擬的角色是把手算的「量級」收斂成「尺寸」：anti-pad 直徑、void 長寬。</li>
+  <li><strong>TDR 回診（公理一再用一次）：</strong>打樣回來量，殘餘的凹/尖面積就是「還欠多少」的處方箋。收斂判準事先定好（例如通道 spec 換算的 ρ 上限），不要「看起來蠻平的」。</li>
+  <li><strong>兩輪不收斂 → 回第 1 步重新分診</strong>（最常見的漏診：回流路徑、以及把禁忌症誤當適應症）。</li>
+</ol>
+
+<h2>7. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——換層 via 的標準配置：</strong>主板上 USB/DP 高速線從 L1 換到內層，SI 檢查清單就是圖 2 那顆 via：anti-pad 有沒有優化、非功能 pad 有沒有刪、要不要 back-drill（板厚與速率決定）、回流 via 有沒有貼著放。這四項在 layout review 時是逐條打勾的例行公事——今天之後你看得懂每一條「為什麼」。</li>
+  <li><strong>鏡頭模組——「補償收不斂」的真實劇本：</strong>模組 MIPI 通道 TDR 在 BTB 處有凹陷，第一版改 footprint 掏空——凹陷變淺但沒消失；第二版加大掏空——凹陷處反而長出小尖峰（過補償），而且眼圖還是不合格。分診重來才發現：真正的病是<strong>ground pin 分配不足（回流繞路的 L 與 lane 間耦合）</strong>——病灶在 pin map，不在 pad 電容。藥方是換 pin assignment（原理圖層級），不是繼續雕地板。這正是第 6 節「兩輪不收斂→重新分診」的教科書案例，也是 Day 12「pin map 定生死」的續集。</li>
+  <li><strong>面試白板：</strong>「Here's a TDR with a dip. Fix it.」——標準的分層答法：先問（或假設）dip 是一過性還是台階開頭 → 面積反推 C_excess → 列兩格抽屜（減 C／加 L）各兩味藥＋各自的談判成本 → 主動講出 f_c 天花板與「TDR 平了不等於眼圖開」。這一套講完，面試官知道你不是背 checklist，是真的有方法論。</li>
+</ul>
+
+<h2>8. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。週五實作日會拿真波形對答案。</p>
+
+<details>
+<summary>練習 1（完整開藥流程）：50 Ω 通道 TDR 在測試點位置有一個一過性凹陷，面積 A ≈ 7.5 ps（ρ·時間），凹陷後回到基準線。(a) 反推 C_excess。(b) 若選「加 L」路線配平，需要多少 nH？(c) 列出「減 C」抽屜裡可用的三味藥。(d) 你會先試哪一味？用「談判成本」說明。</summary>
+<p><strong>解：</strong>(a) 公理一：C_excess = (2/Z₀)×A = (2/50)×7.5 ps = <strong>0.3 pF</strong>。(b) 公理二：L = 2.5×0.3 = <strong>0.75 nH</strong>。(c) 減 C 三味：pad 正下方參考層掏空、pad 瘦身（跟探針/製程需求談）、若凹陷其實含 via 成分則加大 anti-pad＋刪非功能 pad。(d) 先試<strong>掏空</strong>：只動參考層一小塊銅，不影響焊接與探測、不用跟製程或測試部門談判，改版風險最低；瘦 pad 要過製程關、動 anti-pad 牽動的是 via 而非 pad 本身。（順帶檢查公理三：測試點 pad 尺寸 mm 級，遠小於一般 t_r 的空間長度，補償資格成立。）</p>
+</details>
+
+<details>
+<summary>練習 2（頻寬天花板）：兩顆候選 connector 都能藉 footprint 調整做到配平。甲：L=0.8 nH、C=0.32 pF；乙：L=3.0 nH、C=1.2 pF。(a) 驗證兩顆都配平在 50 Ω。(b) 各算 f_c 量級。(c) 通道要跑 10 Gbps NRZ（頻寬需求抓到約 7.5 GHz 以上、留餘裕），哪顆能用？(d) 用一句話說明為什麼「TDR 都平」但結論不同。</summary>
+<p><strong>解：</strong>(a) 甲：√(0.8n/0.32p)=√2500=50 Ω ✓；乙：√(3.0n/1.2p)=√2500=50 Ω ✓。(b) 甲：√(LC)=√(0.8n×0.32p)=16 ps → f_c ≈ 1/(π×16 ps) ≈ <strong>20 GHz 量級</strong>；乙：√(LC)=60 ps → f_c ≈ <strong>5.3 GHz 量級</strong>。(c) 需求約 7.5 GHz＋餘裕：<strong>甲可用；乙的 f_c 直接落在頻帶內，不合格——而且無藥可補</strong>，因為它已經配平了，剩下的病是 √(LC) 總量太大，只能換料。(d) 配平（比例）管反射、√(LC)（總量）管頻寬——TDR 的平坦只證明了前者。</p>
+</details>
+
+<details>
+<summary>練習 3（anti-pad 的兩難）：為了修 via 的容性凹陷，同事提議「anti-pad 直接開到三倍大，一次到位」。(a) anti-pad 加大為什麼能減 C？(b) 引用 PT2 Ch.6 的哪句原文可以提醒他風險？物理機制是什麼？(c) 給出一個工程上的收斂做法。(d) 這個兩難跟 Day 12 的哪個主題是同一堂課？</summary>
+<p><strong>解：</strong>(a) via barrel／pad 與參考層邊緣之間的距離拉大 → 電力線更難閉合到平面 → 對地電容下降。(b) PT2 Ch.6：「在穿過參考平面的孔周圍留過大的間隙也許讓製造容易，但可能迫使回流電流走非最佳路徑——間隙孔的效應應該被分析。」機制：anti-pad 就是參考平面上的洞，鄰近走線的回流（以及 via 自己的回流交接）被迫繞洞緣 → L↑、串擾↑；加大到某個程度，L↑ 的害處反超 C↓ 的好處，凹陷還會翻成尖峰（過補償）。(c) 從廠商建議或模擬起步、每輪小步調整、TDR 面積收斂到目標即停——「效應應該被分析」這半句就是答案本身。(d) Day 12 掏空補償 vs「cutout 必須避免」的一線之隔——同一把刀，差別在有沒有算過、有沒有量。</p>
+</details>
+
+<details>
+<summary>練習 4（分診急診室）：四張 TDR 病例，各自判「可補償／禁忌症」並開藥：(A) 凹陷後曲線停在比基準低 8% 的新水平不回來；(B) 一過性尖峰，面積 5 ps；(C) 走線中段一個凹，用更快的 TDR 邊沿重量後凹「變深且變出周期性」，通道眼圖在特定頻率附近塌陷；(D) connector 處扭波，扭完回基準，但面積比 known-good 板大 50%。</summary>
+<p><strong>解：</strong>(A) <strong>禁忌症——台階</strong>（持續的新水平＝後段整段線阻抗偏低）：查線寬/疊構/該段參考層距離，改幾何，點補償無效。(B) <strong>可補償</strong>：L_excess = 2Z₀×A = 100×5 ps = 0.5 nH；藥：回流 via 貼近／低背化砍 L，或補 C 0.2 pF（0.5/2.5）配平——順序上先查回流（免費）再動結構。(C) <strong>禁忌症——stub 諧振</strong>：快邊沿下現出周期性＋特定頻率塌＝諧振腔特徵（Day 11）；藥是 back-drill／移除分支，不是配平入口電容。(D) <strong>可補償</strong>（且健康地回基準＝無電阻性問題）：面積多 50% ＝ L/C 失衡量多 50%——對照 known-good 查 footprint 差異（掏空漏做？anti-pad 版本錯？），把配平調回來。四例合一句：<strong>先問「一過性？持續？周期性？」再開藥。</strong></p>
+</details>
+
+<details>
+<summary>練習 5（PT2 三招的現代校訂）：PT2 Ch.6 對 via 的三招是「加大、外層鍍厚、填實」。(a) 2002 年這三招針對的是 via 的哪兩個寄生參數？當年的主戰場是什麼訊號？(b) 為什麼「加大」用在 2026 年的 10 Gbps 訊號 via 上可能適得其反？(c) 這三招今天完整保留給哪一類 via？為什麼那裡的邏輯不變？(d) 訊號 via 的現代對應清單是什麼？</summary>
+<p><strong>解：</strong>(a) 針對 <strong>R 與 L</strong>（granular copper 電阻、桶身電感）；主戰場是百 MHz 量級的 clock 佈線——邊沿慢、頻寬窄，via 的 C 幾乎無感。(b) 加大 via ＝ 加大 pad 與桶身對參考層的面積 → <strong>C↑</strong>；現代高速 serial 的 via 病灶常是容性凹陷＋stub 諧振，加大反而把凹陷挖深。(c) <strong>電源 via</strong>：電源路徑的敵人到今天仍是 R（IR drop）與 L（PDN 阻抗）——加大、鍍厚、填實、多打並聯，PT2 邏輯原封不動（第 7-8 週 PDN 再展開）。(d) 訊號 via：小孔徑、優化 anti-pad、移除非功能 pad、back-drill、緊鄰回流 via——外加第零藥方：能不換層就不換層（PT2：「訊號應留在同一層」）。</p>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+<p>補償方法論是 Apple/Google camera HW 面試的高頻主戰場——它同時暴露你的物理直覺、量化能力與工程判斷。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Our 10 Gbps channel shows a capacitive dip at a via transition on the TDR. A junior engineer suggests enlarging the anti-pad until the dip disappears. How would you approach this?"</summary>
+<p><strong>參考答案骨架：</strong>Enlarging the anti-pad is the right direction but the wrong methodology if we just keep enlarging until the dip "disappears." First I'd quantify the problem: the area of the dip on the TDR gives me the excess capacitance directly — height depends on the instrument rise time, but area doesn't. Say it's 0.3 pF; in a 50-ohm system that needs either 0.3 pF removed or about 0.75 nH added to rebalance, since matching means L equals Z-nought squared times C. Then I'd use the full toolkit, not just the anti-pad: remove non-functional pads on unused inner layers, check whether the via needs back-drilling — because if part of that dip is actually a stub resonance, no amount of anti-pad tuning will fix the eye — and make sure there's a ground return via right next to the signal via. On the anti-pad specifically, there's a real limit: it's a hole in the reference plane, so oversizing it forces return currents to detour, which adds inductance and crosstalk — you can overshoot and turn the dip into a peak. So: calculate, adjust in small steps, verify by TDR area, and stop at the target. And one more check before any of this — the cutoff frequency of the compensated structure, roughly one over pi root LC. If the via's total LC is too big, a flat TDR still won't give me an open eye at 10 gig, and the real fix is a shorter via — thinner board section or different layer assignment — not a bigger hole in my ground plane.</p>
+<p><strong>加分點：</strong>「area not height」「rebalance not eliminate」「a flat TDR is not a passing channel」三句金句；主動提到 anti-pad 的回流代價（PT2 Ch.6 的 clearance 警告即此），顯示你知道每味藥的副作用。</p>
+</details>
+
+<details>
+<summary>Q2: "What are the fundamental limits of impedance compensation? When do you stop tuning pads and voids, and change the design instead?"</summary>
+<p><strong>參考答案骨架：</strong>Compensation has three hard limits. First, it only treats one disease: a lumped L-C imbalance. A step change in the TDR means a whole segment has the wrong characteristic impedance — that's a distributed problem, and no point-compensation fixes a distributed error; you fix the trace geometry or the stackup. A resonating stub stores energy at its quarter-wave frequency — balancing its entrance capacitance doesn't stop the resonance; you remove the stub. And a persistent level shift is resistive — that's a failure-analysis problem, not a design-tuning problem. Second, even for the right disease, there's a bandwidth ceiling: a balanced C-L-C section is still a low-pass filter with a cutoff around one over pi root LC. Balancing the L-to-C ratio kills the reflection, but the product LC sets the bandwidth — those are two independent knobs and compensation only turns the first one. So a physically large connector can be perfectly balanced, show a flat TDR, and still close the eye at high data rates. When the required bandwidth approaches that cutoff, I stop tuning and shrink the structure itself — lower stack height, surface-mount instead of through-hole, fewer layer transitions. Third, a practical limit: if two board revisions with simulation-guided tuning haven't converged, my model is missing something — in my experience it's usually the return path, like insufficient ground pins on a connector — and the fix belongs at the schematic or component-selection level, not in the copper tweaks. Knowing when compensation is the wrong tool is, I think, the actual senior skill being tested here.</p>
+<p><strong>加分點：</strong>「ratio vs product — two independent knobs」是這題的靈魂句；第三點把「模型漏回流」講成親身經驗（可接 Day 12 的 pin map 案例當 STAR 故事），會讓面試官追問——那正是你想要的。</p>
+</details>
+
+<h2>10. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：補償設計三公理？</p>
+  <p class="a">A1：①面積反推：L_excess=2Z₀×A（尖峰）、C_excess=(2/Z₀)×A（凹陷）——高度看儀器、面積看真相；②配平：Z_local≈√(L/C)、L=Z₀²C（50 Ω：L[nH]=2.5×C[pF]）——調比例不是消滅；③集總條件：結構長度 ≪ t_r 空間長度（約 1/6 門檻）——夠短，C-L-C 才能合演一段 50 Ω 線。流程：面積算欠多少→配平算補多少→檢查有沒有補償資格。</p>
+  <p class="q">Q2：TDR 五指紋的分診——哪些可補償、哪些是禁忌症？</p>
+  <p class="a">A2：可補償（集總 L/C 失衡）：一過性凹陷（C 多）、一過性尖峰（L 多）、扭波（C-L-C 沒配平）。禁忌症：台階（一整段 Z₀ 錯＝分布性問題→改線寬/疊構）、stub 週期性諧振（能量儲存→back-drill/移除，配平入口 C 無效）、墊高不回基準（電阻性→FA：重插/切片/鍍層）。口訣：一過性的交給蹺蹺板；持續的、週期的、電阻的動結構。</p>
+  <p class="q">Q3：補償的頻寬極限公式？「小而平衡 vs 大而平衡」？</p>
+  <p class="a">A3：配平後的 C-L-C 仍是低通，f_c ≈ 1/(π√(LC))。比例（L/C）管反射、總量（LC）管頻寬——兩個獨立旋鈕，補償只轉前者。例：L=1 nH/C=0.4 pF → f_c≈16 GHz 量級；L=2.5 nH/C=1 pF（同樣配平）→ 約 6 GHz 量級。TDR 拉平 ≠ 眼圖會開；f_c 沒明顯高於訊號頻寬需求→放棄補償、把結構做小（換低背/SMT/少換層）。</p>
+  <p class="q">Q4：一顆換層 via 的標準補償配置四件套？各推哪個方向？</p>
+  <p class="a">A4：①anti-pad 加大→C↓（但過大＝參考平面破洞，PT2 Ch.6：clearance 過大迫使回流繞行，效應應被分析）；②非功能 pad 移除→C↓；③back-drill→移除 stub 諧振（治禁忌症，殘樁約 0.2 mm 量級）；④緊鄰回流 via→回流迴圈 L↓（訊號換層、回流也要換層）。外加第零藥方（PT2 Ch.6）：「訊號應留在同一層，via 應避免」——最好的補償是不需要補償。</p>
+  <p class="q">Q5：PT2 Ch.6 via 三招原文？現代校訂怎麼講？</p>
+  <p class="a">A5：三招：加大 via（面積大→L、R 小）、外層最大銅厚電鍍、孔內鍍厚或填實。背景：2002 年百 MHz clock，via 的病是 R 與 L。現代校訂：多 Gbps serial 訊號 via 的病常是 C 與 stub——「加大」反而增 C 挖深凹陷；訊號 via 改用小孔徑＋anti-pad 優化＋back-drill；三招原封保留給電源 via（R/IR drop 與 L/PDN 阻抗仍是主敵）。引用經典要帶年份與適用前提。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 14（週四）：級聯不連續與遮蔽效應——當板子上不只一個病灶</strong></p>
+  <p>到今天為止，我們每次都只看「一個」不連續。但真實通道是 via＋走線＋connector＋又一顆 via 的連環套——多個不連續會互相遮蔽（前面的病灶讓 TDR「看不清」後面的）、反射會在兩個不連續之間來回打乒乓（多重反射）。明天教你：為什麼 TDR 讀數越往遠端越失真、為什麼「兩端各量一次」是鐵律、以及 TDR 解析度與系統上升時間的關係——這是週五實作日之前的最後一塊判讀拼圖，週五就用公司的示波器親手做出 stub 諧振與分支效應。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 13 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 14｜級聯不連續與遮蔽效應——當通道上不只一個病灶：多重反射、TDR 越遠越失真與「兩端各量一次」鐵律</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 14 天（週四新觀念課）</div>
+  <h1>Day 14：級聯不連續與遮蔽效應——當通道上不只一個病灶：多重反射、TDR 越遠越失真與「兩端各量一次」鐵律</h1>
+  <div class="meta">2026-08-06（四）｜預估學習時間：90 分鐘｜難度：★★★★☆（判讀的最後一塊拼圖——把「單一病灶」的世界升級成真實通道）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 9 到 Day 13，我們每次都默默假設板子上只有「一個」病灶。但真實通道長這樣：BGA 出線 → 換層 via → 一段走線 → connector → flex → 又一顆 via → 接收端——病灶是一串的。今天補上判讀的最後一塊拼圖，讀完你要能夠：</p>
+  <ol>
+    <li>解釋<strong>遮蔽效應（masking）</strong>的兩個機制：振幅打折（每穿過一個不連續，來回共打 (1−ρ²) 折）與<strong>邊沿變鈍</strong>（每過一個容性病灶，解析度就掉一級），並算出遠端病灶被低估了多少</li>
+    <li>看懂<strong>多重反射（乒乓效應）</strong>怎麼在 TDR 上長出「根本不存在的假病灶（鬼影）」，並用三個判別法把鬼影揪出來</li>
+    <li>會算 <strong>TDR 空間解析度 ≈ v × t_r(sys)/2</strong>：兩個靠太近的病灶為什麼會「融合成一顆」，以及這件事跟 Day 13 公理三（集總條件）其實是同一句話</li>
+    <li>說出並執行<strong>「兩端各量一次」鐵律</strong>：為什麼遠端讀數天生失真、為什麼換一端量是最便宜的去遮蔽手段</li>
+    <li>引用《Perfect Timing II》Ch.7 的多負載段落，解釋「兩個負載靠得夠近＝一顆集總電容；離得遠＝一條端接不良的線」——2002 年的 clock 佈線智慧與 2026 年的 TDR 解析度，是同一條物理</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：單一病灶的世界太乾淨了</h2>
+<p>Day 13 你拿到了完整的方法論：分診 → 面積反推 → 配平開藥 → TDR 回診。但那套流程有一個沒說出口的前提——<strong>TDR 曲線上的每個特徵，都忠實對應板上的一個真實結構</strong>。單一病灶時這成立；病灶一多，TDR 開始「說謊」：遠處的凹陷變淺（你以為病不重）、兩個不連續之間長出假凹陷（你以為多了一個病）、靠太近的兩顆 via 融合成一坨（你以為只有一個病）。今天教你聽懂 TDR 的謊話——這也是明天實作日拿示波器親手量 stub 之前，最後一堂判讀課。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：隔著三層髒玻璃往房間裡看</span>
+  <p>把 TDR 想成拿手電筒往一條裝了好幾片玻璃的走廊裡照，靠反光判斷每片玻璃有多髒。三件事會發生：<strong>①越裡面的玻璃越看不清</strong>——光要先穿過前面每一片（去程折一次、回程再折一次），到你眼睛時已剩沒多少，於是「最裡面那片其實很髒」會被你低估，這叫<strong>遮蔽</strong>。<strong>②你會看到鬼影</strong>——光在兩片玻璃之間來回反射，多繞了幾圈才回到你眼睛，看起來就像走廊更深處「還有一片玻璃」，但那個位置根本什麼都沒有，這叫<strong>多重反射</strong>。<strong>③兩片貼很近的玻璃看起來像一片</strong>——你的手電筒光斑有大小，比光斑還近的兩個東西分不開，這叫<strong>解析度極限</strong>。今天的三個主題就是這三件事，一個比喻講完了；後面的數學只是把「折多少、鬼影多大、多近算太近」算出數字。公式看不懂可以先跳過，這段懂了，今天就懂了。</p>
+</div>
+
+<h2>1. 遮蔽效應 I：振幅打折——(1−ρ²) 的兩次過路費</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：過收費站，去程收一次、回程再收一次</span>
+  <p>TDR 的訊號要「看到」第二個病灶，得先<strong>穿過</strong>第一個病灶（去程繳一次過路費），在第二個病灶反射之後，還要<strong>再穿過一次</strong>第一個病灶才能回到儀器（回程再繳一次）。第一個病灶越嚴重（反射越大），過路費越貴，你看到的第二個病灶就越「淡」。所以 TDR 讀數有一條鐵則：<strong>只有第一個病灶是原價，後面每一個都是打過折的</strong>——而且折扣沒顯示在螢幕上，要你自己心裡有數。</p>
+</div>
+
+<p>用最乾淨的模型算折扣。設第一個不連續 D1 的反射係數為 ρ₁（Day 6 的老朋友）。訊號打到 D1：反射 ρ₁ 回儀器（這就是 TDR 上第一個事件，原價），其餘<strong>透射</strong>過去，透射係數 τ = 1 + ρ₁；在 D2 反射後往回走，從背面再穿過 D1 一次，這一次的透射係數是 1 − ρ₁（從高阻抗側往低阻抗側走，符號翻轉——Day 6 的 τ = 1 + ρ 換個方向用）。兩趟相乘：</p>
+
+<div class="formula">來回穿透因子 = (1 + ρ₁)(1 − ρ₁) = 1 − ρ₁²　→　ρ₂(量到) ≈ ρ₂(真實) × (1 − ρ₁²)</div>
+<p><em>白話翻譯：第二個病灶在螢幕上的高度（和面積），是真實值乘上 (1 − ρ₁²)。前面的病灶反射 10%，折扣只有 1%（幾乎無感）；反射 30%，折掉約 9%；反射 50%（一顆很糟的 connector），後面的一切被打 75 折——你以為的小凹，其實是中凹。病灶更多顆就把每一顆的 (1 − ρᵢ²) 連乘上去。</em></p>
+
+<p>感受一下量級（50 Ω 系統）：</p>
+<table>
+  <tr><th>D1 的嚴重度</th><th>ρ₁</th><th>來回穿透因子 (1−ρ₁²)</th><th>對遠端讀數的影響</th></tr>
+  <tr><td>優化過的 via（輕微）</td><td>約 0.05</td><td>0.9975</td><td>幾乎無感——這就是為什麼要先把近端修好</td></tr>
+  <tr><td>普通 connector 凹陷</td><td>約 0.15</td><td>約 0.98</td><td>2% 量級低估，通常可忽略</td></tr>
+  <tr><td>50 Ω → 100 Ω 台階（線寬畫錯）</td><td>1/3</td><td>約 0.89</td><td>後面全部打 89 折——面積反推的 C 會低估約 11%</td></tr>
+  <tr><td>嚴重不連續</td><td>0.5</td><td>0.75</td><td>打 75 折——遠端「看起來還好」完全不可信</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：拿被遮蔽的面積直接開藥</span>
+  <p>Day 13 公理一（面積反推 C_excess）在多病灶通道上要加一句但書：<strong>面積要先除以前面所有病灶的連乘折扣，才是真實寄生量</strong>。實務上更聰明的做法不是去算折扣，而是：①先修近端病灶再重量遠端（近端修好，折扣自動消失）；②或直接<strong>換一端量</strong>（第 4 節鐵律）——讓遠端病灶變成「第一個」，讀到原價。硬要隔著一顆爛 connector 去定量後面 via 的 C，就像隔著毛玻璃驗鈔。</p>
+</div>
+
+<h2>2. 遮蔽效應 II：邊沿變鈍——每過一個容性病灶，解析度掉一級</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：光斑越走越糊</span>
+  <p>振幅打折還只是「變淡」；更隱蔽的是「變糊」。每一個容性病灶（pad、via、測試點）本質上是一個小小的低通濾波器——訊號的邊沿每穿過一個，就被磨鈍一點點。TDR 的「視力」完全由邊沿快慢決定（Day 9：快邊沿才看得見小結構），所以<strong>邊沿一路走一路鈍，等它抵達遠端病灶時，已經是個老花眼</strong>：同樣的凹陷，在遠端量起來「更淺、更寬」。好消息是 Day 9 的面積不變性大致還罩得住（面積對邊沿快慢不敏感）；壞消息是兩個靠近的病灶會因此更早「融合」（第 3 節）。</p>
+</div>
+
+<p>量化這個「磨鈍」：一顆並聯電容 C 掛在 Z₀ 線中間，對通過的訊號等效一個 RC 低通，時間常數 τ = (Z₀/2)·C（電容看出去，兩邊各一條 Z₀ 並聯）。它貢獻的上升時間約 2.2τ，多個慢化源用 RSS 疊加（Day 9 引過 Perfect Timing II Ch.11 的量測鏈 RSS，同一條公式）：</p>
+
+<div class="formula">t_r(抵達遠端) ≈ √( t_r(儀器)² + Σ (2.2 × Z₀C_i/2)² )</div>
+<p><em>白話翻譯：儀器邊沿和沿路每個電容各貢獻一份「鈍化」，平方相加再開根號。例：35 ps 的 TDR 邊沿，途中穿過一顆 1 pF 的病灶（2.2 × 25 ps = 55 ps），到遠端時邊沿已鈍成 √(35² + 55²) ≈ 65 ps 量級——視力直接掉一半。</em></p>
+
+<h2>3. 多重反射：兩個病灶之間的乒乓球，會在螢幕上長出鬼影</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：山谷回音的回音</span>
+  <p>對著兩面相對的山壁喊一聲：你先聽到近壁的回音、再聽到遠壁的回音——然後還會聽到<strong>第三聲</strong>：聲音在兩壁之間來回彈了一趟才回來的「回音的回音」。它比前兩聲晚、比前兩聲小，而且<strong>那個時間點上根本沒有第三面牆</strong>。TDR 完全一樣：訊號在 D1 與 D2 之間打乒乓，每多彈一趟就在螢幕更遠處多長一個「假病灶」。不知道這件事的人，會對著鬼影認真開藥——藥方櫃全套用上，鬼影當然一動也不動，因為那個位置什麼都沒有。</p>
+</div>
+
+<p>這正是 Day 6 引過的 Perfect Timing II Ch.7 那句話的多病灶版：<strong>「波會在走線上持續來回反彈，直到最終衰減殆盡。」（Perfect Timing II Ch.7）</strong>當年書裡談的是 driver 與 load 兩端之間的振鈴；把「兩端」換成「任意兩個不連續」，同一條物理就變成今天的鬼影。追一次乒乓的路徑（見圖 1）：</p>
+<ol>
+  <li>入射波在 D1 反射 ρ₁ → <strong>真事件 1</strong>（時間 t₁ = 2d₁/v）</li>
+  <li>透射波在 D2 反射 ρ₂，穿回 D1 回到儀器 → <strong>真事件 2</strong>（t₂ = 2d₂/v，振幅已打 (1−ρ₁²) 折）</li>
+  <li>但 D2 反射回來的波打到 D1 <strong>背面</strong>時，有一部分（−ρ₁，從背面看符號相反）又被彈回去 D2，再反射 ρ₂ 一次，才回到儀器 → <strong>鬼影</strong>：出現在 t₂ 之後再隔一個「D1–D2 來回時間」處，即 t₃ = t₂ + 2(d₂−d₁)/v，振幅約 −ρ₁·ρ₂² 量級（高階小量，還要再乘穿透折扣）</li>
+</ol>
+
+<div class="formula">鬼影位置：t₂ + n·2(d₂−d₁)/v（n = 1, 2, …）　；　鬼影振幅 ~ ρ₁·ρ₂²（一次乒乓）——每多彈一趟再乘一次 ρ₁ρ₂</div>
+<p><em>白話翻譯：鬼影的「間距」複製了兩個真病灶的間距（等差數列一路排下去）；鬼影的「大小」是兩個反射係數的高階乘積——兩個病灶都要夠嚴重，鬼影才看得見。ρ₁ = ρ₂ = 0.1 時鬼影只有 0.001（看不見）；ρ₁ = ρ₂ = 0.3 時約 0.027（2.7%，在乾淨的基線上清晰可見）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">乒乓路徑與鬼影：兩個真病灶，螢幕上三個事件</text>
+  <!-- top: physical channel -->
+  <line x1="70" y1="70" x2="690" y2="70" stroke="#374151" stroke-width="3"/>
+  <rect x="40" y="56" width="30" height="28" fill="#0e7490"/>
+  <text x="55" y="102" text-anchor="middle" font-size="9.5" fill="#0e7490">TDR</text>
+  <rect x="280" y="58" width="14" height="24" fill="#f59e0b" stroke="#b45309"/>
+  <text x="287" y="102" text-anchor="middle" font-size="9.5" fill="#b45309">D1（ρ₁）</text>
+  <rect x="500" y="58" width="14" height="24" fill="#dc2626" stroke="#991b1b"/>
+  <text x="507" y="102" text-anchor="middle" font-size="9.5" fill="#dc2626">D2（ρ₂）</text>
+  <!-- bounce diagram (time goes down) -->
+  <text x="60" y="132" font-size="9.5" fill="#6b7280">時間 ↓（彈跳圖）</text>
+  <line x1="287" y1="120" x2="287" y2="330" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="507" y1="120" x2="507" y2="330" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="70" y1="120" x2="70" y2="330" stroke="#e5e7eb" stroke-width="1"/>
+  <!-- incident -->
+  <line x1="70" y1="128" x2="287" y2="160" stroke="#0e7490" stroke-width="2"/>
+  <!-- reflect at D1 back -->
+  <line x1="287" y1="160" x2="70" y2="192" stroke="#f59e0b" stroke-width="2"/>
+  <text x="150" y="164" font-size="9" fill="#b45309">ρ₁ → 真事件 1</text>
+  <!-- transmit to D2 -->
+  <line x1="287" y1="160" x2="507" y2="196" stroke="#0e7490" stroke-width="2" stroke-dasharray="6 3"/>
+  <!-- reflect at D2 back through D1 -->
+  <line x1="507" y1="196" x2="287" y2="228" stroke="#dc2626" stroke-width="2"/>
+  <line x1="287" y1="228" x2="70" y2="260" stroke="#dc2626" stroke-width="2"/>
+  <text x="150" y="238" font-size="9" fill="#dc2626">ρ₂(1−ρ₁²) → 真事件 2</text>
+  <!-- re-reflection at back of D1 -->
+  <line x1="287" y1="228" x2="507" y2="262" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="400" y="238" font-size="9" fill="#7c3aed">−ρ₁（背面再彈）</text>
+  <line x1="507" y1="262" x2="287" y2="294" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4 3"/>
+  <line x1="287" y1="294" x2="70" y2="326" stroke="#7c3aed" stroke-width="2"/>
+  <text x="150" y="306" font-size="9" fill="#7c3aed">~ ρ₁ρ₂² → 鬼影</text>
+  <!-- bottom: TDR screen -->
+  <line x1="70" y1="420" x2="690" y2="420" stroke="#374151" stroke-width="1.5"/>
+  <text x="690" y="438" text-anchor="end" font-size="9.5" fill="#374151">時間 →</text>
+  <path d="M70,400 L180,400 L196,414 L212,400 L330,400 L346,409 L362,400 L470,400 L484,396 L498,400 L690,400"
+        fill="none" stroke="#0f4c5c" stroke-width="2"/>
+  <text x="196" y="446" text-anchor="middle" font-size="9" fill="#b45309">真事件 1（t₁，原價）</text>
+  <text x="346" y="446" text-anchor="middle" font-size="9" fill="#dc2626">真事件 2（t₂，打折）</text>
+  <text x="484" y="380" text-anchor="middle" font-size="9" fill="#7c3aed">鬼影（t₂ + Δt，高階小量、符號可能翻轉）</text>
+  <line x1="196" y1="424" x2="346" y2="424" stroke="#9ca3af" stroke-width="1"/>
+  <line x1="346" y1="428" x2="484" y2="428" stroke="#9ca3af" stroke-width="1"/>
+  <text x="271" y="416" text-anchor="middle" font-size="8.5" fill="#6b7280">Δt</text>
+  <text x="415" y="440" text-anchor="middle" font-size="8.5" fill="#6b7280">同一個 Δt ← 鬼影的胎記</text>
+</svg>
+<figcaption>圖 1：上半是彈跳圖（時間向下）：藍色入射波在 D1 分家，一路回儀器（真事件 1）、一路到 D2 再回來（真事件 2）；紫色是被 D1 背面再彈回去多跑一圈的乒乓波——它回到儀器時，在螢幕上「D2 更遠處」長出一個假病灶。下半是螢幕上看到的三個事件：鬼影與真事件 2 的間距，精確複製真事件 1、2 的間距——這是抓鬼的第一線索。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">抓鬼三判別法</span>
+  <p>①<strong>間距胎記</strong>：鬼影到前一事件的距離 = 前兩個真事件的間距（而且 n 次乒乓排成等差數列）；②<strong>振幅量級</strong>：鬼影是 ρ 的高階乘積，天生比真事件小一截——一個「跟真事件差不多大」的遠端事件通常是真的；③<strong>動一個、看全部</strong>：改動 D1（換顆 connector、修個 via），真病灶 D2 不動，鬼影卻會跟著變大變小甚至消失——真的病不會因為別處動刀而移動。層板／對照板（known-good board）比對也是同一招的變形。</p>
+</div>
+
+<h2>4. 「兩端各量一次」鐵律</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：走廊兩頭各照一次手電筒</span>
+  <p>遮蔽和鬼影有一個共同的解藥，而且是免費的：<strong>換到通道另一端再量一次</strong>。從左邊照，最裡面的玻璃最模糊；從右邊照，它變成第一片——原價、最清晰。兩張圖疊起來看：<strong>真病灶在兩張圖上的「物理位置」互為鏡像、對得起來；鬼影的位置對不起來</strong>（因為鬼影位置由「它前面的病灶間距」決定，兩端看到的「前面」不一樣）。一條通道量兩次，多花五分鐘，換到的是：每個病灶都至少被「原價」看過一次＋一次免費的抓鬼交叉比對。這就是為什麼資深工程師的 TDR SOP 永遠是兩端各存一張圖，缺一張就不叫量完。</p>
+</div>
+
+<p>執行面的三個補充：</p>
+<ul>
+  <li><strong>近端永遠最準</strong>：定量（面積反推）只信「從這一端量、它是第一個事件」的讀數；遠端讀數只拿來看趨勢與定位。</li>
+  <li><strong>台階會汙染基準線</strong>：若通道中段有一段阻抗台階（Day 13 的禁忌症），台階之後的所有讀數都是以「錯的基準」在量——儀器把反射換算成阻抗時，一階修正通常只對第一個介面成立。台階後面的絕對阻抗值，兩端各量一次再交叉核對。</li>
+  <li><strong>對差動通道，兩端 × 兩腳</strong>：P/N 各自量、兩端各量，四張圖——lane 內不對稱（skew、單邊 via 沒 back-drill）就是這樣抓出來的（差動細節第 4 週展開）。</li>
+</ul>
+
+<h2>5. TDR 解析度：靠太近的兩個病灶，會融合成一顆</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：手電筒的光斑有大小</span>
+  <p>邊沿在空間上不是一個「點」，是一段有長度的「斜坡」——35 ps 的邊沿在 FR4 裡攤開來約 5 mm 長（量級）。兩個病灶如果都被這段斜坡同時罩住，它們的反射會疊在一起，螢幕上就是<strong>一個</strong>事件：你分不出那是「一顆大電容」還是「兩顆小電容排排站」。這不是儀器故障，是物理極限——跟顯微鏡分不開比光波長更近的兩個點是同一回事。</p>
+</div>
+
+<div class="formula">可分辨的最小間距 Δd ≈ v × t_r(sys) / 2　（t_r(sys) 含儀器、線纜、治具與沿路病灶的 RSS）</div>
+<p><em>白話翻譯：訊號速度乘上系統上升時間，再除以 2（TDR 是來回程，時間軸上的間隔對應單程距離的兩倍）。代數字：FR4 帶狀線 v ≈ 15 cm/ns 量級，t_r(sys) = 35 ps → Δd ≈ 15 cm/ns × 35 ps / 2 ≈ 2.6 mm 量級。也就是說：兩顆間距 2 mm 的 via，在這台 TDR 眼裡是一顆；而經過第 2 節的邊沿鈍化（65 ps）之後，解析度掉到約 5 mm——連 BGA 出線區裡 pad 與 via 都分不開了。</em></p>
+
+<p>現在把 Day 13 公理三接回來，你會發現一件漂亮的事：<strong>「TDR 分不開」和「訊號眼裡是集總」是同一句話</strong>。兩個結構近到被邊沿同時罩住 → TDR 上融合成一個事件 → 對訊號而言它們也是一顆集總元件，寄生量直接相加、用一次配平一起補。分不開，反而好辦——當成一顆醫。真正麻煩的是「不近不遠」的中間地帶：對慢邊沿是一顆、對快邊沿是兩顆，補償策略隨速率升級而失效。</p>
+
+<p>《Perfect Timing II》Ch.7 在多負載佈線那一節，用 2002 年的語言講的正是這條物理：<strong>「如果兩個負載之間的距離很短，兩個負載會表現為一個集總的容性負載。但如果不是，我們就會有一段未端接的 stub，訊號將在每個點反射，產生多重的接受波與透射波——基本上，就是一條端接不良的走線。」（Perfect Timing II Ch.7）</strong>書中給的判準同樣是 1/6 法則（stub 的延遲要比上升時間快至少 6 倍）。把「兩個負載」代換成「兩個不連續」，這段 24 年前寫給百 MHz clock 的話，逐字適用於今天的多 Gbps 通道——只是現代邊沿快了一個量級以上，「算近」的門檻從當年的英吋級縮到 mm 級，以現代標準需照比例下修。</p>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">同一對 via，三種邊沿：分得開、剛好、融合</text>
+  <!-- row 1: fast edge -->
+  <text x="66" y="78" text-anchor="end" font-size="10" fill="#16a34a">快邊沿</text>
+  <text x="66" y="92" text-anchor="end" font-size="9" fill="#16a34a">t_r 小 → Δd 小</text>
+  <line x1="90" y1="100" x2="700" y2="100" stroke="#374151" stroke-width="1"/>
+  <path d="M90,80 L260,80 L274,96 L288,80 L330,80 L344,96 L358,80 L700,80" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="316" y="66" text-anchor="middle" font-size="9" fill="#16a34a">兩個凹清楚分開 → 兩顆 via，各自開藥</text>
+  <!-- row 2: medium -->
+  <text x="66" y="188" text-anchor="end" font-size="10" fill="#b45309">邊沿變鈍</text>
+  <text x="66" y="202" text-anchor="end" font-size="9" fill="#b45309">（過了一顆病灶後）</text>
+  <line x1="90" y1="210" x2="700" y2="210" stroke="#374151" stroke-width="1"/>
+  <path d="M90,190 L250,190 Q274,208 300,196 Q320,188 336,200 Q356,212 380,190 L700,190" fill="none" stroke="#b45309" stroke-width="2"/>
+  <text x="330" y="176" text-anchor="middle" font-size="9" fill="#b45309">開始藕斷絲連——深度不可信，面積仍大致守恆</text>
+  <!-- row 3: slow edge -->
+  <text x="66" y="298" text-anchor="end" font-size="10" fill="#dc2626">慢邊沿</text>
+  <text x="66" y="312" text-anchor="end" font-size="9" fill="#dc2626">t_r 大 → Δd 大</text>
+  <line x1="90" y1="320" x2="700" y2="320" stroke="#374151" stroke-width="1"/>
+  <path d="M90,300 L240,300 Q300,300 316,316 Q332,330 348,316 Q364,300 420,300 L700,300" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="330" y="286" text-anchor="middle" font-size="9" fill="#dc2626">融合成一個寬凹 → 一顆「等效大電容」，寄生量相加、一起配平</text>
+  <rect x="90" y="344" width="600" height="44" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="390" y="362" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">Δd ≈ v·t_r(sys)/2：解析度不是儀器規格表上的一個數字——它沿著通道一路變差</text>
+  <text x="390" y="380" text-anchor="middle" font-size="9.5" fill="#7c3aed">「TDR 分不開」＝「訊號看它是集總」＝ Day 13 公理三——分不開就當一顆醫</text>
+</svg>
+<figcaption>圖 2：同一對相鄰 via 在三種等效邊沿下的 TDR 長相（觀念示意）。上：快邊沿看是兩個獨立凹陷；中：邊沿被前段病灶鈍化後開始黏連——單看深度會誤判，面積仍可用；下：慢邊沿下融合為一個寬凹——此時它對訊號也真的是一顆集總電容，照 Day 13 公理一、二當一顆補。</figcaption>
+</figure>
+
+<h2>6. 把四件事收成一張判讀 SOP</h2>
+
+<figure>
+<svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">多病灶通道 TDR 判讀 SOP</text>
+  <rect x="40" y="44" width="320" height="60" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="200" y="68" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0e7490">① 兩端各量一張（差動再 × P/N）</text>
+  <text x="200" y="86" text-anchor="middle" font-size="9" fill="#0e7490">近端讀數才有定量資格；缺一張不叫量完</text>
+  <rect x="400" y="44" width="320" height="60" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="560" y="68" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0e7490">② 對位：把事件對回板上結構</text>
+  <text x="560" y="86" text-anchor="middle" font-size="9" fill="#0e7490">用 v 把時間換距離，逐一認領 via／connector／flex</text>
+  <rect x="40" y="128" width="320" height="60" rx="8" fill="#fefce8" stroke="#b45309"/>
+  <text x="200" y="152" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b45309">③ 抓鬼：認領不了的事件跑三判別</text>
+  <text x="200" y="170" text-anchor="middle" font-size="9" fill="#b45309">間距胎記／振幅量級／動 D1 看它動不動＋比對 known-good</text>
+  <rect x="400" y="128" width="320" height="60" rx="8" fill="#fefce8" stroke="#b45309"/>
+  <text x="560" y="152" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b45309">④ 去遮蔽：遠端面積除以 Π(1−ρᵢ²)</text>
+  <text x="560" y="170" text-anchor="middle" font-size="9" fill="#b45309">或先修近端再重量／換端量——別拿折扣價開藥</text>
+  <rect x="40" y="212" width="680" height="60" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="380" y="236" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#16a34a">⑤ 每個真病灶各自走 Day 13 流程：分診 → 面積反推 → 配平開藥 → 回診</text>
+  <text x="380" y="254" text-anchor="middle" font-size="9" fill="#16a34a">融合的病灶當一顆醫（寄生量相加）；修完近端要重量遠端——折扣消失後遠端會「變嚴重」，那是真相不是惡化</text>
+  <text x="380" y="300" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">口訣：先量兩端、再認結構、後抓鬼、去折扣，最後才開藥</text>
+  <text x="380" y="318" text-anchor="middle" font-size="9.5" fill="#7c3aed">順序顛倒的每一種走法，都對應一個真實世界修錯板的故事</text>
+</svg>
+<figcaption>圖 3：多病灶判讀 SOP。注意第 ⑤ 步的括號：修好近端病灶後，遠端事件的折扣消失、讀數變大——新手常誤以為「越修越糟」，其實是真相浮出水面。</figcaption>
+</figure>
+
+<h2>7. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——「修了 A，B 變嚴重了？」：</strong>一條 DP 通道 TDR 顯示 connector 凹陷（大）與後段 via 凹陷（小），改版優化了 connector footprint 之後重量，via 的凹「變深了」——專案會議上差點被判定改版失敗。真相：connector 的 ρ 從約 0.3 降到 0.1，後段折扣從 0.91 恢復到 0.99，via 讀數回到原價。改版是成功的，變的是量測折扣不是板子。這一題今天之後你三十秒講清楚。</li>
+  <li><strong>鏡頭模組——flex 通道的鬼影烏龍：</strong>模組廠回報「flex 中段疑似有隱裂，TDR 有異常凹陷」，模組來回寄了兩趟、X-ray 都照了什麼也沒有。後來發現異常凹陷到 BTB 事件的間距，恰好等於 BTB 到 SoC 端 via 的間距——教科書級鬼影（兩個真病灶都不小，ρ₁ρ₂² 剛好爬到可見量級）。從模組端反量一次，該位置乾乾淨淨，結案。<strong>兩端各量一次，省一趟 FA 來回。</strong></li>
+  <li><strong>面試白板：</strong>「Here are TDR plots from both ends of a channel. They don't agree. Why?」——這題就是今天整課：遮蔽折扣（兩端看到的「前面」不同）、邊沿鈍化程度不同、鬼影位置不同、台階之後基準線汙染。能把「不一致本來就是預期行為，而且不一致的方式攜帶資訊」講出來，就是資深與新手的分水嶺。</li>
+</ul>
+
+<h2>8. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。明天實作日的波形上，這四件事全部會親眼出現。</p>
+
+<details>
+<summary>練習 1（遮蔽折扣定量）：50 Ω 通道，TDR 依序看到：D1 = connector 凹陷（該處最低點對應約 33 Ω）、D2 = 遠端 via 凹陷，量得面積 4.0 ps。(a) 估 D1 的 ρ₁。(b) 算來回穿透因子。(c) D2 的真實面積與真實 C_excess。(d) 若隔天改版把 D1 修到 ρ₁ ≈ 0.05，重量時 D2 的面積會變成多少？這是惡化嗎？</summary>
+<p><strong>解：</strong>(a) ρ₁ = (33 − 50)/(33 + 50) ≈ <strong>−0.20</strong>（凹陷，取絕對值 0.20 算折扣）。(b) 1 − ρ₁² = 1 − 0.04 = <strong>0.96</strong>。(c) 真實面積 = 4.0/0.96 ≈ <strong>4.17 ps</strong>；C_excess = (2/Z₀)×A = (2/50)×4.17 ps ≈ <strong>0.17 pF</strong>（Day 13 公理一，用去折扣後的面積）。(d) 折扣變成 1 − 0.05² ≈ 0.9975，量到面積回升到約 <strong>4.16 ps</strong>——比修版前的 4.0 ps「變大」了，但這是折扣消失、讀數回到原價，<strong>不是惡化</strong>。本例折扣僅 4%，工程上常可忽略；但同一套算法在 ρ₁ = 0.3～0.5 時（折 9%～25%）就非算不可。</p>
+</details>
+
+<details>
+<summary>練習 2（抓鬼）：TDR 基線乾淨，出現三個凹陷事件：t = 600 ps（深）、900 ps（中）、1200 ps（很淺）。板上對位只認領得出兩個結構（connector 在約 600 ps 處、via 在約 900 ps 處）。(a) 1200 ps 的事件最可能是什麼？給出兩條證據。(b) 如何用「一次不動板子的量測」驗證？(c) 若 ρ(connector) ≈ 0.25、ρ(via) ≈ 0.15，估鬼影振幅量級並檢查合理性。</summary>
+<p><strong>解：</strong>(a) 最可能是<strong>鬼影（一次乒乓）</strong>。證據一（間距胎記）：1200 − 900 = 300 ps = 900 − 600，間距精確複製；證據二（振幅量級）：它「很淺」，符合高階小量的身分——真結構通常不會恰好又淺又等距。(b) <strong>從另一端量</strong>：真 via 與真 connector 會在鏡像位置再次出現，而 1200 ps 這個事件在對面那張圖找不到對應的鏡像位置（對面的鬼影會長在由對面視角的間距決定的別處）。(c) 鬼影 ~ ρ₁·ρ₂² = 0.25 × 0.15² ≈ <strong>0.006（0.6% 量級）</strong>——在乾淨基線上勉強可見，與「很淺」一致。若它其實有 3%～5% 深，反而要懷疑不是鬼影（回頭查板上 1200 ps 處是否漏了結構，例如測試點）。</p>
+</details>
+
+<details>
+<summary>練習 3（解析度與集總）：TDR 系統上升時間 30 ps，FR4 帶狀線 v ≈ 15 cm/ns。(a) 最小可分辨間距？(b) BGA 出線區有兩顆 via 相距 1.5 mm，各約 0.25 pF——TDR 上看到幾個事件？等效寄生量多少？(c) 訊號邊沿為 50 ps 時，這兩顆 via 對訊號是集總還是分立？該怎麼補償？(d) 若途中先穿過一顆 1.2 pF 的測試點（邊沿鈍化 2.2×Z₀C/2 ≈ 66 ps），再看這兩顆 via，解析度變多少？</summary>
+<p><strong>解：</strong>(a) Δd ≈ v·t_r/2 = 15 cm/ns × 30 ps / 2 = 4.5 mm/2 = <strong>約 2.3 mm</strong>。(b) 1.5 mm &lt; 2.3 mm → <strong>一個事件</strong>；等效 C ≈ 0.25 + 0.25 = <strong>0.5 pF</strong>（融合＝寄生量相加）。(c) 50 ps 邊沿的空間長度 = 15 cm/ns × 50 ps = 7.5 mm，兩顆 via 加間距遠小於 7.5 mm/6 的集總門檻邊界情況——量級上仍屬集總（保守可再模擬確認）；補償<strong>當一顆 0.5 pF 醫</strong>：配平需 L = 2.5 × 0.5 = 1.25 nH，或用減 C 藥方（anti-pad、非功能 pad）分攤到兩顆 via 上。(d) t_r(sys) = √(30² + 66²) ≈ 72 ps → Δd ≈ 15 × 72/2/1000 cm ≈ <strong>5.4 mm 量級</strong>——解析度掉了一倍多；這就是「換一端量」的另一個理由：從 BGA 端量，這兩顆 via 前面沒有測試點擋路。</p>
+</details>
+
+<details>
+<summary>練習 4（兩端量測判讀）：一條通道從左端量：500 ps 處小凹、後段基線整體墊在 55 Ω；從右端量：先看到一段 55 Ω 的台階（從 0 開始持續到 700 ps），之後在 900 ps 處一個中等深度的凹。(a) 板上實際有哪些病？(b) 為什麼左端把凹看成「小」、右端看成「中等」？(c) 55 Ω 段的阻抗值，哪一張圖的讀數比較可信？(d) 開藥。</summary>
+<p><strong>解：</strong>(a) 兩個病：<strong>一段 55 Ω 的阻抗台階</strong>（右端量從頭就是 55 Ω、持續 700 ps ＝ 靠右的一整段線 Z₀ 偏高——線寬偏細或該段參考層距離偏大）＋<strong>一個容性凹陷</strong>（兩張圖都有，位置互為鏡像：左端 500 ps ↔ 右端 900 ps，同一顆結構，可能是 via/測試點）。(b) 先檢查幾何：凹陷靠左（左端量 500 ps 處）、台階在右段——左端看凹陷時<strong>不經過</strong>台階，讀到的是原價；右端看它時要先穿過整段 55 Ω 台階。但台階邊界的 ρ = (55−50)/105 ≈ 0.048，來回折扣僅約 0.5%——振幅折扣解釋不了「小 vs 中等」的差異，主因是<strong>基準線與邊沿</strong>：右端那張圖凹陷是從 55 Ω 的墊高基線往下挖，視覺深度與換算都以 55 Ω 為參考，加上邊沿經過台階邊界與較長路徑後的鈍化，深度變「寬而顯眼」。定量一律用面積、並以<strong>該事件為第一事件的那一端</strong>（左端）為準。(c) 55 Ω 段：<strong>右端</strong>可信——它從右端看是第一個特徵（原價、基線未被汙染）；左端看它時已隔了一個凹陷且處於曲線尾段。(d) 台階＝Day 13 禁忌症→改線寬/查疊構；凹陷＝面積反推 C、走配平藥方。兩病各自開藥，互不相干。</p>
+</details>
+
+<details>
+<summary>練習 5（PT2 多負載段落的現代翻譯）：Perfect Timing II Ch.7 說兩個負載「距離短＝一個集總容性負載；距離長＝未端接 stub、多重反射、端接不良的線」，判準是 stub 延遲比上升時間快 6 倍。(a) 2002 年 t_r = 2 ns 的 clock，兩負載相距多遠內算「一顆」？（FR4 走線 v ≈ 15 cm/ns）(b) 2026 年 t_r = 100 ps 的訊號呢？(c) 這段話與今天的 TDR 解析度公式是什麼關係？(d) 「不近不遠的中間地帶」為什麼最危險？</summary>
+<p><strong>解：</strong>(a) 1/6 法則：stub 延遲 &lt; t_r/6 = 333 ps → 長度 &lt; 15 cm/ns × 333 ps = <strong>約 5 cm</strong>——2002 年兩顆負載離 1、2 吋內都能當一顆（書中 Figure 7.12 的實測正是 1 吋間距的兩負載）。(b) t_r/6 ≈ 16.7 ps → <strong>約 2.5 mm</strong>——門檻縮了 20 倍，以現代標準需照邊沿比例下修，「順手接兩個負載」在高速訊號上已幾乎不存在合法空間。(c) 同一條物理的兩面：1/6 法則說「多近算集總（對訊號）」，Δd ≈ v·t_r/2 說「多近分不開（對 TDR）」——兩者都由邊沿的空間長度決定，只差一個係數量級；所以「TDR 分不開的，訊號也看成一顆」。(d) 中間地帶＝對現在的邊沿是集總、對更快的邊沿是分立＋stub 多重反射——平台升級（換更快的 SoC/介面）時，這些「當年合法」的結構集體發病，而且 TDR 用舊的慢邊沿還量不出來——Day 6 那句「換一顆更快的 buffer 而板子沒改，是 SI 事故的經典開場」的結構版。</p>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+<p>多病灶判讀是 TDR 面試題的進階關卡——單病灶題答對只證明你背過書，多病灶題答對才證明你量過真板子。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "You TDR a channel and see a small dip far from the connector you're probing through. Your colleague reads off the dip's depth and calculates the excess capacitance. What would you double-check before signing off on that number?"</summary>
+<p><strong>參考答案骨架：</strong>Three things. First, masking: to see that far dip, the TDR step had to pass through the connector twice — once out, once back — so the measured response is scaled by one minus rho squared of everything in front of it. If the connector reflects thirty percent, the far dip is understated by roughly nine percent; at fifty percent reflection it's a twenty-five percent error. I'd either divide the measured area by that round-trip factor, or better, measure from the other end of the channel so the dip becomes the first event and I read it at full value. Second, I'd use area, not depth: the edge slows down as it passes through each capacitive discontinuity — every shunt C is a little low-pass filter — so by the time the step reaches a far structure it's degraded and the dip looks shallower and wider. Depth lies; area is approximately conserved. Third, I'd confirm the dip is real and not a re-reflection artifact: if its spacing from the previous event replicates the spacing between the first two events, and its amplitude is suspiciously small — on the order of rho-one times rho-two squared — it may be a ghost from waves ping-ponging between two real discontinuities. The cheap test for all three concerns is the same: TDR from both ends. Real defects mirror consistently between the two plots; ghosts don't, and each defect gets seen at full value from at least one side.</p>
+<p><strong>加分點：</strong>「depth lies, area is conserved」與「measure from both ends — real defects mirror, ghosts don't」兩句金句；能報出 (1−ρ²) 的具體折扣數字（0.3→~9%、0.5→25%）顯示你真的算過而不是聽過。</p>
+</details>
+
+<details>
+<summary>Q2: "After you fixed the worst discontinuity on a board, the TDR dip at a downstream via got noticeably deeper. The program manager thinks your fix made things worse. Walk us through your explanation."</summary>
+<p><strong>參考答案骨架：</strong>The via didn't change — the measurement did. Before the fix, the TDR step had to cross a badly mismatched structure to reach that via, and cross it again coming back. That round trip scales everything downstream by one minus rho squared. Say the original defect reflected thirty-five percent: downstream events were being shown at roughly eighty-eight percent of their true size. After the fix, rho dropped to a few percent, the discount essentially vanished, and the via's dip recovered to full value — it looks deeper because we're finally seeing the truth, not because the board got worse. I'd back this up three ways: the via's dip area after the fix should match a from-the-other-end measurement taken before the fix, where that via was the first event and never discounted; the physical layout at the via is untouched between revisions; and the eye diagram or insertion loss of the full channel improved, which is the metric that actually ships. There's a general lesson I'd offer the team: on multi-discontinuity channels, TDR readings are relative to everything in front of them, so our SOP is to measure from both ends and treat only first-event readings as quantitative. That prevents exactly this kind of false alarm — and its more dangerous mirror image, where a real degradation hides behind an improved upstream structure.</p>
+<p><strong>加分點：</strong>最後那句「更危險的鏡像情境」（上游改善反而遮住下游真惡化）是把同一物理反著再講一次——面試官聽到這句就知道你不是背答案；把眼圖/損耗抬出來當「最終裁判」也呼應 Day 13 的「TDR 平 ≠ 通道合格」。</p>
+</details>
+
+<h2>10. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：遮蔽效應的兩個機制？遠端讀數的折扣公式？</p>
+  <p class="a">A1：①振幅打折：訊號來回各穿過前方不連續一次，透射 (1+ρ)(1−ρ) = 1−ρ²；遠端事件量到值 ≈ 真實值 × Π(1−ρᵢ²)。ρ=0.1 折 1%（無感）、ρ=1/3 折約 11%、ρ=0.5 折 25%。②邊沿鈍化：每顆並聯 C 是低通（τ = Z₀C/2，貢獻 t_r 約 2.2τ），RSS 疊加——遠端病灶看起來更淺更寬。對策：面積除以折扣、先修近端再重量、或換端量。</p>
+  <p class="q">Q2：多重反射鬼影的位置與振幅？抓鬼三判別法？</p>
+  <p class="a">A2：鬼影＝波在 D1–D2 間乒乓多跑 n 圈：位置在 t₂ + n·2(d₂−d₁)/v（等差數列）、一次乒乓振幅 ~ ρ₁·ρ₂²（高階小量）。抓鬼：①間距胎記——鬼影間距複製真事件間距；②振幅量級——比真事件小一截；③動 D1 鬼影跟著變、真病灶不動（＋known-good 比對／換端量：真病灶鏡像對得上、鬼影對不上）。</p>
+  <p class="q">Q3：TDR 空間解析度公式？跟 Day 13 公理三什麼關係？</p>
+  <p class="a">A3：Δd ≈ v × t_r(sys)/2（除 2 因為來回程）。例：v≈15 cm/ns、t_r=35 ps → 約 2.6 mm 量級；邊沿鈍化到 70 ps → 掉到約 5 mm。關係：「TDR 分不開」＝「訊號眼裡是集總」——同由邊沿空間長度決定。融合的病灶當一顆醫：寄生量相加、一次配平。PT2 Ch.7 多負載段落即此：「距離短＝一個集總容性負載；距離長＝未端接 stub、多重反射、端接不良的線」（1/6 法則，2002 年門檻吋級、現代 mm 級需下修）。</p>
+  <p class="q">Q4：「兩端各量一次」鐵律的三個理由？</p>
+  <p class="a">A4：①去遮蔽——每個病灶至少被「第一事件、原價」看過一次（定量只信近端讀數）；②抓鬼——真病灶在兩張圖鏡像位置一致、鬼影不一致；③台階之後基準線被汙染——台階段的絕對阻抗要用「該段是第一特徵」的那一端讀。差動通道再 × P/N 共四張圖。修好近端後遠端讀數變大＝折扣消失＝真相，不是惡化。</p>
+  <p class="q">Q5：多病灶通道 TDR 判讀 SOP 五步？</p>
+  <p class="a">A5：①兩端各量一張 → ②對位：時間換距離、事件逐一認領板上結構 → ③認領不了的跑抓鬼三判別 → ④去遮蔽：遠端面積除以 Π(1−ρᵢ²)（或先修近端/換端量）→ ⑤每個真病灶各自走 Day 13 流程（分診→面積→配平→回診），融合的當一顆醫。口訣：先量兩端、再認結構、後抓鬼、去折扣，最後才開藥。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 15（週五實作日）：把 stub 諧振與分支效應搬上示波器——親手做出「吃訊號的諧振腔」</strong></p>
+  <p>判讀拼圖到今天全部到齊，明天進實驗室收割。用公司的訊號產生器＋示波器＋幾條同軸線和 T 型接頭，親手做出：①一條乾淨的參考線；②接上分支線，看反射怎麼長出來；③調分支長度，找出 f₀ = v/4ℓ 的諧振點（Day 11 的公式量給你看）；④兩個不連續擺近擺遠，親眼看它們從「兩個事件」融合成「一顆」（今天第 5 節的解析度實驗）。全程窮人版 TDR 手法（Day 8 的老朋友），記得把實驗指引帶去公司。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 14 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

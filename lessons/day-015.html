@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 15｜實作日：親手做出「吃訊號的諧振腔」——stub 諧振、分支效應與病灶融合實驗</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 15 天（週五實作日）</div>
+  <h1>Day 15：親手做出「吃訊號的諧振腔」——stub 諧振、分支效應與病灶融合實驗</h1>
+  <div class="meta">2026-08-07（五）｜預估操作時間：90～100 分鐘｜難度：★★★☆☆（接線不難，難在每個波形出現前你要先說出它長什麼樣）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>第 3 週的判讀理論（Day 11 stub、Day 13 藥方櫃、Day 14 多病灶）今天全部進實驗室驗收。全程只用公司標配儀器：訊號產生器、百 MHz 示波器、幾條同軸線、T 型接頭與終端器。做完你要能夠：</p>
+  <ol>
+    <li>先量出一條<strong>乾淨參考線</strong>（known-good 基準，Day 14 抓鬼判別的道具），再親手接上一根分支線，看著螢幕上長出一個<strong>寬度 = 2×t_stub 的凹陷</strong>——用凹陷寬度反推分支長度</li>
+    <li>在接收端看到 stub 造成的<strong>振鈴</strong>，並驗證振鈴頻率 = <strong>f₀ = v/4ℓ</strong>——時域的振鈴和頻域的 λ/4 諧振是同一件事（Day 11 的公式親手量出來）</li>
+    <li>改用正弦波掃頻，找到 stub 的<strong>諧振凹口</strong>：在 f₀ 處接收振幅塌陷、在 3f₀ 處再塌一次；換不同長度的 stub，驗證 f₀ 與 ℓ 成反比</li>
+    <li>把兩個分支<strong>擺遠再擺近</strong>，親眼看它們從「兩個獨立事件」融合成「一顆等效大電容」——Day 14 的解析度公式 Δd ≈ v·t_r/2 的活體展示</li>
+    <li>（加碼）在兩個強不連續之間<strong>抓一次鬼影</strong>，並用「換一端量」驗證 Day 14 的鐵律</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：三堂課的紙上談兵，今天一張桌子收割</h2>
+<p>Day 11 說 stub 是雙面人：短的時候是一顆電容（C ≈ t_d/Z₀），長的時候是 λ/4 開路諧振腔（f₀ = v/4ℓ），在特定頻率把訊號整口吃掉。Day 14 說兩個病灶靠太近會在 TDR 上融合成一顆（Δd ≈ v·t_r/2），還會在螢幕上長出鬼影。這些你都「算」過了，但沒「摸」過。今天沿用 Day 8 的老招——<strong>用幾公尺長的同軸線把飛行時間拉到幾十奈秒，讓百 MHz 儀器把 ps 級世界的物理放大到看得一清二楚</strong>。板子上 3 mm 的 via stub 和桌上 2 m 的同軸分支，是同一條方程式，只差一個比例尺。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在玩什麼</span>
+  <p>Day 11 把 stub 比喻成水管上的<strong>死巷</strong>：水鎚波經過岔口分一股進死巷、撞底、彈回來晚一步歸隊。今天我們真的蓋一條死巷——拿一個 T 型接頭在主線中間開個岔、掛一段末端懸空的同軸線。然後做四件事：①先量沒有死巷的主線，存一張「健康照」；②接上死巷，看波形上長出凹陷，<strong>用凹陷的寬度算出死巷多長</strong>；③改放連續的正弦波進去，慢慢調快節奏，找到那個「波被死巷整口吃掉」的節奏——那就是諧振頻率；④蓋兩條死巷，先離遠再靠近，看螢幕上的兩個凹陷怎麼黏成一坨。每一步都<strong>先手畫預測、再按 Run 對答案</strong>——猜對了，理論才真正是你的。</p>
+</div>
+
+<h2>1. 器材清單與行前準備</h2>
+<ul>
+  <li><strong>任意函數／訊號產生器</strong>：要能出方波（邊沿一般約 10～20 ns 量級）與正弦波（頻率上限至少 25 MHz，能到 60 MHz 更好）</li>
+  <li><strong>示波器</strong>：100 MHz 以上、雙通道，輸入阻抗可切 1 MΩ／50 Ω（今天兩檔都會用到——什麼時候用哪檔，劇本裡會明講）</li>
+  <li><strong>50 Ω BNC 同軸線</strong>（RG-58 類）：主線兩段各約 5 m；分支（stub）用 0.5 m、1 m、2 m 各一～二條（可用母對母直通頭串接湊長度；長度不必精確，實驗會反過來量它）</li>
+  <li><strong>BNC T 型接頭 ×3</strong>、<strong>BNC 母對母直通頭（barrel）×2～3</strong></li>
+  <li><strong>50 Ω BNC 終端器 ×1～2</strong></li>
+  <li>Day 8 用過的接法今天全部沿用：T 接頭直接鎖在示波器輸入上＝「站在線上」的觀察點</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">行前必讀的三個坑</span>
+  <p><strong>坑一（Day 8 老坑）：示波器輸入阻抗檔位。</strong>「站在線中間旁觀」的通道用 <strong>1 MΩ 檔</strong>；「當線的終點吸收訊號」的通道用 <strong>50 Ω 檔</strong>（或 1 MΩ 檔＋貫通式 50 Ω 終端器）。接錯檔，現象整組消失或多出假反射。每個實驗開頭都會標明用哪檔。</p>
+  <p><strong>坑二：產生器振幅顯示值。</strong>多數機型假設 50 Ω 負載；今天主線末端多半是匹配的，顯示值大致可信，但全程仍建議用「相對於穩態值的比例」讀波形，不要迷信絕對伏特數。</p>
+  <p><strong>坑三：stub 的「開路端」就讓它懸空。</strong>不要手癢鎖終端器上去——鎖了 50 Ω，死巷就變成普通支路，今天的主角（開路端全反射 ρ = +1）直接下班。</p>
+</div>
+
+<h3>1.1 撐全場的兩個數字</h3>
+<p>沿用 Day 8：RG-58 類實心 PE 同軸線速度因子約 0.66 → 傳播速度 <strong>v ≈ 20 cm/ns（約 5 ns/m）</strong>。今天新增一個由它衍生的數字：<strong>λ/4 諧振 f₀ = v/4ℓ</strong>——代入 2 m 的 stub：f₀ = 20 cm/ns ÷ (4 × 200 cm) = <strong>25 MHz</strong>；1 m 是 50 MHz、4 m 是 12.5 MHz。這幾個數字等一下會一一在螢幕上現身，先寫在筆記本第一行。</p>
+
+<h2>2. 實驗 1（約 10 分）：乾淨參考線——先拍一張健康照</h2>
+<p><strong>接法：</strong>產生器（方波 100 kHz～1 MHz、邊沿最快、幅度 1～2 Vpp）→ 短線約 1 m → <strong>T 接頭鎖在 CH1（1 MΩ 檔）</strong>→ 主線 5 m ＋ barrel ＋ 5 m（共約 10 m）→ 末端鎖 <strong>50 Ω 終端器</strong>。</p>
+<ol>
+  <li>這就是 Day 8 實驗 1 的接法，只是末端這次是匹配的：CH1 應該看到<strong>一步到位、又平又直的台階</strong>——沒有半壓架子（沒有回波），只有 barrel 與 T 接頭處可能有小毛刺。</li>
+  <li><strong>把這張波形截圖存檔</strong>，命名「known-good」。Day 14 說抓鬼要跟 known-good 比對——今天之後每個實驗的波形，都要跟這張健康照對照著看：多出來的每一個特徵，都是你親手接上去的東西造成的。</li>
+  <li>順手記下邊沿的 10–90% 上升時間 t_r（用示波器的自動量測），例如約 15 ns——它決定今天實驗 4 的解析度 Δd ≈ v·t_r/2，先算出來（15 ns → 約 1.5 m）寫在記錄表。</li>
+</ol>
+
+<h2>3. 實驗 2（約 25 分）：接上死巷——凹陷寬度就是 stub 的身分證</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：凹多寬，巷多深</span>
+  <p>波走到岔口，看到「往前的主線」和「往死巷的支線」並聯在一起——路突然變寬（阻抗變低），一部分波被彈回來，這就是螢幕上凹陷的<strong>開頭</strong>。分進死巷的那股波撞到懸空的底、原樣彈回岔口歸隊，把凹陷<strong>填回來</strong>——這是凹陷的<strong>結尾</strong>。所以凹陷從開始到結束的時間，正好是波在死巷裡<strong>來回一趟</strong>的時間 2×t_stub。量凹陷寬度、除以 2、乘上速度——死巷多長，量出來了。這跟 Day 8「架子寬度反推線長」是同一招，只是這次量的是分岔不是主線。</p>
+</div>
+
+<p><strong>接法：</strong>在實驗 1 的主線中間（兩段 5 m 之間，拆掉 barrel 換上）插入<strong>第二個 T 接頭</strong>，T 的第三口掛 <strong>2 m 同軸線、末端懸空</strong>。其餘不動：CH1 仍在源端 T 接頭上（1 MΩ 檔）、主線末端仍是 50 Ω 終端器。</p>
+
+<p><strong>動手前先算預測（正規化：CH1 的出發台階高度 = 1）：</strong></p>
+<ol>
+  <li>波抵達分支點：往前看是「主線 50 Ω ‖ stub 50 Ω」= 25 Ω → ρ = (25−50)/(25+50) = <strong>−1/3</strong>。這個反射走回 CH1，在 t = 2×(5 m 飛行時間) ≈ <strong>50 ns</strong> 處把波形拉下去 1/3 → 凹到約 <strong>0.67</strong>。</li>
+  <li>分進 stub 的波（透射 τ = 1 + ρ = 2/3）走 2 m、在開路端全反射（ρ = +1）、走回岔口——共耗時 2 × (2 m × 5 ns/m) = <strong>20 ns</strong>。它在岔口再度分家：2/3 穿透回源端方向，把 CH1 拉回來 (2/3)×(2/3) = +4/9 → 跳到約 <strong>1.11（過衝！）</strong>；另有 −1/3 被彈回 stub 再跑一圈。</li>
+  <li>之後每隔 20 ns 補一階、每階衰減 ×(−1/3)：1 → 0.67 → 1.11 → 0.96 → 1.01 → … 收斂回 1。<strong>凹陷寬度 = 2×t_stub = 20 ns；後續階梯間隔也是 20 ns。</strong></li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 2：接法與 CH1 預測波形——凹陷寬度 = 2×t_stub</text>
+  <!-- setup sketch -->
+  <rect x="36" y="46" width="96" height="44" rx="8" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="84" y="66" text-anchor="middle" font-size="11" fill="#374151">訊號產生器</text>
+  <text x="84" y="82" text-anchor="middle" font-size="10" fill="#6b7280">50Ω 輸出＝源端接</text>
+  <line x1="132" y1="68" x2="200" y2="68" stroke="#374151" stroke-width="2.5"/>
+  <text x="166" y="60" text-anchor="middle" font-size="10" fill="#6b7280">~1m</text>
+  <rect x="200" y="54" width="52" height="28" rx="6" fill="#e0f2f7" stroke="#0e7490" stroke-width="2"/>
+  <text x="226" y="72" text-anchor="middle" font-size="10" fill="#0e7490">T＋CH1</text>
+  <text x="226" y="98" text-anchor="middle" font-size="9" fill="#6b7280">1 MΩ 檔（旁觀）</text>
+  <line x1="252" y1="68" x2="420" y2="68" stroke="#374151" stroke-width="2.5"/>
+  <text x="336" y="60" text-anchor="middle" font-size="10" fill="#374151">主線 5 m（25 ns）</text>
+  <rect x="420" y="54" width="52" height="28" rx="6" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+  <text x="446" y="72" text-anchor="middle" font-size="10" fill="#b45309">T（岔口）</text>
+  <line x1="446" y1="82" x2="446" y2="130" stroke="#b45309" stroke-width="2.5"/>
+  <text x="500" y="106" text-anchor="middle" font-size="10" fill="#b45309">stub 2 m，末端懸空</text>
+  <text x="500" y="120" text-anchor="middle" font-size="9" fill="#b45309">t_stub = 10 ns（來回 20 ns）</text>
+  <line x1="436" y1="130" x2="456" y2="130" stroke="#dc2626" stroke-width="3"/>
+  <line x1="472" y1="68" x2="640" y2="68" stroke="#374151" stroke-width="2.5"/>
+  <text x="556" y="60" text-anchor="middle" font-size="10" fill="#374151">主線 5 m</text>
+  <rect x="640" y="54" width="60" height="28" rx="6" fill="#fef2f2" stroke="#dc2626" stroke-width="1.8"/>
+  <text x="670" y="72" text-anchor="middle" font-size="9.5" fill="#991b1b">50Ω 終端器</text>
+  <!-- waveform -->
+  <text x="96" y="180" font-size="12.5" font-weight="bold" fill="#0f4c5c">CH1 預測（正規化到出發台階 = 1）</text>
+  <line x1="80" y1="420" x2="700" y2="420" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="420" x2="80" y2="196" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="240" x2="700" y2="240" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="74" y="244" text-anchor="end" font-size="10" fill="#6b7280">1.0</text>
+  <text x="74" y="304" text-anchor="end" font-size="10" fill="#6b7280">0.67</text>
+  <path d="M80,420 L120,420 L126,240 L300,240 L306,300 L400,300 L406,220 L500,220 L506,247 L600,247 L606,238 L700,238"
+        fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="306" y1="330" x2="400" y2="330" stroke="#374151" stroke-width="1"/>
+  <line x1="306" y1="326" x2="306" y2="334" stroke="#374151" stroke-width="1"/>
+  <line x1="400" y1="326" x2="400" y2="334" stroke="#374151" stroke-width="1"/>
+  <text x="353" y="348" text-anchor="middle" font-size="10" fill="#374151">凹陷寬 = 2×t_stub = 20 ns → 反推 ℓ！</text>
+  <text x="213" y="230" text-anchor="middle" font-size="9.5" fill="#6b7280">出發台階（t=0）</text>
+  <text x="306" y="288" text-anchor="middle" font-size="9.5" fill="#b45309">t=50 ns：岔口反射 −1/3 抵達</text>
+  <text x="453" y="210" text-anchor="middle" font-size="9.5" fill="#dc2626">stub 回波歸隊 → 過衝到約 1.11</text>
+  <text x="556" y="264" text-anchor="middle" font-size="9.5" fill="#6b7280">每 20 ns 一階、×(−1/3) 衰減收斂回 1</text>
+</svg>
+<figcaption>圖 1：實驗 2 接法與 CH1 預測波形。凹陷開頭＝岔口反射（ρ = −1/3，「深度」由並聯阻抗決定、與 stub 長度無關）；凹陷結尾＝stub 回波歸隊（「寬度」= 2×t_stub，由長度決定、與阻抗無關）。深度說「岔口長什麼樣」、寬度說「死巷有多深」——一個凹陷帶兩條資訊。</figcaption>
+</figure>
+
+<p><strong>步驟：</strong></p>
+<ol>
+  <li>先手畫預測波形（照上面三步），再按 Run。對照 known-good：多出來的凹陷位置 ≈ 50 ns（岔口離 CH1 的來回時間）——先驗證「凹陷位置＝岔口位置」，這是 TDR 定位的靈魂。</li>
+  <li>游標量<strong>凹陷寬度</strong>：理論 20 ns。反推 stub 長度 = 寬度 ÷ 2 × 20 cm/ns ≈ 2 m。拿捲尺對答案，通常對到幾個百分點。</li>
+  <li>游標量<strong>凹陷深度</strong>：約落在出發台階的 2/3 處（ρ = −1/3）。注意：把 stub 換成 1 m，<strong>深度不變、寬度減半</strong>——親手驗證「深度管阻抗、寬度管長度」的分工。</li>
+  <li>把 stub 縮短到 0.5 m（來回 5 ns，已比邊沿窄）：凹陷「糊進」邊沿裡，變成一個<strong>淺淺的圓角小凹</strong>——恭喜，你親眼看到 stub 的雙面人格切換：<strong>短 stub＝一顆電容</strong>（此例 C ≈ t_d/Z₀ = 2.5 ns/50 Ω = 50 pF 量級），Day 11 的公式現身。這正是《Perfect Timing II》Ch.7 多負載那段的門檻在你桌上的樣子：stub 延遲要比上升時間快至少 6 倍才能當集總看（Perfect Timing II Ch.7 的 1/6 法則）——0.5 m stub 的 2.5 ns vs 邊沿 15 ns/6 = 2.5 ns，恰好踩在門檻上。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">實驗 2 帶走的話</span>
+  <p><strong>凹陷深度報阻抗、凹陷寬度報長度、凹陷位置報地點</strong>——一個 stub 事件自帶三條資訊。板廠 TDR 報告上 via stub 的凹陷，你從今天起讀得出「stub 多長」而不只是「有個凹」。而 2/3 → 1.11 → 0.96 那串階梯，就是 PT2 Ch.7 說的「波會持續來回反彈直到衰減殆盡」（Day 6、Day 14 引過）在你螢幕上的本尊。</p>
+</div>
+
+<h2>4. 實驗 3（約 25 分）：掃頻找諧振——f₀ = v/4ℓ 現形記</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：盪鞦韆找到節奏就飛天，死巷找到節奏就吃人</span>
+  <p>剛剛的方波是「單發水鎚」，死巷只咬它一口。現在改灌<strong>連續的正弦波</strong>——如果正弦的節奏剛好讓「進死巷再回來的波」每次都跟主流<strong>反相</strong>，回波就一口一口把主流抵銷掉：接收端的振幅塌陷。這個致命節奏就是 λ/4 諧振：波長的四分之一剛好等於死巷長度時，來回半個波長、相位差 180°。<strong>對接收端來說，開路的死巷在 f₀ 這個頻率上等效於把線短路到地</strong>——訊號被整口吃掉。今天你會親手轉旋鈕「找到」這個頻率，而它會跟 f₀ = v/4ℓ 算出來的數字對上。</p>
+</div>
+
+<p><strong>接法（只改兩處）：</strong>①產生器改出<strong>正弦波</strong>（幅度 1～2 Vpp）；②示波器改成「當終點」：把主線遠端直接接到 <strong>CH1 並切 50 Ω 輸入檔</strong>（或 1 MΩ 檔＋貫通式 50 Ω 終端器）。源端那個 T 接頭可以拆掉不用——這個實驗我們只關心「傳到終點的振幅」。中間的岔口與 2 m 懸空 stub 保持不動。</p>
+
+<p><strong>預測：</strong>f₀ = v/4ℓ = 20 cm/ns ÷ 800 cm = <strong>25 MHz</strong>。掃頻時接收振幅在 25 MHz 附近塌出一個深谷；理想無損時谷底是零，實際受線損與接頭品質限制，凹到原振幅的一至二成以下（量級）就算教科書級成功。</p>
+
+<p><strong>步驟：</strong></p>
+<ol>
+  <li>從 5 MHz 開始，每步 2～5 MHz 往上掃，記錄接收端峰對峰值。接近 25 MHz 時改用 0.5～1 MHz 細步——谷很尖，粗掃會跳過去。</li>
+  <li>找到谷底頻率 f₀(實測)，跟 25 MHz 對答案（線長與速度因子都帶「約」，差個 1～2 MHz 屬正常）。</li>
+  <li><strong>驗證反比律：</strong>stub 換 1 m → 谷應搬到約 50 MHz（產生器出得去的話）；stub 加長到 4 m（2 m×2 串接）→ 約 12.5 MHz。把三組 (ℓ, f₀) 記進表格，算 f₀ × ℓ 是否都 ≈ v/4 ≈ 5 GHz·mm 量級（即 50 MHz·m）。</li>
+  <li><strong>奇次諧波加碼：</strong>回到 2 m stub，繼續往上掃到 75 MHz 附近（3f₀，3λ/4 一樣把開路變短路）——若產生器出得了這個頻率，會再塌一谷。偶數倍（50 MHz）則安然無恙。這就是 Day 11 說的「梳子狀」吸收：f₀、3f₀、5f₀…。</li>
+  <li><strong>閉環驗證（今天最漂亮的一步）：</strong>回頭調出實驗 2 的方波波形，量接收端（把終點的 CH1 波形叫出來或重接）振鈴的<strong>週期</strong>：理論 = 4×t_stub = 40 ns → 頻率 25 MHz——<strong>時域振鈴的頻率就是頻域諧振的 f₀</strong>。兩個實驗、兩種波形、同一個數字：這就是「時域與頻域是同一件事的兩種語言」最有手感的一次相遇。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 3：掃頻傳輸曲線預測——λ/4 諧振把開路 stub 變成短路</text>
+  <!-- axes -->
+  <line x1="80" y1="330" x2="700" y2="330" stroke="#374151" stroke-width="1.5"/>
+  <line x1="80" y1="330" x2="80" y2="60" stroke="#374151" stroke-width="1.5"/>
+  <text x="700" y="350" text-anchor="end" font-size="10.5" fill="#374151">頻率 →</text>
+  <text x="70" y="70" text-anchor="end" font-size="10.5" fill="#374151">接收振幅</text>
+  <!-- transmission curve for 2m stub -->
+  <path d="M80,90 L200,92 Q250,96 280,130 Q305,220 315,300 Q325,220 350,130 Q380,96 430,92 L480,94 Q530,100 560,140 Q585,230 595,300 Q605,230 630,140 Q660,100 700,96"
+        fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="315" y1="330" x2="315" y2="300" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="315" y="348" text-anchor="middle" font-size="10.5" fill="#dc2626" font-weight="bold">f₀ = v/4ℓ（2 m → 約 25 MHz）</text>
+  <line x1="595" y1="330" x2="595" y2="300" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="595" y="348" text-anchor="middle" font-size="10.5" fill="#dc2626" font-weight="bold">3f₀（約 75 MHz）</text>
+  <text x="455" y="86" text-anchor="middle" font-size="9.5" fill="#16a34a">偶數倍（50 MHz）沒事——梳齒只長在奇數倍</text>
+  <text x="315" y="286" text-anchor="middle" font-size="9" fill="#991b1b">谷底受線損限制</text>
+  <!-- annotation: length dependence -->
+  <rect x="90" y="120" width="196" height="76" rx="8" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="188" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#7c3aed">換 stub 長度，谷跟著搬家：</text>
+  <text x="188" y="158" text-anchor="middle" font-size="9.5" fill="#7c3aed">1 m → 約 50 MHz</text>
+  <text x="188" y="173" text-anchor="middle" font-size="9.5" fill="#7c3aed">2 m → 約 25 MHz</text>
+  <text x="188" y="188" text-anchor="middle" font-size="9.5" fill="#7c3aed">4 m → 約 12.5 MHz（f₀∝1/ℓ）</text>
+  <!-- bottom: physics -->
+  <rect x="80" y="368" width="620" height="44" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="390" y="386" text-anchor="middle" font-size="10.5" fill="#0e7490" font-weight="bold">物理：ℓ = λ/4 時，開路端的「電壓最大、電流零」被轉換成岔口的「電壓零、電流最大」——開路變短路</text>
+  <text x="390" y="403" text-anchor="middle" font-size="9.5" fill="#0e7490">板上的 via stub 同理：3 mm stub（FR4 v≈15 cm/ns）→ f₀ 約 12.5 GHz，正好咬在 25 Gbps 訊號的奈奎斯特頻率上</text>
+</svg>
+<figcaption>圖 2：掃頻預測（觀念示意）。開路 stub 在 f₀ = v/4ℓ 及其奇數倍把自己「阻抗變換」成短路，接收振幅塌谷。今天在 25 MHz 親手找到的谷，跟高速板上 via stub 在十幾 GHz 咬掉眼圖，是同一條方程式——只是桌上的 2 m 換成板裡的 3 mm。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：谷找不到？先查這三件事</span>
+  <p>①接收端是不是忘了切 50 Ω（或忘了掛貫通終端器）？1 MΩ 開路終點會讓整條線變成駐波遊樂場，谷的位置和深度全走樣。②掃頻步距太粗——谷可能只有 1～2 MHz 寬，用細步慢慢爬。③stub 開路端有沒有不小心碰到金屬（桌面、機殼）？懸空要真的懸空。都查過還找不到，量一下 stub 實際長度重算 f₀——多半是長度記錯。</p>
+</div>
+
+<h2>5. 實驗 4（約 20 分）：兩個病灶擺近擺遠——親眼看 Δd ≈ v·t_r/2</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：兩片髒玻璃推近推遠</span>
+  <p>Day 14 說 TDR 的「視力」由邊沿決定：兩個病灶比 Δd ≈ v·t_r/2 更近，螢幕上就融合成一坨。昨天這是一條公式，今天它是你手上的兩個 T 接頭——先擺得老遠（兩個凹陷各自獨立），再一步步推近，親眼看它們<strong>藕斷絲連、最後黏成一個寬凹</strong>。這是把 Day 14 圖 2 的三格漫畫親手演一遍。</p>
+</div>
+
+<p><strong>接法：</strong>主線改成三段：CH1（源端 T、1 MΩ 檔）→ 3 m → <strong>T 接頭 A（掛 0.5 m 懸空 stub）</strong>→ 間距 s → <strong>T 接頭 B（掛 0.5 m 懸空 stub）</strong>→ 3 m → 50 Ω 終端器。兩個 0.5 m stub 各自是一顆「約 50 pF 量級的電容型病灶」（實驗 2 第 4 步做過的那種淺圓凹）。</p>
+
+<p><strong>預測：</strong>實驗 1 量到的邊沿若為 t_r ≈ 15 ns，解析度 Δd ≈ 20 cm/ns × 15 ns ÷ 2 = <strong>約 1.5 m</strong>。所以：</p>
+<ol>
+  <li><strong>s = 5 m（≫ Δd）：</strong>兩個淺凹清楚分開，間隔 = 2×(5 m) 飛行 = 50 ns。各自認領、各自能定量。</li>
+  <li><strong>s = 1 m（≈ Δd 邊界）：</strong>兩凹開始黏連——中間的「回升」回不到基線，藕斷絲連。單看深度已不可信；Day 9 的面積不變性此時是你唯一的靠山。</li>
+  <li><strong>s = 0.3 m（≪ Δd）：</strong>徹底融合成<strong>一個更深更寬的單一凹陷</strong>——螢幕上它就是「一顆病灶」。且對訊號它也真的是一顆：等效 C ≈ 50 + 50 = 100 pF 量級（融合＝寄生量相加，Day 14 第 5 節）。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 4：同兩顆病灶、三種間距——分開、黏連、融合</text>
+  <!-- row 1 -->
+  <text x="66" y="78" text-anchor="end" font-size="10" fill="#16a34a">s = 5 m</text>
+  <text x="66" y="92" text-anchor="end" font-size="9" fill="#16a34a">（≫ Δd）</text>
+  <line x1="90" y1="100" x2="700" y2="100" stroke="#374151" stroke-width="1"/>
+  <path d="M90,80 L240,80 Q258,80 266,94 Q274,102 282,94 Q290,80 308,80 L420,80 Q438,80 446,94 Q454,102 462,94 Q470,80 488,80 L700,80" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="376" y="66" text-anchor="middle" font-size="9" fill="#16a34a">兩個獨立事件，間隔 50 ns → 各自認領、各自開藥</text>
+  <!-- row 2 -->
+  <text x="66" y="188" text-anchor="end" font-size="10" fill="#b45309">s = 1 m</text>
+  <text x="66" y="202" text-anchor="end" font-size="9" fill="#b45309">（≈ Δd）</text>
+  <line x1="90" y1="210" x2="700" y2="210" stroke="#374151" stroke-width="1"/>
+  <path d="M90,190 L280,190 Q300,190 310,204 Q320,214 330,206 Q338,200 346,206 Q356,214 366,204 Q376,190 396,190 L700,190" fill="none" stroke="#b45309" stroke-width="2"/>
+  <text x="376" y="176" text-anchor="middle" font-size="9" fill="#b45309">藕斷絲連——中間回不到基線；深度不可信，面積仍大致守恆</text>
+  <!-- row 3 -->
+  <text x="66" y="298" text-anchor="end" font-size="10" fill="#dc2626">s = 0.3 m</text>
+  <text x="66" y="312" text-anchor="end" font-size="9" fill="#dc2626">（≪ Δd）</text>
+  <line x1="90" y1="320" x2="700" y2="320" stroke="#374151" stroke-width="1"/>
+  <path d="M90,300 L280,300 Q310,300 322,316 Q338,332 354,332 Q370,332 386,316 Q398,300 428,300 L700,300" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="376" y="286" text-anchor="middle" font-size="9" fill="#dc2626">融合成一個更深更寬的凹 → 等效一顆約 100 pF 量級的「大病灶」</text>
+  <rect x="90" y="352" width="600" height="40" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="390" y="369" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="bold">分界線就是 Δd ≈ v·t_r/2（本例約 1.5 m）——昨天的公式，今天的旋鈕</text>
+  <text x="390" y="385" text-anchor="middle" font-size="9.5" fill="#7c3aed">「TDR 分不開」＝「訊號看它是集總」＝ PT2 Ch.7：距離短，兩個負載表現為一個集總容性負載</text>
+</svg>
+<figcaption>圖 3：實驗 4 的三種間距與 CH1 預測波形。這張圖跟 Day 14 圖 2 是同一張——差別是昨天用「邊沿變鈍」改變 Δd、病灶不動；今天邊沿固定、你用手改變病灶間距。兩條路殊途同歸，都撞上同一條解析度公式。</figcaption>
+</figure>
+
+<p><strong>步驟：</strong>三種間距各存一張圖。s = 0.3 m 那張，用游標粗估凹陷面積，跟 s = 5 m 時「兩個凹面積相加」比一比——量級應該對得上（面積守恆＋融合相加）。這正是《Perfect Timing II》Ch.7 的原話在你桌上重演：<strong>「如果兩個負載之間的距離很短，兩個負載會表現為一個集總的容性負載」（Perfect Timing II Ch.7）</strong>——書中 Figure 7.12 用相距 1 吋的兩顆負載實測這件事（2002 年、2 ns 邊沿的世界；今天你用 0.3 m 和 15 ns 邊沿重現它，高速板上則是 mm 級與 ps 級——比例尺不同，物理一字不改）。</p>
+
+<h2>6. 實驗 5（加碼，約 10 分）：抓一次鬼——Day 14 的鬼影與「換端量」</h2>
+<p>把實驗 4 的兩個 stub 都換回 <strong>2 m</strong>（讓兩個病灶都「夠嚴重」：每個岔口瞬態 ρ = −1/3），間距 s = 5 m。Day 14 的鬼影條件湊齊了：</p>
+<ol>
+  <li><strong>預測：</strong>真事件 A（約 t=2×3m 飛行 ≈ 30 ns 量級，依實際佈線）、真事件 B（再晚 50 ns）；鬼影在 B 之後<strong>再隔 50 ns</strong>（間距胎記！），振幅量級 ~ ρ₁ρ₂² ≈ (1/3)³ ≈ 3.7%——不大，打開示波器的<strong>平均（averaging）模式</strong>壓噪聲找它。</li>
+  <li>找到疑似鬼影後，跑 Day 14 抓鬼三判別：間距是否複製？振幅是否小一截？<strong>把 stub A 拔掉</strong>——真事件 B 只會變乾淨一點點（遮蔽折扣消失），鬼影則整個蒸發。</li>
+  <li><strong>換端量收尾：</strong>把產生器和示波器（源端 T）整組搬到線的另一頭再量一次。真事件 A、B 鏡像出現；鬼影長在不同的地方。Day 14 鐵律「兩端各量一次」從口訣變成手感。</li>
+</ol>
+<p>找不到鬼影也不算失敗——(1/3)³ 本來就在可見度邊緣，記下「在多少平均次數下仍看不到」，這本身就是一筆有價值的量測紀錄（振幅量級判別法的實證）。</p>
+
+<h2>7. 量測記錄表（拍照存檔，週日測驗會用到）</h2>
+<table>
+  <tr><th>#</th><th>項目</th><th>理論預測</th><th>實測值</th><th>偏差原因猜測</th></tr>
+  <tr><td>1</td><td>known-good 基準線＋邊沿 t_r</td><td>平直無事件</td><td></td><td></td></tr>
+  <tr><td>2</td><td>2 m stub 凹陷寬度</td><td>約 20 ns</td><td></td><td>速度因子「約 0.66」</td></tr>
+  <tr><td>3</td><td>凹陷深度（正規化）</td><td>約 −1/3</td><td></td><td>T 接頭寄生</td></tr>
+  <tr><td>4</td><td>接收端振鈴週期</td><td>約 40 ns（=4×t_stub）</td><td></td><td></td></tr>
+  <tr><td>5</td><td>掃頻谷 f₀（2 m）</td><td>約 25 MHz</td><td></td><td>線長／速度因子</td></tr>
+  <tr><td>6</td><td>f₀（1 m／4 m）</td><td>約 50／12.5 MHz</td><td></td><td></td></tr>
+  <tr><td>7</td><td>f₀ × ℓ 三組乘積</td><td>≈ v/4（約 50 MHz·m）</td><td></td><td></td></tr>
+  <tr><td>8</td><td>兩病灶融合的臨界間距</td><td>約 v·t_r/2</td><td></td><td>t_r 讀值方式</td></tr>
+  <tr><td>9</td><td>（加碼）鬼影位置與振幅</td><td>等差 50 ns、約 4% 量級</td><td></td><td>平均次數不足</td></tr>
+</table>
+<p>第 4、5 列的數字若對上（振鈴週期的倒數 ≈ 掃頻谷的頻率），在備註欄寫下「時域＝頻域 ✓」——這一格是今天全部實驗的靈魂。</p>
+
+<h2>8. 實務案例：今天的手感值多少錢</h2>
+<ul>
+  <li><strong>NB 主機板：</strong>高速通道換層 via 沒 back-drill，殘留 3 mm stub（FR4 v ≈ 15 cm/ns）→ f₀ ≈ 12.5 GHz，正咬在 25 Gbps 的奈奎斯特頻率上——這就是你今天 25 MHz 那個谷的 500 倍縮小版。開會時被問「back-drill 為什麼非做不可」，你現在可以說：「我在桌上用 2 m 同軸線做過這個諧振腔，f₀ = v/4ℓ，谷有多深我親眼看過。」親手量過的公式，講出來的底氣不一樣。</li>
+  <li><strong>鏡頭模組：</strong>模組 flex 上為了 ICT 測試留的測試點分支、或 BTB 附近的預留焊盤走線，每一根都是今天的「死巷」。MIPI D-PHY 速率一路往上（量級：Gbps 級），當年無害的短分支正在逐批踩進 1/6 門檻——今天實驗 2 第 4 步那個「凹陷糊進邊沿」與「凹陷獨立成形」的切換點，就是設計審查時判「這根分支能不能留」的物理依據。</li>
+  <li><strong>面試：</strong>「Have you ever actually measured a stub resonance?」——多數候選人只會背 f₀ = v/4ℓ。你可以講一個完整的故事：怎麼用訊號產生器和百 MHz 示波器搭出諧振腔、時域振鈴週期怎麼跟頻域谷對上、換長度怎麼驗證反比律。動手故事是面試裡最難造假的加分項。</li>
+</ul>
+
+<h2>9. 動手練習（實驗數據分析）</h2>
+<p>用今天的實測值（沒做完就用理論值）作答，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（凹陷判讀）：實驗 2 你量到凹陷位於 48 ns、寬 21 ns、深度為出發台階的 0.34。(a) 岔口離 CH1 多遠？(b) stub 多長？(c) 岔口處的瞬時並聯阻抗多少？(d) 若明天有人偷偷把你的 stub 換成 75 Ω 的同軸線（長度不變），凹陷的寬度和深度各怎麼變？</summary>
+<p><strong>解：</strong>(a) 單程 = 48/2 = 24 ns → 24 × 0.2 m/ns ≈ <strong>4.8 m</strong>（與佈線 1 m + 短段誤差內相符即可）。(b) t_stub = 21/2 = 10.5 ns → ℓ ≈ 10.5 × 0.2 ≈ <strong>2.1 m</strong>。(c) 深度 0.34 ≈ 1/3 → ρ ≈ −1/3 → Z = Z₀(1+ρ)/(1−ρ) = 50 × (2/3)/(4/3) = <strong>25 Ω</strong>＝主線 50 ‖ stub 50，自洽。(d) 寬度<strong>只由長度與速度決定</strong>：75 Ω 線若速度因子相同則寬度不變（實際 75 Ω 線介質常不同，速度略異，標「約」）。深度變淺：並聯阻抗 = 50‖75 = 30 Ω → ρ = (30−50)/80 = <strong>−0.25</strong>，凹陷從 1/3 縮到 1/4——深度管阻抗、寬度管長度，分工再驗一次。</p>
+</details>
+
+<details>
+<summary>練習 2（掃頻反推）：實驗 3 用一段標籤脫落的 stub，量到谷底在 26.5 MHz。(a) 這段 stub 約多長？(b) 下一個谷預測在哪？(c) 同一段線若拿去當「主線」用窮人版 TDR 量（末端開路），半壓架子會多寬？(d) 為什麼 (b) 和 (c) 其實是同一個資訊？</summary>
+<p><strong>解：</strong>(a) ℓ = v/4f₀ = 20 cm/ns ÷ (4 × 26.5 MHz) ≈ 20/(4×0.0265) cm ≈ <strong>約 1.9 m</strong>。(b) 奇次諧波：3f₀ ≈ <strong>79.5 MHz</strong>（偶數倍無谷）。(c) T_d ≈ 1.9 m × 5 ns/m ≈ 9.4 ns → 架子寬 2T_d ≈ <strong>約 19 ns</strong>（Day 8 的量法）。(d) 兩者都只是在量「這段線的電氣長度 t_d」：頻域用 f₀ = 1/(4t_d) 報告它、時域用架子寬 2t_d 報告它——同一個物理量的兩種讀法，係數不同而已。量測手段可以換，線的身分證只有一張。</p>
+</details>
+
+<details>
+<summary>練習 3（解析度設計題）：你的產生器邊沿實測 t_r = 18 ns。(a) 今天的融合臨界間距 Δd 是多少？(b) 兩個 0.5 m stub 相距 0.4 m 時，CH1 看到幾個事件？等效寄生量約多少？(c) 要把這兩顆「分開看」，除了換更快邊沿的儀器，還有哪一招免費的？(d) 把這題翻譯回真板子：BGA 出線區兩顆相鄰 via，什麼情況下「分不開反而好辦」？</summary>
+<p><strong>解：</strong>(a) Δd ≈ v·t_r/2 = 20 cm/ns × 18 ns ÷ 2 = <strong>約 1.8 m</strong>。(b) 0.4 m ≪ 1.8 m → <strong>一個事件</strong>；每顆 0.5 m stub ≈ 2.5 ns/50 Ω = 50 pF 量級 → 融合後等效 <strong>約 100 pF</strong>（寄生量相加，Day 14）。(c) <strong>換一端量幫不上忙（間距不變），但「拉開它們」可以</strong>——實驗上把兩個 T 接頭中間多接一段線即可；另一招是<strong>只拔掉一顆再量</strong>，兩次相減得到另一顆的貢獻（差分法，known-good 思路的變形）。(d) Day 14 的結論：分不開＝訊號眼裡也是集總＝<strong>當一顆醫</strong>——寄生量相加、一次配平補償。真正麻煩的是「不近不遠」的中間地帶，平台升級時集體發病。</p>
+</details>
+
+<details>
+<summary>練習 4（時域頻域對帳）：實驗 3 步驟 5 你量到接收端振鈴週期 41 ns、掃頻谷 24.8 MHz。(a) 這兩個數字自洽嗎？(b) 由振鈴週期反推 t_stub 與 ℓ。(c) 板上一顆殘留 0.8 mm stub 的 via（FR4，v ≈ 15 cm/ns），f₀ 多少？對 10 Gbps（奈奎斯特 5 GHz）的訊號構成威脅嗎？</summary>
+<p><strong>解：</strong>(a) 1/41 ns ≈ 24.4 MHz vs 24.8 MHz——差約 2%，<strong>自洽</strong>（游標讀值精度量級）。這一格就是「時域振鈴＝頻域諧振」的實證。(b) 週期 = 4×t_stub → t_stub ≈ 10.25 ns → ℓ ≈ <strong>約 2.05 m</strong>。(c) f₀ = 15 cm/ns ÷ (4 × 0.08 cm) ≈ <strong>約 47 GHz</strong>——遠高於 5 GHz，這顆短 stub 對 10 Gbps 大致只是一小顆電容（威脅有限）；但若 stub 是 3 mm，f₀ ≈ 12.5 GHz，對 25 Gbps（奈奎斯特 12.5 GHz）就是正面對撞——back-drill 的取捨永遠要跟「速率的奈奎斯特頻率」對表，不是跟 stub 絕對長度對表。</p>
+</details>
+
+<details>
+<summary>練習 5（PT2 對照題）：《Perfect Timing II》Ch.7 說：兩負載距離短＝一個集總容性負載，不然就是未端接 stub、訊號在每點反射、「基本上是一條端接不良的線」；門檻是 stub 延遲比上升時間快 6 倍。(a) 用今天實驗 2 的數據驗證：0.5 m stub 對 15 ns 邊沿，過門檻了嗎？2 m 呢？(b) 書中 Figure 7.12 的兩負載相距 1 吋、邊沿 2 ns 量級——用 1/6 法則檢查它為什麼「合法」。(c) 為什麼今天實驗 4 的融合判準用 Δd ≈ v·t_r/2、Day 11 的集總判準用 t_r/6？兩個係數矛盾嗎？</summary>
+<p><strong>解：</strong>(a) 門檻 t_r/6 = 2.5 ns。0.5 m → t_stub = 2.5 ns，<strong>恰在門檻上</strong>（所以螢幕上是「糊進邊沿的淺圓凹」——電容行為）；2 m → 10 ns ≫ 2.5 ns，<strong>不合格</strong>——它是獨立成形的凹陷＋振鈴＝書中說的「端接不良的線」。實驗 2 的兩張波形就是這條法則的左右兩頁。(b) 1 吋 ≈ 2.54 cm，FR4 類走線延遲約 170 ps/吋量級 → 遠小於 2 ns/6 ≈ 333 ps → 合法（書中實測確實表現為單一集總負載；2002 年數據，現代 100 ps 邊沿下同樣 1 吋就違法，需照比例下修）。(c) 不矛盾——它們回答不同問題：<strong>t_r/6 是「訊號會不會把它當一顆」的工程安全門檻</strong>（要留餘裕，係數嚴）；<strong>v·t_r/2 是「TDR 螢幕上分不分得開」的物理極限</strong>（剛好分得開就算）。同一根尺（邊沿的空間長度），一個拿來守規矩、一個拿來讀螢幕。</p>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+<p>實作經驗是 camera HW 面試的照妖鏡——今天兩題都圍繞「你真的量過嗎」。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Explain quarter-wave stub resonance — and describe how you would demonstrate it with nothing but a function generator and a basic oscilloscope."</summary>
+<p><strong>參考答案骨架：</strong>An open-ended stub is a resonator: at the frequency where the stub is exactly a quarter wavelength long, the wave travels down, reflects off the open end, and comes back 180 degrees out of phase with the incoming signal — the open circuit at the far end gets transformed into a short circuit at the junction. So the stub eats the signal at f-zero equals v over four L, and again at every odd multiple. To demonstrate it on a bench, I scale the problem up: instead of a 3-millimeter via stub resonating at tens of gigahertz, I hang a 2-meter piece of coax off a BNC tee in the middle of a matched 50-ohm line. Coax propagates at about 20 centimeters per nanosecond, so f-zero lands around 25 megahertz — well within any function generator. I drive a sine into the line, terminate into the scope's 50-ohm input, and sweep: the received amplitude collapses into a sharp notch at 25 megahertz, moves to 50 when I halve the stub, and a second notch shows up near 75 — the third harmonic. The cross-check I like best is time-domain: with a step input, the receiver rings at a period of four times the stub delay — 40 nanoseconds — and one over that is exactly the 25 megahertz notch. Same physics, two languages. On a real board this is why we back-drill: a residual 3-millimeter stub in FR4 resonates around 12 or 13 gigahertz, right on the Nyquist of a 25-gig link.</p>
+<p><strong>加分點：</strong>「the open gets transformed into a short」的阻抗變換說法＋時域頻域互相對帳（4×t_stub 振鈴 ↔ f₀ 凹口）；能主動把桌上實驗換算回板上 via stub 的 GHz 量級，證明你懂的是比例尺不是背公式。</p>
+</details>
+
+<details>
+<summary>Q2: "On a TDR trace you see one wide capacitive dip. How do you determine whether it's one large discontinuity or several small ones merged together — and does the distinction even matter for the fix?"</summary>
+<p><strong>參考答案骨架：</strong>First I check what the instrument can resolve: spatial resolution is roughly propagation velocity times the system rise time over two — and the system rise time includes degradation from every capacitive structure the edge already crossed, so resolution gets worse the farther down the channel I look. If the dip's width is comparable to that limit, it could be hiding multiple structures. Then I cross-check against the layout: I convert time to distance and see how many physical structures — vias, pads, test points — live inside that window. If the board says two vias and the TDR says one dip, they're merged. To separate them experimentally I can use a faster edge if available, measure from the other end so the edge arrives less degraded, or on a bench mock-up, physically change one element and difference the two traces. But here's the key judgment: if the TDR can't resolve them, the signal — whose edge is usually no faster — sees them as one lumped element too. So for the fix, the distinction often doesn't matter: I take the total dip area, convert it to excess capacitance, and compensate it as a single lump. Where it does matter is future-proofing — structures that are lumped at today's edge rate become separate discontinuities with an unterminated stub between them at the next platform's faster edge, and that's when boards that used to pass start failing.</p>
+<p><strong>加分點：</strong>「if TDR can't resolve it, neither can the signal」這句把量測極限與設計判斷焊在一起（Day 13 公理三＋Day 14 的核心）；結尾的平台升級警語展現的是系統思維，不是儀器操作員思維。</p>
+</details>
+
+<h2>11. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：主線中間掛一根開路 stub，TDR/步階波形長什麼樣？各特徵由什麼決定？</p>
+  <p class="a">A1：一個凹陷＋衰減階梯。凹陷<strong>深度</strong>由岔口並聯阻抗決定（50‖50=25 Ω → ρ=−1/3，與 stub 長度無關）；凹陷<strong>寬度</strong> = 2×t_stub（波在 stub 來回一趟，反推長度）；凹陷<strong>位置</strong>＝岔口離量測點的來回飛行時間。之後每 2t_stub 一階、×(−1/3) 衰減收斂（PT2 Ch.7：波持續來回反彈直到衰減殆盡）。口訣：深度報阻抗、寬度報長度、位置報地點。</p>
+  <p class="q">Q2：開路 stub 的諧振頻率？物理機制一句話？諧波長在哪？</p>
+  <p class="a">A2：f₀ = v/4ℓ（λ/4 諧振）。機制：ℓ=λ/4 時開路端的「電壓最大/電流零」被阻抗變換成岔口的「電壓零/電流最大」——<strong>開路變短路</strong>，訊號在 f₀ 被吃掉。諧波只長在<strong>奇數倍</strong>：f₀、3f₀、5f₀…（偶數倍安全）。例：2 m 同軸（v≈20 cm/ns）→ 25 MHz；板上 3 mm via stub（FR4 v≈15 cm/ns）→ 約 12.5 GHz。</p>
+  <p class="q">Q3：stub 的時域振鈴與頻域諧振怎麼對帳？</p>
+  <p class="a">A3：接收端振鈴每 2t_stub 翻一次相 → 完整週期 = 4×t_stub → 振鈴頻率 = 1/(4t_stub) = v/4ℓ = f₀——時域振鈴頻率就是頻域諧振頻率，同一物理的兩種語言。實驗驗證：2 m stub 振鈴週期約 40 ns ↔ 掃頻谷約 25 MHz。</p>
+  <p class="q">Q4：桌上怎麼用基本儀器演示 stub 諧振與病灶融合？</p>
+  <p class="a">A4：比例尺放大術——板上 mm/ps 換成桌上 m/ns。①諧振：50 Ω 主線（末端接示波器 50 Ω 檔）中間 T 接頭掛 2 m 開路 stub，正弦掃頻在約 25 MHz 找到深谷，換 1 m 谷搬到約 50 MHz（f₀∝1/ℓ）。②融合：兩個 T＋0.5 m stub（各約 50 pF 量級），間距從 5 m 縮到 0.3 m，看兩事件融合成一顆（臨界間距 Δd ≈ v·t_r/2，15 ns 邊沿約 1.5 m）。</p>
+  <p class="q">Q5：0.5 m 開路 stub 對 15 ns 邊沿是電容還是諧振腔？判準？</p>
+  <p class="a">A5：t_stub = 2.5 ns，恰在 PT2 Ch.7 的 1/6 門檻上（15/6 = 2.5 ns）——邊界情況，波形上呈「糊進邊沿的淺圓凹」＝電容行為，C ≈ t_d/Z₀ = 2.5 ns/50 Ω = 50 pF 量級。2 m stub（10 ns）則遠超門檻＝獨立凹陷＋振鈴＝「端接不良的線」。1/6 法則管設計安全（係數嚴）、Δd ≈ v·t_r/2 管 TDR 分辨（物理極限）——同一根尺的兩種用法。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 16（週六）：回流路徑——訊號電流的另一半旅程</strong></p>
+  <p>三週以來我們盯著訊號線看，但電流是一個迴圈——<strong>每一條訊號線底下，都有一條等量、反向、你看不見的回流</strong>。它走哪裡？換層時它怎麼跟過去？參考平面被切一刀它會繞多遠、代價是什麼？明天把「另一半的電路」補上：參考平面、換層回流、跨槽切割與 stitching via——這是 Day 12 connector 回流故事的完整版，也是下週串擾與未來 EMI 的共同地基。純閱讀課，不需儀器；今天的實驗記錄表記得拍照存檔，週日測驗見。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 15 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

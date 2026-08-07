@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 16｜回流路徑——訊號電流的另一半旅程：參考平面、換層過橋與跨槽切割的代價</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 16 天（週六新觀念課・純閱讀不需儀器）</div>
+  <h1>Day 16：回流路徑——訊號電流的另一半旅程：參考平面、換層過橋與跨槽切割的代價</h1>
+  <div class="meta">2026-08-08（六）｜預估學習時間：90 分鐘｜難度：★★★★☆（把三週來「只看訊號線」的半套世界觀補成整套——下週串擾與未來 EMI 的共同地基）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>三週以來我們盯著訊號線看：Z₀、反射、stub、connector……但電流從來不是「一條線」，它是<strong>一個迴圈</strong>——每一條訊號線的正下方，都有一條等量、反向、你在 layout 軟體裡看不見的<strong>回流</strong>。今天把這另一半補上，讀完你要能夠：</p>
+  <ol>
+    <li>解釋回流電流<strong>低頻走最低電阻、高頻走最低電感</strong>的分家行為（Perfect Timing II Ch.6 原文觀念），並用回流密度公式算出「約 80% 的回流擠在訊號線正下方 ±3h 的窄帶裡」</li>
+    <li>說出參考平面的四大功能（PT2 Ch.6），並理解一件顛覆直覺的事：<strong>Z₀ 從來不是訊號線一個人的屬性，是「訊號線＋它的參考平面」這對組合的屬性</strong>——Day 4 的公式今天補完另一半</li>
+    <li>畫出訊號換層時回流的三種「過橋」方式：同平面跟隨、地對地 stitching via、地換電源靠去耦電容跳橋（PT2 Ch.6 Figure 6.4 的觀念），並知道每一種的代價</li>
+    <li>算出跨槽切割（slot）的繞路代價：多出的迴路電感 → TDR 感性尖峰（面積公式接 Day 13）→ 邊沿變慢 → 串擾與 EMI——一刀切下去，四種病一起上身</li>
+    <li>把 Day 12 connector 的「回流故事」升級成完整版：為什麼地針數量與位置決定 connector 的成敗</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：你一直只看了半個電路</h2>
+<p>Day 12 講 connector 時我們埋過一句話：「訊號針旁邊要有地針，因為回流要有路走。」當時沒展開——因為它值得一整課。Day 15 實驗裡你掛的每一根同軸線，其實都自帶完美回流（外皮就是回流路徑，緊貼著芯線）——所以你從來不用擔心它。但 PCB 不是同軸線：<strong>回流走哪裡，是你的 layout 決定的，而且大多數 SI 事故，病根不在訊號線，在回流被你切斷、繞路、或跟錯了平面</strong>。今天是純閱讀課，不需儀器；讀完之後你看每一張 layout 的眼睛會多一層——看得見那條「影子電流」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：每一次外送，都有一趟你沒看見的回程</span>
+  <p>把訊號想成外送員送餐：從 driver（餐廳）出發，沿著訊號線（大馬路）騎到 receiver（客人家）。但故事沒完——<strong>外送員一定要騎回餐廳</strong>，不然餐廳的人力（電荷）會越來越少，生意做不下去。回程走哪？走「地」——板子裡那一大片銅平面。重點來了：<strong>回程不是隨便亂騎的</strong>。如果外送員慢慢騎（低頻），他挑最省力的直線抄捷徑回家；如果他趕時間狂飆（高頻），他會<strong>緊貼著去程的大馬路正下方的平行巷子騎回來</strong>——因為物理規定：去程與回程靠得越近，這趟來回越「順」（電感越小）。今天整課就三個問題：①回程巷子在哪、有多寬？②去程換馬路（換層）時，回程怎麼跟？③有人把回程巷子挖斷了（平面切割）會怎樣？公式看不懂可以先跳過——「訊號永遠帶著一條緊貼身下的影子，影子被擋住就出事」，這句懂了，今天就懂了一半。</p>
+</div>
+
+<h2>1. 回流是訊號的影子：低頻走最低電阻，高頻走最低電感</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：省油費 vs 省時間</span>
+  <p>回流面前永遠有兩條路：一條「直線捷徑」（兩點之間最短、電阻最小——省油費），一條「緊貼訊號線正下方的平行路」（可能繞一點，但和去程貼得最近——省時間）。慢電流在乎油費，走捷徑；快電流在乎的是「迴圈順不順」（電感），走平行路。切換點在哪？不用背——只要記得：<strong>凡是我們這三週在乎的訊號（MHz 以上的邊沿），回流一律走正下方</strong>。真正麻煩的反而是：你以為它走捷徑，其實它在你不知道的地方緊緊跟著訊號線——直到被一條切割擋住。</p>
+</div>
+
+<p>這正是 Perfect Timing II Ch.6 在 Signal Return Paths 一節的開場白：<strong>「在非常低的速度下，回流電流走電阻最小的路徑；但在較高速度下，回流電流走電感最小的路徑——通常就是訊號線正下方的接地平面。」（Perfect Timing II Ch.6）</strong>為什麼「正下方」電感最小？回想迴路電感的直覺：<strong>迴路電感正比於迴路圍出的面積</strong>。去程在訊號線、回程在它正下方，兩者只隔一層介質厚度 h（幾 mil），迴圈面積被壓到最小——這就是最低電感路徑。回流若從別處繞，迴圈被撐大，電感暴增。</p>
+
+<p>「走捷徑 vs 走正下方」的分家頻率，取決於平面的電阻與迴路電感之比（f ≈ R/2πL），對典型 PCB 平面大約在<strong>數十 kHz 到數百 kHz 量級</strong>——換句話說，超過約 1 MHz 之後，回流幾乎百分之百聽電感的話。我們課程裡所有訊號（邊沿 ns 級、頻寬數百 MHz 起跳）都遠在這個門檻之上。</p>
+
+<p>回流在平面上不是一條無限細的線，而是一個以訊號線正下方為中心的「電流帶」。微帶線（線寬遠小於高度時的理想化模型）的回流密度分布是經典結果：</p>
+
+<div class="formula">i(d) = (I₀ / πh) × 1 / (1 + (d/h)²)　；　落在 ±d 範圍內的回流比例 = (2/π)·arctan(d/h)</div>
+<p><em>白話翻譯：h 是訊號線離平面的高度，d 是離「正下方」的水平距離。回流像一座以正下方為峰的山：<strong>±1h 內擠了 50%、±3h 內約 80%、±5h 內約 87%</strong>。h 通常只有 0.1 mm 量級——意思是：幾乎全部的回流，擠在訊號線正下方一條不到 1 mm 寬的窄帶裡。這條窄帶，就是你要保護的「影子」。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">回流電流住在訊號線正下方的窄帶裡</text>
+  <!-- cross-section -->
+  <text x="60" y="56" font-size="10" fill="#6b7280">板子橫截面（正面看過去）</text>
+  <rect x="330" y="80" width="100" height="14" fill="#0e7490"/>
+  <text x="380" y="72" text-anchor="middle" font-size="9.5" fill="#0e7490">訊號線（去程電流 ⊗ 流入紙面）</text>
+  <rect x="80" y="130" width="600" height="12" fill="#9ca3af"/>
+  <text x="700" y="140" font-size="9.5" fill="#6b7280">地平面</text>
+  <line x1="380" y1="94" x2="380" y2="130" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="392" y="116" font-size="9" fill="#6b7280">h（介質厚度）</text>
+  <!-- current density curve on plane -->
+  <path d="M100,128 L240,128 Q300,128 330,112 Q360,96 380,96 Q400,96 430,112 Q460,128 520,128 L660,128"
+        fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="380" y="160" text-anchor="middle" font-size="9.5" fill="#dc2626">回流密度 i(d) ∝ 1/(1+(d/h)²)：以正下方為峰的山（⊙ 流出紙面）</text>
+  <!-- bands -->
+  <line x1="360" y1="170" x2="400" y2="170" stroke="#16a34a" stroke-width="5"/>
+  <text x="420" y="174" font-size="9" fill="#16a34a">±1h → 50% 的回流</text>
+  <line x1="320" y1="188" x2="440" y2="188" stroke="#b45309" stroke-width="5"/>
+  <text x="460" y="192" font-size="9" fill="#b45309">±3h → 約 80%</text>
+  <line x1="280" y1="206" x2="480" y2="206" stroke="#7c3aed" stroke-width="5"/>
+  <text x="500" y="210" font-size="9" fill="#7c3aed">±5h → 約 87%</text>
+  <!-- top view -->
+  <text x="60" y="256" font-size="10" fill="#6b7280">俯視圖（layout 視角）</text>
+  <rect x="80" y="270" width="600" height="120" fill="#f3f4f6" stroke="#d1d5db"/>
+  <line x1="110" y1="330" x2="650" y2="330" stroke="#0e7490" stroke-width="5"/>
+  <text x="130" y="320" font-size="9.5" fill="#0e7490">你在 layout 軟體裡看見的：一條訊號線</text>
+  <rect x="110" y="316" width="540" height="28" fill="#dc2626" opacity="0.14"/>
+  <text x="380" y="374" text-anchor="middle" font-size="9.5" fill="#dc2626">你看不見但真實存在的：貼著正下方、寬約 ±3h 的回流影子（在下一層平面上反向奔跑）</text>
+  <text x="380" y="410" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">高頻回流走最低「電感」＝迴圈面積最小＝緊貼去程正下方（Perfect Timing II Ch.6）</text>
+</svg>
+<figcaption>圖 1：上半是橫截面——回流密度在訊號線正下方成峰，±3h 內擠了約 80%（h 通常僅 0.1 mm 量級，這條影子帶不到 1 mm 寬）。下半是俯視圖——從此以後看 layout，每條高速線都要在腦中疊上這條紅色影子帶：影子完整，訊號才完整。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">一句話世界觀升級</span>
+  <p>從今天起，「一條 50 Ω 走線」這句話在你腦中要自動翻譯成：「一條訊號線＋它正下方那條 ±3h 寬的回流影子帶，<strong>這對組合</strong>是 50 Ω」。Day 4 推 Z₀ = √(L/C) 時，那個 L 是<strong>迴路</strong>電感、C 是線對<strong>平面</strong>的電容——參考平面從第一天就在公式裡，只是我們一直沒點名它。動了影子（挖槽、換參考層、平面破洞），L 和 C 就變了，Z₀ 跟著變——訊號線一動未動，阻抗照樣出事。</p>
+</div>
+
+<h2>2. 參考平面：不只是「地」，是訊號的另一根導體</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：舞伴</span>
+  <p>訊號線和參考平面的關係，不是「主角與背景」，是<strong>雙人舞的兩個舞伴</strong>——阻抗、延遲、耦合，全都是兩人共同決定的。而且舞伴不一定是「地」：只要那片平面在交流意義上是安靜的（電位不亂晃），電源平面也能當舞伴。但中途換舞伴（一段線參考地、下一段參考電源）是有代價的——待會第 3 節講換層時你會看到帳單。</p>
+</div>
+
+<p>Perfect Timing II Ch.6 開篇就把平面的角色講全了——平面提供四大功能（Perfect Timing II Ch.6）：</p>
+<ol>
+  <li><strong>低阻抗供電路徑</strong>：書中舉例，2 oz 銅平面的點對點電阻是 1 oz 的一半（兩條電阻/電感並聯的概念）——DC 壓降與 AC 電感一起降；</li>
+  <li><strong>散熱通道</strong>；</li>
+  <li><strong>靜電屏蔽</strong>：隔開平面兩側訊號層的電磁場——這是多層板「訊號層之間夾平面」能壓串擾的原因（下週主角）；</li>
+  <li><strong>平面電容</strong>：電源平面與地平面本身是一顆平板電容，天生提供高頻旁路。</li>
+</ol>
+
+<p>第四點書中給了公式與數字（Perfect Timing II Ch.6）：</p>
+<div class="formula">C = 0.225 × ε<sub>r</sub> × A′ / t′　（A′：平面面積 in²；t′：層間距 in；C 單位 pF）</div>
+<p><em>白話翻譯：兩片平面靠得越近、面積越大、介質介電常數越高，白送的電容越多。書中算例：10×10 吋 FR-4 板、ε<sub>r</sub> = 4.1、電源—地間距 5 mil → C ≈ 18,450 pF，即<strong>約 184 pF 每平方吋</strong>。書中也強調：這遠不足以涵蓋高速設計全部的旁路需求，但應該用好用滿。注意這是 2002 年的典型疊構——現代密疊構常把電源—地間距壓到 3 mil 甚至更薄（薄介質專用材料），單位面積電容以現代標準需上修；平面電容真正的價值（極低 ESL 的超高頻旁路）等 Phase 2 週 8 展開。</em></p>
+
+<p>那「電源平面能不能當參考」？書中的答案很精確：<strong>「當電源平面被正確旁路後，它與地平面處於相同的交流電位，因此可以作為受控阻抗走線的參考。但同時使用電源與地兩種平面（讓走線在兩者之間切換參考）是不智的——兩者之間的轉換極有可能造成明顯的阻抗不連續，成為不必要的反射來源。」（Perfect Timing II Ch.6）</strong>翻成 Day 6 的語言：換參考層的那一點，就是一個 ρ ≠ 0 的介面——TDR 上看得見。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「反正整片都是 GND，接哪裡都一樣」</span>
+  <p>對 DC 來說是的；對高頻回流來說，<strong>平面上每一點都不等價</strong>——回流只認訊號線正下方那條窄帶。所以「這裡的 GND 銅皮跟那裡的 GND 銅皮有接起來就好」是 DC 思維；SI 思維問的是：「<strong>回流從訊號線正下方這一點，到它要去的下一點，走的是連續的短路徑，還是被迫繞遠路？</strong>」PT2 Ch.6 有一句話值得抄在螢幕邊上：<strong>「如果回流訊號在地平面裡遭遇一段 5 Ω 的路徑，那條 50 Ω 走線上正常訊號的完整性就可能被破壞。」（Perfect Timing II Ch.6）</strong>——注意量級對比：回流路徑只要「稍微」不理想（5 Ω 對 50 Ω，才十分之一），就足以汙染訊號。回流不是配角，是半個主角。</p>
+</div>
+
+<h2>3. 換層：回流的三種過橋方式</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：你搭電梯換樓層，影子怎麼辦？</span>
+  <p>訊號打一根 via 從第 1 層換到第 6 層，一微秒的事。但影子（回流）貼在<strong>平面</strong>上，它不能穿過平面飛過去——它得找自己的「電梯」。三種情況：<strong>①換層前後參考同一片平面</strong>（例如第 1 層和第 3 層都參考第 2 層地）：影子只要從平面上面翻到平面下面，走 via 反焊盤（antipad）的洞口邊緣繞過去就行，代價最小。<strong>②換層後參考另一片地平面</strong>：影子要從地平面 A 跳到地平面 B——需要一根<strong>地對地的 stitching via</strong> 當電梯，而且電梯要蓋在訊號 via 旁邊，不然影子繞遠路。<strong>③換層後參考的是電源平面</strong>：影子要從「地」跳到「電源」——兩片平面 DC 上根本不相連！唯一的橋是<strong>去耦電容</strong>（AC 上把兩片平面短路起來）。附近有沒有一顆電容、離多遠，決定影子繞多大圈。</p>
+</div>
+
+<p>第三種情況正是 PT2 Ch.6 Figure 6.4 畫的場景：<strong>「當回流電流回到驅動元件端，由旁路電容提供通往正確電壓平面的橋樑。」（Perfect Timing II Ch.6）</strong>——2002 年書裡講的是回流在 driver 端跨回電源平面的最後一哩路；把同一個觀念用在通道中段的換層 via 旁，就是現代 layout guideline「訊號換參考層時，旁邊擺一顆 stitching cap」的出處。三種過橋的代價排序：</p>
+
+<div class="formula">同平面翻面（幾乎免費）　＜　地對地 stitching via（一根 via 的電感，約 nH 量級的幾分之一）　＜　靠遠處的去耦電容跳橋（繞路電感＋電容自身 ESL，代價最大且隨距離惡化）</div>
+<p><em>白話翻譯：能不換參考就不換；要換，優先換到「同一片」或「同性質（地對地）」的平面；不得已換到電源平面，電容要貼著訊號 via 放。「多遠算貼著」的尺，還是那把：回流繞路的額外延遲要遠小於 t_r——與 Day 13 集總判準同源，邊沿越快，容許的繞路越短（現代高速訊號通常要求 stitching via/cap 在訊號 via 約 1~2 mm 內，量級供參考）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">換層時，回流的三種過橋方式（截面圖，代價由小到大）</text>
+  <!-- case 1 -->
+  <text x="40" y="56" font-size="10.5" font-weight="bold" fill="#16a34a">① 換層前後參考同一片地平面：影子翻面就好</text>
+  <line x1="60" y1="80" x2="330" y2="80" stroke="#0e7490" stroke-width="3"/>
+  <rect x="60" y="100" width="640" height="8" fill="#9ca3af"/>
+  <text x="710" y="108" font-size="8.5" fill="#6b7280">GND</text>
+  <line x1="390" y1="128" x2="660" y2="128" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="80" x2="330" y2="128" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="128" x2="390" y2="128" stroke="#0e7490" stroke-width="3"/>
+  <circle cx="330" cy="104" r="10" fill="none" stroke="#374151" stroke-width="1.5" stroke-dasharray="2 2"/>
+  <path d="M120,96 L318,96 M318,96 Q330,96 330,104 Q330,112 342,112 M342,112 L600,112" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <text x="470" y="94" font-size="8.5" fill="#dc2626">回流沿 antipad 洞口邊緣從平面上側翻到下側——路徑短，幾乎免費</text>
+  <!-- case 2 -->
+  <text x="40" y="176" font-size="10.5" font-weight="bold" fill="#b45309">② 換到另一片地平面：需要地對地 stitching via 當電梯</text>
+  <line x1="60" y1="200" x2="330" y2="200" stroke="#0e7490" stroke-width="3"/>
+  <rect x="60" y="218" width="640" height="8" fill="#9ca3af"/>
+  <text x="710" y="226" font-size="8.5" fill="#6b7280">GND A</text>
+  <rect x="60" y="268" width="640" height="8" fill="#9ca3af"/>
+  <text x="710" y="276" font-size="8.5" fill="#6b7280">GND B</text>
+  <line x1="390" y1="292" x2="660" y2="292" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="200" x2="330" y2="292" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="292" x2="390" y2="292" stroke="#0e7490" stroke-width="3"/>
+  <line x1="360" y1="222" x2="360" y2="272" stroke="#16a34a" stroke-width="4"/>
+  <text x="368" y="250" font-size="8.5" fill="#16a34a">stitching via（GND–GND）緊鄰訊號 via</text>
+  <path d="M120,214 L340,214 Q356,214 358,224 M362,270 Q364,282 380,282 L600,282" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <text x="480" y="252" font-size="8.5" fill="#dc2626">回流搭綠色電梯換平面；電梯離越遠，繞路電感越大</text>
+  <!-- case 3 -->
+  <text x="40" y="340" font-size="10.5" font-weight="bold" fill="#dc2626">③ 換到電源平面當參考：DC 不相連——回流只能靠去耦電容跳橋</text>
+  <line x1="60" y1="364" x2="330" y2="364" stroke="#0e7490" stroke-width="3"/>
+  <rect x="60" y="382" width="640" height="8" fill="#9ca3af"/>
+  <text x="710" y="390" font-size="8.5" fill="#6b7280">GND</text>
+  <rect x="60" y="418" width="640" height="8" fill="#f59e0b"/>
+  <text x="710" y="426" font-size="8.5" fill="#b45309">PWR</text>
+  <line x1="390" y1="442" x2="660" y2="442" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="364" x2="330" y2="442" stroke="#0e7490" stroke-width="3"/>
+  <line x1="330" y1="442" x2="390" y2="442" stroke="#0e7490" stroke-width="3"/>
+  <rect x="440" y="392" width="26" height="28" fill="#7c3aed"/>
+  <text x="453" y="386" text-anchor="middle" font-size="8.5" fill="#7c3aed">去耦電容（AC 短路橋）</text>
+  <path d="M120,378 L320,378 Q336,378 338,388 M338,388 L444,388 M462,424 L380,432 Q368,434 368,440 M368,440 L600,436" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <text x="230" y="410" font-size="8.5" fill="#dc2626">回流繞到電容才過得去：距離＋ESL 全是帳單（PT2 Ch.6 Fig 6.4 觀念）</text>
+</svg>
+<figcaption>圖 2：換層三情境。藍色＝訊號路徑，紅色虛線＝回流路徑。①同參考平面：回流沿 via 洞口翻面，幾乎免費。②地換地：stitching via 是回流電梯，必須緊鄰訊號 via。③地換電源：兩平面 DC 不相連，回流唯一的橋是去耦電容——「由旁路電容提供通往正確電壓平面的橋樑」（Perfect Timing II Ch.6）。</figcaption>
+</figure>
+
+<p>順帶把 PT2 Ch.6 對 via 本身的忠告收進來（它同時影響訊號與回流兩側）：書中指出 via 由電鍍的顆粒狀銅構成，電阻高於等長走線，而對高速訊號最大的傷害來自其<strong>電感</strong>；若無法避免在走線中使用 via，書中給的三條緩解方針是——<strong>加大 via 尺寸、外層電鍍加厚、將 via 填實</strong>（Perfect Timing II Ch.6）。而在元件接地端，書中的 ground island 建議是<strong>每個地腳至少一根 via、緊貼接地點打下去；並聯加 via 能再降阻抗，但每腳超過兩根之後效益遞減</strong>（Perfect Timing II Ch.6）——這條「兩根之後遞減」的手感，到今天依然好用。</p>
+
+<h2>4. 跨槽切割：一刀下去，四種病一起上身</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：把影子的巷子挖斷</span>
+  <p>平面上開一條槽（slot）——可能是刻意的電源分割、也可能是一排 connector 針孔的 antipad 連成一線——而一條高速訊號線恰好從槽上方跨過去。去程照走不誤（訊號線又沒斷），但<strong>影子撞牆了</strong>：回流走到槽邊緣過不去，只能沿著槽緣繞到槽的端點、拐過去、再繞回訊號線下方。去程 1 cm、回程可能繞了 4 cm——迴圈被撐開一個大三角形，面積暴增。而「迴圈面積」這四個字，在 SI 的字典裡對應四筆帳單：電感（反射）、延遲（邊沿變慢）、共享路徑（串擾）、環形天線（EMI）。</p>
+</div>
+
+<p>PT2 Ch.6 對此的表述毫不含糊：<strong>「地平面的挖空（cutout）必須避免。如同 via 的餘隙孔，若時脈訊號線跨越平面挖空區，回流電流將被迫繞行——這會增加路徑的電感、拉慢訊號線上時脈的上升時間，同時提高串擾的可能性。」（Perfect Timing II Ch.6）</strong>書中也提醒連「過大的 via 餘隙（clearance）」都要分析——多個 antipad 排成一排、彼此相連，就是一條隱形的槽（NB 主機板上 connector 針列下方是重災區）。把帳單逐筆算清：</p>
+
+<ol>
+  <li><strong>反射（感性尖峰）</strong>：繞路多出的迴路電感 ΔL 串在訊號路徑上——量級估算可抓「繞行每 1 cm 增加約 1 nH 量級」（實際值隨槽寬與幾何變化，此為粗估）。接 Day 13 面積公式：TDR 上的感性尖峰面積 A = L_excess/(2Z₀)，ΔL = 1 nH 在 50 Ω 系統就是 10 ps 的尖峰面積——清晰可見；</li>
+  <li><strong>邊沿變慢</strong>：串聯 L 是低通，τ = L/(2Z₀)（L 看出去兩側各一條 Z₀ 串聯分壓），貢獻上升時間約 2.2τ——ΔL = 1 nH → τ = 10 ps → 額外約 22 ps，與 Day 14 的容性鈍化公式互為鏡像（那邊是 τ = Z₀C/2），一樣用 RSS 疊加；</li>
+  <li><strong>串擾</strong>：所有跨越同一條槽的訊號，回流全被迫擠到同一個槽端點繞行——<strong>共享回流路徑＝共享阻抗</strong>，A 訊號的 di/dt 在共享電感上砸出的電壓，原封不動疊到 B 訊號上（V = L_shared·di/dt）。這是下週串擾課的預告片：串擾的一大機制根本不發生在訊號線之間，發生在回流搶道；</li>
+  <li><strong>EMI</strong>：被撐開的大迴圈就是一面環形天線，迴路面積直接進輻射公式（Phase 2 週 9 展開）。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">跨槽切割：回流繞路，迴圈面積暴增（俯視圖）</text>
+  <!-- healthy -->
+  <text x="40" y="54" font-size="10.5" font-weight="bold" fill="#16a34a">健康：平面完整</text>
+  <rect x="40" y="64" width="320" height="140" fill="#e5e7eb" stroke="#9ca3af"/>
+  <line x1="60" y1="134" x2="340" y2="134" stroke="#0e7490" stroke-width="4"/>
+  <text x="200" y="126" text-anchor="middle" font-size="9" fill="#0e7490">訊號（去程 →）</text>
+  <path d="M336,142 L64,142" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="200" y="158" text-anchor="middle" font-size="9" fill="#dc2626">回流（← 緊貼正下方）</text>
+  <text x="200" y="192" text-anchor="middle" font-size="9" fill="#16a34a">迴圈面積 ≈ 線長 × h（最小）</text>
+  <!-- slotted -->
+  <text x="400" y="54" font-size="10.5" font-weight="bold" fill="#dc2626">生病：訊號跨槽</text>
+  <rect x="400" y="64" width="320" height="140" fill="#e5e7eb" stroke="#9ca3af"/>
+  <rect x="540" y="64" width="16" height="100" fill="#ffffff" stroke="#dc2626"/>
+  <text x="548" y="58" text-anchor="middle" font-size="8.5" fill="#dc2626">槽（切割）</text>
+  <line x1="420" y1="134" x2="700" y2="134" stroke="#0e7490" stroke-width="4"/>
+  <path d="M696,142 L560,142 L560,172 Q560,180 548,180 Q536,180 536,172 L536,142 L424,142"
+        fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 3"/>
+  <text x="548" y="196" text-anchor="middle" font-size="9" fill="#dc2626">回流繞槽端點——迴圈撐開一個大三角</text>
+  <!-- consequences -->
+  <rect x="40" y="232" width="680" height="88" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="380" y="254" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#dc2626">一刀四病（PT2 Ch.6：增加電感、拉慢上升時間、提高串擾）＋ EMI</text>
+  <text x="380" y="274" text-anchor="middle" font-size="9.5" fill="#991b1b">① ΔL（約 1 nH/cm 繞行量級）→ TDR 感性尖峰，面積 = ΔL/2Z₀　② τ = ΔL/2Z₀ → 邊沿再鈍 2.2τ</text>
+  <text x="380" y="292" text-anchor="middle" font-size="9.5" fill="#991b1b">③ 多條線共擠一個繞行點 → 共享電感 V = L·di/dt 直灌鄰線（下週串擾主角）　④ 大迴圈 = 環形天線（週 9 EMI）</text>
+  <text x="380" y="310" text-anchor="middle" font-size="9.5" fill="#16a34a">解法優先序：改走線避開槽 ＞ 縮短跨槽段 ＞ 槽旁貼跨槽電容/地橋（治標，回流仍要繞到橋）</text>
+  <!-- TDR view -->
+  <text x="40" y="348" font-size="10" fill="#6b7280">TDR 眼中的跨槽（接 Day 9/13 的判讀語言）：</text>
+  <line x1="60" y1="404" x2="700" y2="404" stroke="#374151" stroke-width="1"/>
+  <path d="M60,388 L300,388 L318,368 L336,388 L640,388" fill="none" stroke="#0f4c5c" stroke-width="2"/>
+  <text x="318" y="360" text-anchor="middle" font-size="9" fill="#b45309">感性尖峰（向上）：位置＝跨槽點，面積＝ΔL/2Z₀</text>
+  <text x="380" y="424" text-anchor="middle" font-size="9" fill="#6b7280">訊號線本身在 layout 上完美無缺——病灶在另一層的平面上。TDR 指著這裡叫，你要會往「下面那層」看。</text>
+</svg>
+<figcaption>圖 3：左＝平面完整時的最小迴圈；右＝跨槽時回流繞行槽端點，迴圈面積暴增。下方是 TDR 視角：跨槽在曲線上是一個感性尖峰——但這次元凶不在訊號層。「訊號線沒動過卻長出感性尖峰」是回流問題的經典指紋。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：用一顆「跨槽電容」就當作沒事</span>
+  <p>槽兩側各留 pad、跨一顆 0.1 µF——這招常見，但它是<strong>治標</strong>：回流仍要先沿槽緣繞到電容位置、擠過電容的 ESL（nH 量級）再回來，只是把「繞到槽端點」換成「繞到電容」。電容離跨槽點越遠、跨的訊號越多，效果越差。優先序永遠是：<strong>改走線避開槽 &gt; 質疑這條槽存不存在的必要 &gt; 縮短跨槽段並在跨槽點兩側就近給橋</strong>。另外記住 Day 13 的教訓：補償是折衷，不是治癒——平台升級（邊沿變快）時，當年「跨槽＋電容」壓過的板子會集體翻案。</p>
+</div>
+
+<h2>5. 數學收口：把今天的量全部接回前三週的公式</h2>
+<p>今天沒有新數學，只有舊公式的新戰場——這正是回流路徑好學的地方：</p>
+<table>
+  <tr><th>回流事件</th><th>等效元件</th><th>接回哪一課</th></tr>
+  <tr><td>換參考層（地→電源）、橋不夠近</td><td>串聯 L_excess</td><td>Day 9/13：TDR 感性尖峰，面積 A = L/(2Z₀)；配平藥方 L/C = Z₀²</td></tr>
+  <tr><td>跨槽繞行</td><td>串聯 ΔL（約 1 nH/cm 繞行，量級）</td><td>Day 13 面積反推＋Day 14 邊沿鈍化 RSS（τ = L/2Z₀）</td></tr>
+  <tr><td>整段線的參考平面被挖空/網格化</td><td>該段 Z₀ = √(L/C) 整體上移（L↑、C↓）</td><td>Day 9：台階；Day 13：禁忌症（改結構，不是補償）</td></tr>
+  <tr><td>多條線共享一個回流繞行點</td><td>共享 L 上的 V = L·di/dt</td><td>下週串擾課的地基</td></tr>
+</table>
+<p><em>白話翻譯：回流出問題，在儀器上永遠偽裝成「訊號線的病」（尖峰、台階、邊沿變慢）——公式全是學過的，難的是想到往另一層看。這也是為什麼 FA 時 layout 要開著「所有層」一起看，不是只開訊號層。</em></p>
+
+<h2>6. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——connector 針列下方的隱形槽：</strong>DDR 走線從板子 A 區跨到 B 區，中間恰好從一排 connector 通孔下方穿過。每個通孔的 antipad 都合規，但整排連起來，內層地平面上就是一條 2 cm 的槽——PT2 Ch.6 說的「過大餘隙要分析」的集體版。症狀：跨槽的那幾條 byte lane 眼圖偏差、TDR 在跨槽點有感性尖峰，而訊號層 layout 怎麼查都「完美」。解法是把走線改道繞開針列，或讓針列 antipad 之間保留地銅橋。<strong>看 layout 只開訊號層，這種病一輩子找不到。</strong></li>
+  <li><strong>鏡頭模組——flex 上的網格地與 BTB 地腳：</strong>模組 flex 為了可撓性，地層常做成網格（hatched）而非實心——回流影子帶被迫在網格上跳格子走，等效 L 上升、Z₀ 上移且隨網格週期波動（這是 flex 上 MIPI 阻抗難控的原因之一，週 13 展開）。另一個現場：BTB connector 的地腳分配——訊號腳離最近地腳的距離，決定回流過 connector 時迴圈撐多大。Day 12 說過「地針是回流的橋」，今天你知道完整版：<strong>每一根高速訊號腳，都應該有就近的地腳陪它過橋；共地腳的兩條線，就是在共享回流阻抗。</strong></li>
+  <li><strong>面試白板：</strong>「Where does the return current flow?」是 Apple/Google 硬體面試的招牌開場題——因為它一秒鐘分出「背過 Z₀ 公式的人」和「理解電流迴圈的人」。追問通常三連發：換層怎麼跟？跨槽會怎樣？去耦電容跟回流什麼關係？——正好是今天的第 3、4 節加 Phase 2 預告。答題時記得把「低頻走最低電阻、高頻走最低電感」當第一句話說出來。</li>
+</ul>
+
+<h2>7. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（回流影子帶的寬度）：微帶線離地平面 h = 0.1 mm。(a) 幾 % 的回流擠在正下方 ±0.3 mm 內？(b) 若隔壁 3 mm 外還有另一條線，兩條線的回流帶重疊嚴重嗎？(c) 同一條線改到 h = 0.3 mm 的疊構，回流帶變寬還是變窄？這對串擾意味著什麼？</summary>
+<p><strong>解：</strong>(a) ±0.3 mm = ±3h → (2/π)·arctan(3) ≈ <strong>約 80%</strong>。(b) 3 mm = 30h，該處回流密度 ∝ 1/(1+30²) ≈ 0.1%——<strong>幾乎不重疊</strong>，回流互不搶道。(c) h 變 3 倍，回流帶同比例<strong>變寬</strong>（±3h 變成 ±0.9 mm）——線離平面越遠，影子攤得越開，與鄰線的回流重疊越多、迴圈面積也越大。這就是「薄介質（線貼近平面）天生抗串擾」的其中一半原因——下週會看到 PT2 Ch.6 的互感公式 L<sub>M</sub> = L/(1+(s/h)²) 把這件事定量收掉（預告：h 在分母的平方裡）。</p>
+</details>
+
+<details>
+<summary>練習 2（跨槽帳單全算）：一條 50 Ω 訊號跨過一條槽，回流單邊繞行約 2 cm（粗估 ΔL ≈ 2 nH 量級）。訊號邊沿 t_r = 100 ps。(a) TDR 感性尖峰的面積？(b) 邊沿被鈍化成多少？(c) 這顆 ΔL 用 Day 13 配平藥方要補多少 C？你會這樣做嗎？(d) 若隔壁還有 3 條線跨同一條槽，會發生什麼？</summary>
+<p><strong>解：</strong>(a) A = L/(2Z₀) = 2 nH/100 Ω = <strong>20 ps</strong>——在 TDR 上非常醒目（對照 Day 13：優化過的 via 才個位數 ps）。(b) τ = L/(2Z₀) = 20 ps，貢獻 2.2τ = 44 ps；RSS：√(100² + 44²) ≈ <strong>109 ps</strong>——邊沿慢了近一成。(c) 配平 C = L/Z₀² = 2 nH/2500 = 0.8 pF。<strong>但不該這樣做</strong>——這是 Day 13 的禁忌症思維：跨槽是「結構錯了」，正解是改走線避開槽或補地橋，讓 ΔL 消失，而不是再掛 0.8 pF 把通道變成一段又慢又鈍的低通。補償是給「改不了的結構」用的。(d) 4 條線的回流全擠同一個繞行點：共享電感上 V = L·di/dt 互灌（同時開關時最糟），星期一到星期四的串擾課會給它一個正式名字——<strong>共阻抗耦合</strong>。</p>
+</details>
+
+<details>
+<summary>練習 3（換層設計題）：8 層板，訊號從 L1（參考 L2 GND）經 via 換到 L8（參考 L7 PWR）。(a) 回流要完成哪兩件事？(b) 你有哪些選項讓它走得順？排出優先序。(c) 若選「訊號 via 旁放去耦電容」，電容離訊號 via 的距離用什麼尺來定？t_r = 50 ps、板內 v ≈ 15 cm/ns，估一個量級。</summary>
+<p><strong>解：</strong>(a) ①從 L2 平面換到 L7 平面（跨 6 層）；②從「地」域跳到「電源」域（DC 不相連）。(b) 優先序：<strong>①改疊構/換層規劃，讓換層後參考 GND 平面</strong>（例如換到參考 L7 為 GND 的疊構，或訊號改 L1→L3 都參考 L2）——地對地只需 stitching via；<strong>②若必須參考 PWR</strong>，在訊號 via 旁放 GND–PWR 去耦電容當橋（PT2 Ch.6 Fig 6.4 觀念）；<strong>③至少</strong>確保附近本來就有既有的去耦電容並確認其位置。(c) 尺＝回流繞路延遲 ≪ t_r，沿用 1/6 手感：繞路長度 &lt; v·t_r/6 ≈ 15 cm/ns × 50 ps/6 ≈ <strong>1.25 mm 量級</strong>——電容（含其 via）要在訊號 via 約 1 mm 級距離內才算「貼著」；還要記得電容自身 ESL（nH 量級）也在帳上，兩顆並聯優於一顆（Phase 2 週 8 細講）。</p>
+</details>
+
+<details>
+<summary>練習 4（PT2 平面電容的現代體檢）：照 Perfect Timing II Ch.6 公式 C = 0.225·ε<sub>r</sub>·A′/t′。(a) 驗算書中例子：10×10 吋、ε<sub>r</sub> = 4.1、間距 5 mil。(b) 一塊 2×3 吋的 camera 模組主板區域、電源—地間距 3 mil、ε<sub>r</sub> ≈ 4，平面電容多少？(c) 平面電容比起 0.1 µF MLCC 小四個量級，為什麼書中還說「應用好用滿」？</summary>
+<p><strong>解：</strong>(a) C = 0.225 × 4.1 × 100/0.005 = <strong>18,450 pF ≈ 18.5 nF</strong>，即約 184 pF/in²——與書中一致（Perfect Timing II Ch.6）。(b) C = 0.225 × 4 × 6/0.003 = <strong>1800 pF = 1.8 nF</strong>（間距從 5 mil 壓到 3 mil，單位面積電容升到約 300 pF/in²——2002 年數據以現代薄介質標準需上修的具體示範）。(c) 因為平面電容的 <strong>ESL 趨近於零</strong>——它不經 via、不經焊點、電流片狀展開，是全板「最高頻段」唯一還有效的旁路；MLCC 容量大但 ESL（nH 量級）讓它在數百 MHz 以上自己先變成電感。容量與頻段是兩回事——這句話是 Phase 2 週 8（反諧振、target impedance）的門票，先收好。</p>
+</details>
+
+<details>
+<summary>練習 5（回流 FA 推理題）：TDR 顯示通道中段有一個 15 ps 面積的感性尖峰，但訊號層 layout 在該位置乾乾淨淨：無 via、無 connector、線寬正確。(a) 下一步看什麼？(b) 列出三種可能病因。(c) 每種病因各給一個「不改板就能佐證」的證據。</summary>
+<p><strong>解：</strong>(a) <strong>打開該位置的相鄰參考平面層</strong>——訊號層乾淨＋感性尖峰＝教科書級的「回流層病灶」指紋（今天圖 3）。(b) ①平面上有槽/挖空恰好被跨越（電源分割邊界、一排通孔 antipad 相連、螺絲孔禁區）；②該段參考平面被挖成銅網格或大面積開窗（散熱/工藝原因）；③該處恰好是換參考層的位置且 stitching 不足（橋太遠）。(c) ①對位：把尖峰位置換算成距離，與平面層的槽位置對圖——對得上就是它；同板跨同一槽的<strong>其他訊號線</strong>應在同位置也長尖峰（槽是公共病灶，這是最有力旁證）；②網格段在 TDR 上通常伴隨該段基線整體墊高（Z₀ 台階）而不只一個尖峰——看尖峰前後基線；③查該線換層點與尖峰位置是否重合，並比對同板上「有就近 stitching」的同類線該處是否乾淨。加分手法（Day 14）：換端量——真實平面病灶兩端鏡像一致，可順便排除鬼影。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>「Where does the return current flow?」系列是 camera HW / 高速板廠面試的分水嶺題——答得出迴圈思維，後面的串擾、PDN、EMI 題全都順；答不出，Z₀ 背得再熟也會被判定「只會公式」。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "A high-speed signal goes from the top layer, through a via, down to a bottom layer routed over a different reference plane. Walk me through the complete current loop, and tell me what determines whether this transition is clean or a problem."</summary>
+<p><strong>參考答案骨架：</strong>Current always flows in a loop, so the signal current on the trace has an equal and opposite return current — and above roughly the megahertz range, that return doesn't take the shortest path, it takes the lowest-inductance path, which is the reference plane directly under the trace, concentrated within a few dielectric heights of the trace. So on the top layer, the return travels on the first plane below, right under the signal. At the via, the signal jumps layers in one step, but the return current is stuck on its plane and needs its own path to the new reference. Three cases. If both segments reference the same plane, the return just wraps through the via's antipad clearance from one side of that plane to the other — nearly free. If the new reference is another ground plane, the return needs a ground-to-ground stitching via, placed right next to the signal via — every millimeter of separation adds loop inductance. Worst case, the new reference is a power plane: ground and power aren't DC-connected, so the only bridge is a decoupling capacitor — the return has to detour to the nearest cap and pay its ESL on top. Whether the transition is clean comes down to one number: the extra loop area the return is forced to take. Small loop, you see nothing; big loop, you get an inductive spike on TDR at the via, a slower edge, and a loop antenna for EMI. My design rules: prefer transitions that keep the same reference, ground-to-ground next, and if I must change to power, a stitching cap within about a millimeter of the signal via at today's edge rates.</p>
+<p><strong>加分點：</strong>開頭第一句就給「low frequency follows least resistance, high frequency follows least inductance」的分家原則（正是 Perfect Timing II Ch.6 的表述）；三種情境有代價排序；結尾把「乾不乾淨」收斂成單一物理量（extra loop area）——面試官最愛的收斂式答法。</p>
+</details>
+
+<details>
+<summary>Q2: "During bring-up you find a high-speed lane failing marginally. TDR shows an inductive discontinuity mid-channel, but the routing layer looks perfect there. What's your hypothesis and how do you confirm it?"</summary>
+<p><strong>參考答案骨架：</strong>A clean signal layer plus an inductive signature is the classic fingerprint of a return-path problem — the defect lives on the reference plane, not the trace. My first hypothesis is the trace crosses a slot or void in the plane below: a power-plane split, a row of connector antipads that merged into a slot, or a keep-out. The return current gets forced around the end of the slot, the loop area balloons, and that extra loop inductance shows up on TDR as an inductive spike — plus a degraded edge and extra crosstalk, because every trace crossing that slot shares the same detour. To confirm without touching the board: first, overlay the TDR position — converted to distance — onto the plane layers in the CAD, not just the routing layer; if a split lines up with the spike, that's the smoking gun. Second, TDR the neighboring traces that cross the same region: a plane defect is a shared defect, so they should all show a spike at the same physical location — a single-trace defect wouldn't. Third, measure from both ends to make sure it mirrors consistently and isn't a re-reflection artifact. The fix, in order of preference: reroute to avoid the split, restore copper or add a ground bridge under the crossing, and only as a mitigation, stitch capacitors across the split right at the crossing point — the return still has to detour to the cap and pay its ESL, so it's a band-aid, not a cure. And I'd flag it as a design-rule item, because slot crossings that marginally pass today fail at the next platform's faster edge.</p>
+<p><strong>加分點：</strong>「a plane defect is a shared defect」用鄰線同位置尖峰當交叉證據，是真的 FA 過的人才會講的招；補電容講成 band-aid 並說明為什麼（detour + ESL）；結尾平台升級警語呼應 Day 13/14 的一貫立場。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：回流電流走哪裡？低頻與高頻有何不同？分家頻率量級？</p>
+  <p class="a">A1：電流必成迴圈，訊號線必有等量反向回流。低頻走<strong>最低電阻</strong>（幾何捷徑）；高頻走<strong>最低電感</strong>＝迴圈面積最小＝<strong>訊號線正下方的參考平面</strong>（Perfect Timing II Ch.6）。分家頻率 f ≈ R/2πL，典型平面約數十～數百 kHz 量級——MHz 以上回流一律貼著正下方走。分布：i(d) ∝ 1/(1+(d/h)²)，±1h 內 50%、±3h 內約 80%——影子帶通常不到 1 mm 寬。</p>
+  <p class="q">Q2：為什麼說 Z₀ 是「訊號線＋參考平面」這對組合的屬性？</p>
+  <p class="a">A2：Z₀ = √(L/C) 中的 L 是<strong>迴路</strong>電感（含回流路徑）、C 是線對<strong>平面</strong>的電容——平面從第一天就在公式裡。動了平面（挖槽、網格化、換參考層、拉開距離），L/C 就變，Z₀ 跟著變——訊號線一動未動照樣出事。平面四大功能（PT2 Ch.6）：低阻抗供電、散熱、層間屏蔽、平面電容（約 184 pF/in²@5 mil FR-4，2002 年數據，現代薄介質更高）。</p>
+  <p class="q">Q3：訊號換層時，回流的三種過橋方式與代價排序？</p>
+  <p class="a">A3：①換層前後<strong>同參考平面</strong>：回流沿 antipad 洞口翻面，幾乎免費；②<strong>地換地</strong>：需緊鄰訊號 via 的 GND–GND stitching via（每遠 1 mm 多付迴路電感）；③<strong>地換電源</strong>：DC 不相連，唯一的橋是去耦電容（PT2 Ch.6 Fig 6.4：「由旁路電容提供通往正確電壓平面的橋樑」），代價＝繞路＋電容 ESL，最貴。設計優先序同此順序；「多近算貼著」用 v·t_r/6 的尺（50 ps 邊沿約 1 mm 量級）。PT2 warning：走線在電源/地兩種參考間切換易生阻抗不連續與反射。</p>
+  <p class="q">Q4：訊號跨越平面切割（slot）的四筆帳單？TDR 指紋？</p>
+  <p class="a">A4：回流被迫繞槽端點、迴圈面積暴增（PT2 Ch.6：增加電感、拉慢上升時間、提高串擾）：①反射——繞行 ΔL 約 1 nH/cm 量級，TDR 感性尖峰面積 A = ΔL/2Z₀（1 nH@50 Ω → 10 ps）；②邊沿變慢——τ = ΔL/2Z₀，貢獻 2.2τ，RSS 疊加；③串擾——多線共擠一個繞行點＝共享阻抗，V = L·di/dt 互灌；④EMI——大迴圈＝環形天線。指紋：<strong>訊號層乾淨卻有感性尖峰＝往平面層找病</strong>；鄰線同位置也長尖峰＝公共病灶鐵證。解法：改道 &gt; 補地橋 &gt; 跨槽電容（治標）。</p>
+  <p class="q">Q5：PT2 Ch.6 關於回流/via/接地的三條金句？</p>
+  <p class="a">A5：①「低速回流走電阻最小路徑，高速回流走電感最小路徑——通常是訊號正下方的地平面」；②「地平面裡一段 5 Ω 的路徑，就可能破壞 50 Ω 走線的訊號完整性」——回流路徑只要十分之一的不理想就足以壞事；③接地 via：每地腳至少一根、緊貼接地點，並聯降阻抗但<strong>每腳超過兩根效益遞減</strong>；訊號 via 不可避免時：加大尺寸、加厚電鍍、填實（皆 Perfect Timing II Ch.6）。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 17（週日）：第 3 週複習與 20 題自我測驗</strong></p>
+  <p>反射實戰週收官：TDR 判讀、via/stub 效應、connector 不連續、補償設計學、多病灶遮蔽與鬼影、stub 諧振實驗、今天的回流路徑——20 題附詳解，範圍 Day 11～16。請把 Day 15 的實驗記錄表拍照存檔帶著對答案（週五沒做完實驗的，記得排下週平日補做）。考前提示：這週的靈魂是三句話——「深度報阻抗、寬度報長度、位置報地點」、「兩端各量一次」、「訊號層乾淨就往平面層找病」。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 16 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

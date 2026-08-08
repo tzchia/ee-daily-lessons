@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 17｜第 3 週複習與 20 題自我測驗</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 3 週・第 17 天（週日複習日）</div>
+  <h1>Day 17：第 3 週複習與 20 題自我測驗</h1>
+  <div class="meta">2026-08-09（日）｜預估時間：90 分鐘（作答 50 分＋對詳解 40 分）｜範圍：Day 11–16（反射實戰週：stub、connector、補償、多病灶、實驗、回流路徑）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標與規則</span>
+  <p>反射實戰週收官。第 2 週你學會「一個」不連續怎麼反射；這一週你學會的是<strong>真實世界</strong>：病灶會分岔（stub）、會成雙成對（connector 的 C-L-C）、會互相遮蔽、會長鬼影、還會躲在你看不見的平面層（回流）。這 20 題把它們拼成一張 FA 作戰地圖。規則：</p>
+  <ol>
+    <li><strong>先刷一輪 Day 11–16 的 Anki 卡</strong>（10 分鐘），再開始作答</li>
+    <li>拿紙筆，<strong>先寫下自己的答案再展開詳解</strong>——面試考的是「自己寫得出來」，不是「看得懂」</li>
+    <li>計算題全部手算；<strong>把 Day 15 的量測記錄表照片翻出來</strong>，Part D 會要你對自己的實測數據下判決（週五實驗沒做完的，記得排下週平日午休補做）</li>
+    <li>每題 1 分，答對標準是「詳解裡的粗體重點你都有講到」；最後對照文末評分表決定要不要回頭重讀</li>
+  </ol>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：這週的三句靈魂，先默背再開考</span>
+  <p>①「<strong>深度報阻抗、寬度報長度、位置報地點</strong>」——TDR 上一個凹陷自帶三條資訊，別只會說「有個凹」。②「<strong>兩端各量一次</strong>」——遠端的病灶會被前面的病灶打折扣、還可能是鬼影，換一端量一次就分得出真假。③「<strong>訊號層乾淨就往平面層找病</strong>」——訊號是一個迴圈，另一半（回流）住在平面層；訊號線完美無缺卻長出感性尖峰，元凶九成在下面那層。這三句話貫穿全卷 20 題，也貫穿你之後每一次 FA。</p>
+</div>
+
+<h2>0. 考前 3 分鐘速查表（作答時請蓋住）</h2>
+<table>
+  <tr><th>公式 / 數字</th><th>意義</th><th>出處</th></tr>
+  <tr><td>f₀ = v/4ℓ（奇數倍 3f₀、5f₀ 同中招）；集總門檻 t_stub &lt; t_r/6</td><td>開路 stub 的 λ/4 陷波；短於門檻才可當電容</td><td>Day 11</td></tr>
+  <tr><td>C_stub ≈ t_d/Z₀（50 Ω 心算：每 1 ps ≈ 0.02 pF）</td><td>短 stub 的等效電容</td><td>Day 11</td></tr>
+  <tr><td>connector = C–L–C π 型；扭波回不到基準線＝接觸電阻劣化</td><td>凹→尖→凹；電阻性 vs 一過性</td><td>Day 12</td></tr>
+  <tr><td>L = 2Z₀×A、C = (2/Z₀)×A；配平 L = Z₀²C（50 Ω：L[nH] = 2.5×C[pF]）</td><td>面積反推寄生；調比例不是消滅</td><td>Day 13</td></tr>
+  <tr><td>f_c ≈ 1/(π√(LC))</td><td>配平後仍是低通——比例管反射、總量管頻寬</td><td>Day 13</td></tr>
+  <tr><td>遮蔽折扣 (1−ρ²)；鬼影位置 t₂ + n·(t₂−t₁)、振幅 ~ρ₁ρ₂²</td><td>遠端讀數打折；鬼影等差數列</td><td>Day 14</td></tr>
+  <tr><td>解析度 Δd ≈ v × t_r/2</td><td>靠太近的病灶融合成一顆</td><td>Day 14–15</td></tr>
+  <tr><td>回流：±1h 50%、±3h 約 80%；跨槽 ΔL 約 1 nH/cm 繞行（量級）</td><td>影子帶寬度；跨槽帳單</td><td>Day 16</td></tr>
+</table>
+
+<h2>Part A｜觀念題（Q1–Q6）</h2>
+
+<p><strong>Q1.</strong> stub 是「雙面人」：短的時候是一種病，長的時候是另一種病。兩種病各是什麼？分界的門檻？並列出 stub 的「三宗罪」與板上四種常見長相。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>短（t_stub &lt; t_r/6）：整根 stub 在邊沿眼裡是<strong>集總電容</strong> C ≈ t_d/Z₀——拖慢邊沿、TDR 一個淺凹，病輕。長（超過門檻）：變成 <strong>λ/4 開路諧振腔</strong>——進 stub 的波在開路端以 ρ=+1 反彈，來回多走 2ℓ，當 ℓ=λ/4 時回波與主流<strong>反相抵銷</strong>，岔口等效短路，f₀ = v/4ℓ 及其奇數倍頻率整口被吃掉（頻域 notch）。三宗罪：①時域加電容拖邊沿；②頻域 λ/4 陷波；③空域駐波天線（EMI）。四種長相：T 型分支走線、測試點分支、<strong>via stub</strong>（訊號換層後沒用到的 barrel 尾巴——唯一「不畫也存在」的 stub）、bifurcated trace 共用段（Day 11）。</p>
+</details>
+
+<p><strong>Q2.</strong> connector 在 TDR 上是一個「扭波」。(a) 它的等效電路與扭波的內部結構？(b) 「扭完回到基準線」與「扭完回不到基準線」各代表什麼？為什麼這個區別在 FA 上如此重要？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>C–L–C π 型</strong>：SMT pad＝並聯電容（寬銅面貼參考層）→ 引腳彈片＝串聯電感（細長、懸空、離回流遠）→ 對面 pad 再一顆 C。TDR 上＝<strong>凹→尖→凹</strong>；邊沿胖時三個特徵糊成一個「扭波」。(b) 回得到基準線＝L/C 的<strong>一過性</strong>失衡——能量暫存又放掉，通道 DC 上是健康的，藥方是 Day 13 的配平。回不到基準線（整段墊高）＝<strong>接觸電阻劣化</strong>——電阻性、持續性，配平無效；FA 方向完全不同：重插即好→接觸面氧化/正向力不足；切片、鍍層檢查（Day 12）。<strong>一過性 vs 持續性，決定你開「layout 藥」還是「機構/製程藥」</strong>——開錯方向就是白忙一場。</p>
+</details>
+
+<p><strong>Q3.</strong> Day 13 說「補償不是消滅寄生，是配平」。(a) 解釋這句話背後的物理。(b) 補償的三種「禁忌症」是什麼？各自的正解？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 不連續處的局部阻抗 Z_local ≈ √(L/C)——訊號在乎的不是 L 或 C 的絕對值，是<strong>比例</strong>。寄生 C 消不掉，但可以補 L（或反之）把 L/C 調回 Z₀²，讓那一段「假裝」自己是 50 Ω 線（50 Ω 換算：L[nH] = 2.5×C[pF]）。代價：配平後仍是低通 f_c ≈ 1/(π√(LC))——<strong>比例管反射、總量管頻寬</strong>，補償只轉前一個旋鈕。(b) 禁忌症：①<strong>台階</strong>（一整段 Z₀ 錯）＝分布性問題→改線寬/疊構，不是掛集總元件；②<strong>stub 週期性諧振</strong>＝能量儲存問題→back-drill/移除 stub，在入口配平 C 無效；③<strong>墊高不回基準</strong>＝電阻性→FA（重插/切片/鍍層）。口訣：<strong>一過性的交給蹺蹺板；持續的、週期的、電阻的動結構</strong>（Day 13）。</p>
+</details>
+
+<p><strong>Q4.</strong> 「兩端各量一次」是本週立下的鐵律。給出三個理由，並回答：修好近端病灶後重量，遠端病灶的讀數變大了——這是惡化嗎？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>三個理由（Day 14）：①<strong>去遮蔽</strong>——訊號來回各穿過前方不連續一次，遠端事件被打 (1−ρ²) 折扣；兩端各量，每個病灶至少被「第一事件、原價」看過一次，定量只信近端讀數。②<strong>抓鬼</strong>——真病灶在兩張圖的鏡像位置一致，鬼影（多重反射的假象）對不上。③台階之後基準線被汙染——台階段的絕對阻抗要用「該段是第一特徵」的那一端讀。修好近端後遠端讀數變大＝<strong>折扣消失、露出原價</strong>——是真相不是惡化；把它誤判成「越修越糟」是新手常見翻車（Day 14）。差動通道 P/N 各兩端，共四張圖。</p>
+</details>
+
+<p><strong>Q5.</strong> 回流電流「低頻走最低電阻、高頻走最低電感」（Perfect Timing II Ch.6）。(a) 為什麼「訊號線正下方」就是最低電感路徑？(b) 影子帶多寬？(c) 為什麼說 Z₀ 是「訊號線＋參考平面」這對組合的屬性、不是訊號線一個人的？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 迴路電感正比於<strong>迴圈圍出的面積</strong>：去程在訊號線、回程在正下方，兩者只隔介質厚度 h（0.1 mm 量級），迴圈面積被壓到最小＝電感最小；從別處繞，迴圈撐大、電感暴增。分家頻率 f ≈ R/2πL 約數十～數百 kHz 量級——MHz 以上回流一律貼正下方。(b) 回流密度 i(d) ∝ 1/(1+(d/h)²)：<strong>±1h 內 50%、±3h 內約 80%、±5h 約 87%</strong>——影子帶通常不到 1 mm 寬。(c) Z₀ = √(L/C) 的 L 是<strong>迴路</strong>電感（含回流路徑）、C 是線對<strong>平面</strong>的電容——平面從 Day 4 就在公式裡。動了平面（挖槽、網格化、換參考層），L/C 就變、Z₀ 跟著變——<strong>訊號線一動未動照樣出事</strong>（Day 16）。</p>
+</details>
+
+<p><strong>Q6.</strong> 訊號經 via 換層，回流有三種「過橋」方式。依代價由小到大排出來，各說一句它的機制；並回答：「多近算貼著」用什麼尺來量？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>①<strong>換層前後參考同一片平面</strong>：回流沿 via 的 antipad 洞口邊緣從平面上側翻到下側——幾乎免費。②<strong>地換地</strong>：回流要跳到另一片地平面，需要<strong>GND–GND stitching via</strong> 當電梯，且要緊鄰訊號 via——每遠 1 mm 多付迴路電感。③<strong>地換電源</strong>：兩片平面 DC 不相連，唯一的橋是<strong>去耦電容</strong>（PT2 Ch.6 Fig 6.4：「由旁路電容提供通往正確電壓平面的橋樑」）——代價＝繞路電感＋電容自身 ESL，最貴且隨距離惡化。尺：回流繞路延遲遠小於 t_r，沿用 <strong>v·t_r/6</strong> 手感——t_r = 50 ps、板內 15 cm/ns → 約 1 mm 量級（Day 16）。設計優先序＝代價排序：能同參考就同參考，不得已才靠電容跳橋。</p>
+</details>
+
+<h2>Part B｜計算題（Q7–Q12）</h2>
+
+<p><strong>Q7.</strong> NB 主機板一根換層 via 沒做 back-drill，殘留 stub 約 3 mm（板內 v ≈ 15 cm/ns）。(a) 陷波頻率 f₀？(b) 邊沿 t_r = 100 ps 的訊號，這根 stub 還能當集總電容嗎？若能，等效多少 pF？(c) back-drill 後殘樁約 0.25 mm，f₀ 被推到哪？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) f₀ = v/4ℓ = 15 cm/ns ÷ (4×0.3 cm) = <strong>12.5 GHz</strong>——正咬在 25 Gbps 級訊號的奈奎斯特頻率附近，這就是 back-drill 非做不可的原因（Day 11/15）。(b) t_stub = 0.3 cm ÷ 15 cm/ns = <strong>20 ps</strong>；門檻 t_r/6 ≈ 16.7 ps → 20 ps <strong>超標</strong>，嚴格說已不能安心當集總電容（處在灰色地帶，諧振行為開始露頭）；若邊沿較慢（如 t_r = 300 ps、門檻 50 ps）則可當 C ≈ t_d/Z₀ = 20/50 = <strong>0.4 pF</strong>。(c) f₀ = 15 ÷ (4×0.025) = <strong>150 GHz</strong>——被推出任何實際訊號頻寬之外，這就是 back-drill 的全部意義：不是消滅 stub，是把 f₀ 趕出戰場（Day 11）。</p>
+</details>
+
+<p><strong>Q8.</strong> 鏡頭模組 flex 上有一根 5 mm 的測試點分支（外層走線 v ≈ 18 cm/ns、50 Ω 系統）。(a) 等效電容？(b) t_r = 300 ps 時它是乖電容還是諧振腔？t_r = 100 ps 呢？(c) 若判定不能留，f₀ 在哪？這題對「平台升級翻案潮」有什麼啟示？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) t_d = 0.5 cm ÷ 18 cm/ns ≈ 28 ps → C ≈ t_d/Z₀ ≈ 28/50 ≈ <strong>0.56 pF</strong>（心算版：28 ps × 0.02 pF/ps ≈ 0.56 pF）。(b) t_r = 300 ps：門檻 50 ps &gt; 28 ps → <strong>乖電容</strong>（只是 0.56 pF 的淺凹＋輕微鈍邊）；t_r = 100 ps：門檻 16.7 ps &lt; 28 ps → <strong>過線</strong>，開始長出諧振人格。(c) f₀ = 18 ÷ (4×0.5) = <strong>9 GHz</strong>。啟示：<strong>同一根分支，昨天無害、今天翻案</strong>——MIPI 速率一代代往上，當年設計審查放行的測試點正逐批踩進 1/6 門檻；「這板子上一代沒事」不是安全證明，門檻要用<strong>新的 t_r</strong> 重算（Day 11/15 的一貫警語）。</p>
+</details>
+
+<p><strong>Q9.</strong> TDR 在通道中段量到一個感性尖峰，面積 A = 25 ps（50 Ω 系統）。(a) 多餘電感多少？(b) 用配平藥方要補多少 C？(c) 配平後這一段的頻寬極限 f_c？若通道要跑 10 Gbps（奈奎斯特約 5 GHz），這帖藥開得下去嗎？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) L = 2Z₀×A = 2×50×25 ps = <strong>2.5 nH</strong>。(b) C = L/Z₀² = 2.5 nH/2500 = <strong>1 pF</strong>（驗算：√(2.5n/1p) = 50 Ω ✓）。(c) f_c ≈ 1/(π√(LC)) = 1/(π×√(2.5×10⁻²¹)) = 1/(π×5×10⁻¹¹) ≈ <strong>6.4 GHz</strong>——只比 5 GHz 高一點點，<strong>不夠安全</strong>：TDR 會拉平，但眼圖未必會開（比例管反射、總量管頻寬）。正解是先問「這 2.5 nH 哪來的」——這麼大的量級多半是回流繞行或引腳電感，<strong>把結構做小</strong>（低背 connector、補回流 via、改道避開槽）讓 L 本身變小，而不是再掛 1 pF 把通道變成一段又慢又鈍的低通（Day 13 的補償極限）。</p>
+</details>
+
+<p><strong>Q10.</strong> 通道上游有一個 ρ = 1/3 的病灶，下游還有一個容性凹陷，從近端打 TDR 量到凹陷面積 8 ps。(a) 遠端這個凹陷被打了多少折扣？真實面積？(b) 反推真實電容？(c) 除了數學除回去，還有哪兩招拿到原價？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 折扣 = 1−ρ² = 1−1/9 = <strong>8/9 ≈ 0.89</strong>（來回各穿一次：(1+ρ)(1−ρ)）；真實面積 = 8 ÷ (8/9) = <strong>9 ps</strong>。(b) C = (2/Z₀)×A = 0.04×9 ps = <strong>0.36 pF</strong>——小號 via 或測試點量級。(c) ①<strong>換端量</strong>：從另一端打，這個凹陷變成第一事件、原價呈現（順便驗鏡像、排鬼影）；②<strong>先修近端再重量</strong>：把 ρ=1/3 的病灶修掉，折扣自動消失。注意 ρ=1/3 的折扣已達 11%，報告裡若直接拿打折後的面積換算 pF 數去跟模型比對，會系統性低估——這就是「定量只信近端讀數」的原因（Day 14）。</p>
+</details>
+
+<p><strong>Q11.</strong> TDR（橫軸為來回時間）顯示：D1 在 10 ns、D2 在 25 ns，另外 40 ns 和 55 ns 處還有兩個小事件。(a) 判斷 40/55 ns 是真病灶還是鬼影，說出判斷依據。(b) 若 D1、D2 的反射係數都約 −1/3，一次乒乓鬼影的振幅量級？(c) 不確定時，最快的一錘定音手法？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 高度嫌疑是<strong>鬼影</strong>：波在 D1–D2 之間乒乓，每多跑一圈在顯示上多走 t₂−t₁ = 15 ns → 預測鬼影落在 25+15 = <strong>40 ns</strong>、40+15 = <strong>55 ns</strong>——完全命中，且間距（15 ns）<strong>複製真事件間距</strong>，這就是「間距胎記」（Day 14 抓鬼判別①）。(b) 一次乒乓振幅 ~ ρ₁·ρ₂² = (1/3)×(1/9) ≈ <strong>0.037，約 4% 量級</strong>——比真事件小一截（判別②），Day 15 實驗 5 你親手量過這個 4%。(c) <strong>動 D1</strong>（例如把它修掉或改變它）：鬼影跟著動或消失、真病灶不動；或<strong>換端量</strong>——真病灶兩張圖鏡像一致、鬼影對不上（判別③）。三判別齊發，鬼無所遁形。</p>
+</details>
+
+<p><strong>Q12.</strong> 一條 50 Ω 訊號（t_r = 80 ps）跨過內層地平面上一條槽，回流繞行造成 ΔL ≈ 1.5 nH。請把「一刀四病」的帳單算完整：(a) TDR 感性尖峰面積？(b) 邊沿被鈍化成多少？(c) 另外兩筆帳是什麼（不用算，講機制）？(d) 解法優先序？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) A = ΔL/2Z₀ = 1.5 nH/100 = <strong>15 ps</strong>——非常醒目（優化過的 via 才個位數 ps）。(b) τ = ΔL/2Z₀ = 15 ps → 貢獻 2.2τ = 33 ps；RSS：√(80² + 33²) ≈ <strong>87 ps</strong>——邊沿慢了近一成。(c) ③<strong>串擾</strong>：跨同一條槽的多條線回流全擠同一個繞行點＝共享電感，V = L·di/dt 直灌鄰線（共阻抗耦合——下週正式開課）；④<strong>EMI</strong>：回流繞行撐出的大迴圈＝環形天線（週 9 主角）。PT2 Ch.6 原文警告：切割「增加電感、拉慢上升時間、提高串擾」——必須避免。(d) <strong>改走線避開槽 &gt; 質疑槽存在的必要 &gt; 縮短跨槽段＋跨槽點就近給地橋 &gt; 跨槽電容</strong>（治標：回流仍要繞到電容＋付 ESL）（Day 16）。</p>
+</details>
+
+<h2>Part C｜讀圖題（Q13–Q15）</h2>
+
+<p><strong>Q13.</strong> 下圖是一條同軸實驗通道的 TDR 曲線（v ≈ 20 cm/ns，橫軸為<strong>來回</strong>時間，末端接 50 Ω 終端器）。中段有一個凹陷：起點 36 ns、寬 16 ns、深度為基準的 0.67。請把凹陷自帶的三條資訊全部讀出來，並回答 (d)：這個 stub 的 λ/4 陷波頻率與接收端振鈴週期。</p>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q13：stub 凹陷判讀（縱軸：V/V<tspan font-size="11" baseline-shift="sub">i</tspan>；橫軸：來回時間）</text>
+  <!-- axes -->
+  <line x1="70" y1="250" x2="720" y2="250" stroke="#374151" stroke-width="1.5"/>
+  <line x1="70" y1="250" x2="70" y2="50" stroke="#374151" stroke-width="1.5"/>
+  <!-- baseline 1.0 -->
+  <line x1="70" y1="100" x2="720" y2="100" stroke="#9ca3af" stroke-dasharray="5 3" stroke-width="1.3"/>
+  <text x="64" y="104" text-anchor="end" font-size="10" fill="#0e7490" font-weight="bold">1.00（50Ω）</text>
+  <line x1="70" y1="166" x2="720" y2="166" stroke="#e5e7eb"/>
+  <text x="64" y="170" text-anchor="end" font-size="10" fill="#6b7280">0.67</text>
+  <!-- time ticks: 10ns = 100px, origin x=70 -->
+  <text x="70" y="268" text-anchor="middle" font-size="10" fill="#6b7280">0</text>
+  <text x="170" y="268" text-anchor="middle" font-size="10" fill="#6b7280">10 ns</text>
+  <text x="270" y="268" text-anchor="middle" font-size="10" fill="#6b7280">20 ns</text>
+  <text x="370" y="268" text-anchor="middle" font-size="10" fill="#6b7280">30 ns</text>
+  <text x="470" y="268" text-anchor="middle" font-size="10" fill="#6b7280">40 ns</text>
+  <text x="570" y="268" text-anchor="middle" font-size="10" fill="#6b7280">50 ns</text>
+  <text x="670" y="268" text-anchor="middle" font-size="10" fill="#6b7280">60 ns</text>
+  <!-- curve: step up at ~0, flat 1.0, dip at 36ns (x=430) width 16ns (to x=590), back to 1.0 -->
+  <path d="M70,250 L84,250 L90,100 L430,100 L438,166 L582,166 L590,100 L720,100" fill="none" stroke="#dc2626" stroke-width="2.6"/>
+  <!-- annotations -->
+  <line x1="430" y1="80" x2="430" y2="100" stroke="#374151" stroke-width="1"/>
+  <text x="430" y="72" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#374151">起點 36 ns</text>
+  <line x1="438" y1="186" x2="582" y2="186" stroke="#b45309" stroke-width="2"/>
+  <text x="510" y="204" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b45309">寬 16 ns</text>
+  <text x="300" y="150" text-anchor="middle" font-size="10.5" fill="#0e7490">深度：基準的 0.67（掉 1/3）</text>
+  <text x="680" y="90" text-anchor="middle" font-size="9.5" fill="#16a34a">末端匹配：平到底</text>
+</svg>
+<figcaption>圖 1：待判讀的 stub 凹陷。凹陷的起點、寬度、深度各報一條情報——這是 Day 15 實驗 2 你親手做出來的波形的正式考版。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>三條資訊（<strong>深度報阻抗、寬度報長度、位置報地點</strong>，Day 15）：①位置——單程 = 36/2 = 18 ns → 岔口離打入端 18 ns × 0.2 m/ns = <strong>3.6 m</strong>。②寬度——凹陷寬 = 2×t_stub → t_stub = 8 ns → stub 長 ≈ 8 × 0.2 = <strong>1.6 m</strong>。③深度——0.67 ＝掉 1/3 → ρ = −1/3 → Z = 50×(2/3)/(4/3) = <strong>25 Ω = 50‖50</strong>：岔口瞬間看到主線與 stub 兩條 50 Ω 並聯，自洽 ✓（深度只由並聯阻抗決定、與 stub 長度無關；寬度只由長度決定、與阻抗無關——分工明確）。(d) f₀ = v/4ℓ = 0.2 m/ns ÷ (4×1.6 m) = <strong>約 31 MHz</strong>（奇數倍 3f₀ ≈ 94 MHz 同中招）；接收端振鈴週期 = 4×t_stub = <strong>32 ns</strong>，其倒數 ≈ 31 MHz——<strong>時域振鈴頻率＝頻域陷波 f₀</strong>，Day 15 實驗 3 最漂亮的閉環。</p>
+</details>
+
+<p><strong>Q14.</strong> 下圖是同一塊板上兩條相鄰高速線（Lane A、Lane B）各自的 TDR 曲線。兩條線在 2.0 ns（來回）處都有一個向上尖峰；打開訊號層 layout，兩條線在該處都乾乾淨淨——無 via、無 connector、線寬正確。(a) 你的假設？(b) 圖中哪一個特徵是這個假設的最有力證據？(c) 依序講出「不改板就能確認」的三步。(d) 修復方案的優先序。</p>
+
+<figure>
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q14：兩條鄰線的 TDR 曲線（縱軸：V/V<tspan font-size="11" baseline-shift="sub">i</tspan>；橫軸：來回時間）</text>
+  <!-- Lane A -->
+  <text x="80" y="60" font-size="11" font-weight="bold" fill="#0e7490">Lane A</text>
+  <line x1="70" y1="110" x2="720" y2="110" stroke="#9ca3af" stroke-dasharray="5 3"/>
+  <text x="64" y="114" text-anchor="end" font-size="10" fill="#6b7280">1.00</text>
+  <path d="M70,150 L82,150 L88,110 L370,110 L385,78 L400,110 L700,110" fill="none" stroke="#0e7490" stroke-width="2.4"/>
+  <text x="385" y="68" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">尖峰 @2.0 ns（面積約 12 ps）</text>
+  <!-- Lane B -->
+  <text x="80" y="200" font-size="11" font-weight="bold" fill="#7c3aed">Lane B（鄰線）</text>
+  <line x1="70" y1="250" x2="720" y2="250" stroke="#9ca3af" stroke-dasharray="5 3"/>
+  <text x="64" y="254" text-anchor="end" font-size="10" fill="#6b7280">1.00</text>
+  <path d="M70,290 L82,290 L88,250 L370,250 L385,220 L400,250 L700,250" fill="none" stroke="#7c3aed" stroke-width="2.4"/>
+  <text x="385" y="210" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">同位置也有尖峰 @2.0 ns</text>
+  <!-- common annotation -->
+  <line x1="385" y1="86" x2="385" y2="218" stroke="#dc2626" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="380" y="322" text-anchor="middle" font-size="10.5" fill="#dc2626" font-weight="bold">兩條線、同一個位置、同款感性尖峰——而兩條線的訊號層 layout 都「完美無缺」</text>
+</svg>
+<figcaption>圖 2：Lane A 與 Lane B 的 TDR 曲線。板內 v ≈ 15 cm/ns。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>回流路徑病灶</strong>：訊號層乾淨＋感性尖峰＝教科書級的「病在平面層」指紋——兩條線在該處跨過參考平面上的槽/挖空（電源分割邊界、一排 connector antipad 連成的隱形槽、螺絲孔禁區），回流被迫繞行、迴路電感上升（Day 16）。(b) <strong>鄰線同位置同款尖峰</strong>——「a plane defect is a shared defect」：單一走線自己的缺陷不會兩條線同時同位置發作；公共病灶（平面槽）才會。這是最有力的交叉證據。(c) 三步：①把 2.0 ns 換算成距離（1 ns 單程 × 15 cm/ns = <strong>15 cm</strong>），在 CAD 裡<strong>打開平面層</strong>與尖峰位置對圖——槽對上位置就是鐵證；②再掃幾條跨過同區域的線，全部同位置長尖峰＝公共病灶確立；③<strong>兩端各量</strong>驗鏡像，排除鬼影。 (d) <strong>改走線避開槽 &gt; 補回銅/加地橋 &gt; 跨槽點緊貼著放 stitching 電容</strong>（治標——回流仍要繞到電容並付 ESL），並立 design rule：今天邊際過的跨槽，下一代更快的邊沿必翻案（Day 16 面試 Q2 的中文版）。</p>
+</details>
+
+<p><strong>Q15.</strong> 用訊號產生器掃頻量一條通道的傳輸幅度，發現 21 MHz 與 63 MHz 各有一個深谷，42 MHz 卻安然無恙。(a) 診斷是什麼結構？在哪裡找它？(b) 反推 stub 長度（同軸 v ≈ 20 cm/ns）。(c) 為什麼 42 MHz 沒事？(d) 若改用 TDR 看同一條通道，這個結構長什麼樣？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 谷呈 <strong>1:3 比例（f₀、3f₀）而偶數倍缺席</strong>——λ/4 開路 stub 的招牌梳齒（f₀、3f₀、5f₀…），去找一條<strong>分岔且末端開路</strong>的線（測試分支、預留線、懸空的 T 接頭）。(b) ℓ = v/4f₀ = 0.2 m/ns ÷ (4×21 MHz) = 0.2 m/ns ÷ 0.084 /ns ≈ <strong>約 2.4 m</strong>。(c) 42 MHz 時 stub 電長度 = λ/2：來回相位差一整圈，回波與主流<strong>同相</strong>、開路性質原樣映射回岔口——不抵銷，所以無害；只有奇數個 λ/4（開路變短路）才把訊號吃掉（Day 11 的 Z_in = −jZ₀/tan(βℓ)）。(d) TDR 上是一個<strong>凹陷</strong>：深度 −1/3（若 stub 也是 50 Ω）、寬度 = 2×t_stub = 2×(2.4/0.2) = <strong>24 ns</strong>——TDR 只顯示「凹陷偏深偏寬」，殺傷力（notch 多深）要靠頻域看：<strong>時域頻域各看半場，合起來才是全場</strong>（Day 11/15）。</p>
+</details>
+
+<h2>Part D｜實驗數據對照題（Q16–Q17）——拿出你的 Day 15 記錄表</h2>
+
+<p><strong>Q16.</strong> 對照記錄表第 5、6、7 列（掃頻谷）：(a) 2 m / 1 m / 4 m 三組 stub 的 f₀ 理論值各是多少？f₀ × ℓ 的乘積應該收斂到什麼數？這個乘積在物理上是什麼？(b) 你的實測 f₀ 若普遍比理論值低 5～8%，最合理的解釋？怎麼驗證？(c) 記錄表第 4、5 列若「振鈴週期倒數 ≈ 掃頻谷頻率」，這一格為什麼是全實驗的靈魂？（沒做實驗的用理論值作答）</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) f₀ = v/4ℓ（v ≈ 0.2 m/ns）：2 m → <strong>25 MHz</strong>、1 m → <strong>50 MHz</strong>、4 m → <strong>12.5 MHz</strong>；乘積 f₀×ℓ ≈ <strong>v/4 ≈ 50 MHz·m</strong>——三組收斂到同一個數，就是「f₀ 與 ℓ 成反比」的實驗證明，而 v/4 本身就是<strong>線材速度的四分之一</strong>：你等於用三根 stub 量出了同軸線的傳播速度。(b) f₀ 偏低＝分母偏大：<strong>實際電長度比標稱長</strong>——速度因子「約 0.66」偏樂觀（實際更慢）、或線長含 T 接頭/接頭段沒算進去。驗證：用一段<strong>已知長度</strong>的線做 Day 8 的飛行時間量測，校出這捲線的真實 v，再回頭重算三組 f₀——儀器沒錯、公式沒錯時，先校常數（FA 的基本動作）。(c) 因為它證明<strong>時域振鈴與頻域陷波是同一件事的兩種語言</strong>：振鈴週期 4×t_stub 的倒數＝v/4ℓ＝掃頻谷 f₀。兩種儀器、兩種波形、同一個數字——之後看到眼圖上的週期性抖動或 S21 的 notch，你會自動在兩個域之間翻譯（Day 15）。</p>
+</details>
+
+<p><strong>Q17.</strong> 對照記錄表第 8、9 列：(a) 兩顆 0.5 m stub 病灶，從「兩個獨立凹陷」變成「一顆融合大凹陷」的臨界間距理論值（t_r ≈ 15 ns、v ≈ 20 cm/ns）？你的實測臨界值若是 1.2 m 而非 1.5 m，給兩個合理偏差原因。(b) 融合成一顆之後，工程上正確的處置是什麼？(c) 加碼題第 9 列的鬼影若「平均次數開太少就看不見」，為什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) Δd ≈ v×t_r/2 = 20 cm/ns × 15 ns ÷ 2 = <strong>約 1.5 m</strong>。實測偏小的原因：①<strong>t_r 讀值方式</strong>——你讀的若是產生器標稱值而非 CH1 實際量到的 10–90% 邊沿（經過線材與 T 接頭已被拖慢），代入的 t_r 偏小、算出的 Δd 偏小；②「融合/分開」的判定本身有主觀帶——兩凹陷之間只要還看得出一個小鼓包就算「分開」的話，臨界值會偏小；用「谷底是否回到基準線」當判準比較一致。趨勢與量級對就是成功（Day 8/15 的評分標準）。(b) 把融合的病灶<strong>當一顆醫</strong>：寄生量相加、一次配平——TDR 分不開的，訊號眼裡本來就是一顆集總元件，硬要分開修反而沒有物理意義（Day 13 公理三＋Day 14）。(c) 鬼影振幅只有 ~ρ₁ρ₂² ≈ 4% 量級，貼近雜訊底；示波器的<strong>平均（averaging）</strong>把非同步雜訊壓下去、把同步的小訊號露出來——平均次數不足，4% 的鬼影就淹在雜訊裡。這也是實務忠告：<strong>找小事件時先開平均，再下「沒有問題」的結論</strong>（Day 15）。</p>
+</details>
+
+<h2>Part E｜延伸題：Perfect Timing II（Q18–Q20）</h2>
+<div class="card intuition">
+  <span class="label">白話版：為什麼是這三題</span>
+  <p>本週織入的《Perfect Timing II》（Cypress, 2002）段落集中在 Ch.6「PCB Layout」（via、回流、平面）與 Ch.7「多負載」。這三題把書中的規則當面試題重演：背景知識都在題目裡，考的是你能不能<strong>用本週的工具自己把數字生出來</strong>，並且知道 2002 年的數據哪些要以現代標準重新校訂。</p>
+</div>
+
+<p><strong>Q18.</strong> Perfect Timing II Ch.7 給了「一個 driver 帶兩個負載」的三條路。(a) 三條路各是什麼？各自的適用條件？(b) 路 2（雙線雙串聯電阻）的設計公式與兩個陷阱？(c) 用 19.8 Ω driver、50 Ω 走線示範路 2 的電阻值。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解（Perfect Timing II Ch.7）：</strong>(a) <strong>路 1</strong>：兩負載夠近（間距 t_stub &lt; t_r/6）→ 整團當<strong>一顆合併的集總容性負載</strong>，代價是 t_R = 2.2·Z·C 邊沿變慢（書中實例：19.8 Ω driver＋31.9 Ω 串阻、6 吋 51.7 Ω 帶狀線、負載相距 1 吋）；<strong>路 2</strong>：負載離得遠 → 從 driver 拉<strong>兩條各自串聯端接的線</strong>；<strong>路 3</strong>：fanout buffer 一對一點對點——最乾淨，代價是 BOM 與 additive jitter。(b) 公式：兩條線在 driver 端並聯，driver 看到 Z₀/2 → <strong>R_D + R_S1∥R_S2 = Z₀/2</strong>。陷阱①：Z₀/2 &lt; R_D 時<strong>無解</strong>（driver 本身已比並聯負載強不起來；三負載更慘：Z₀/3）；陷阱②：兩線共用段超過 t_r/10 就退化成 bifurcated trace（共用段自己變 stub），且<strong>兩線必須等長</strong>否則先到的回波打擾後到的。(c) R_S1∥R_S2 = 25 − 19.8 = 5.2 Ω → 對稱時每條 R_S ≈ <strong>10.4 Ω</strong>（取 E24 標準值 10 Ω 量級即可）——數字小到說明這條路對強 driver 才走得通（Day 11）。</p>
+</details>
+
+<p><strong>Q19.</strong> Perfect Timing II Ch.6 的平面電容公式 C = 0.225·ε<sub>r</sub>·A′/t′（A′ 單位 in²、t′ 單位 in、C 單位 pF）。(a) 驗算書中例子：10×10 吋、ε<sub>r</sub> = 4.1、電源—地間距 5 mil。(b) 這顆「白送的電容」最珍貴的特質是什麼？為什麼 MLCC 給不了？(c) 書中同章還說電源平面「正確旁路後可作為受控阻抗走線的參考」，但緊接著給了一個警告——警告內容與它的 Day 6 語言翻譯？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) C = 0.225 × 4.1 × 100 ÷ 0.005 = <strong>18,450 pF ≈ 18.5 nF</strong>，即約 <strong>184 pF/in²</strong>——與書中一致（Perfect Timing II Ch.6）。註：這是 2002 年典型疊構；現代薄介質常壓到 3 mil 以下，單位面積電容以現代標準需上修。(b) <strong>ESL 趨近於零</strong>——電流以片狀展開、不經 via 不經焊點，是全板最高頻段唯一還有效的旁路；MLCC 容量再大，自身 ESL（nH 量級）讓它在數百 MHz 以上先變成電感。<strong>容量與頻段是兩回事</strong>——這句話是 Phase 2 週 8（反諧振、target impedance）的門票。(c) 警告：<strong>讓走線在電源與地兩種參考平面之間切換是不智的——轉換處極可能造成明顯的阻抗不連續，成為不必要的反射來源</strong>（Perfect Timing II Ch.6）。Day 6 語言：換參考的那一點是一個 ρ ≠ 0 的介面——TDR 上看得見、眼圖上收利息（Day 16）。</p>
+</details>
+
+<p><strong>Q20.</strong> Perfect Timing II Ch.6 兩句金句的完整解讀：(a) 「如果回流訊號在地平面裡遭遇一段 5 Ω 的路徑，那條 50 Ω 走線的訊號完整性就可能被破壞」——5 Ω 才是 50 Ω 的十分之一，為什麼就足以壞事？(b) via 的三招緩解（2002 年版）是什麼？為什麼現代高速 serial 訊號要把「加大 via」反著做？哪類 via 三招原封不動照用？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 因為回流路徑的阻抗是<strong>串在訊號迴圈裡</strong>的：它直接墊高該段的迴路電感/阻抗、在共享它的多條線之間形成<strong>共阻抗耦合</strong>（V = L·di/dt 互灌），並讓局部 Z = √(L/C) 偏離 50 Ω 產生反射——訊號的「50 Ω」是整個迴圈的預算，回流端多出 5 Ω 等於預算被吃掉一成，邊沿快的訊號立刻有感。金句的真正意思：<strong>回流不是配角，是半個主角</strong>（Day 16）。(b) 三招：<strong>把 via 做大、外層電鍍加厚、孔內鍍厚或填實</strong>；第一原則「clock 盡量同層走完、能不打 via 就不打」（Perfect Timing II Ch.6）。背景：2002 年百 MHz clock，via 的病是 R 與 L——加大降 R、L。現代校訂：多 Gbps serial 訊號 via 的病常是 <strong>C 與 stub</strong>——「加大」反而增 C、挖深凹陷；改用小孔徑＋anti-pad 優化＋back-drill＋緊鄰回流 via。三招<strong>原封保留給電源 via</strong>——IR drop 與 PDN 電感仍是主敵（Day 13）。引用經典要帶年份與適用前提——面試講這句，比背十條 rule 更值錢。</p>
+</details>
+
+<h2>評分與行動</h2>
+<div class="card takeaway">
+  <span class="label">評分表</span>
+  <ul>
+    <li><strong>17–20 分</strong>：反射實戰這關過了——你已具備「拿一張 TDR 圖講一個完整 FA 故事」的能力，這正是 camera HW 面試 debug 題的核心肌肉。明天放心進第 4 週串擾。錯的題做成 Anki 卡。</li>
+    <li><strong>13–16 分</strong>：過關。把錯題對應的課回去重讀（速查表右欄有出處）；特別注意 Part C——面試給的永遠是圖不是公式，而且愛考「訊號層乾淨」這種要你轉彎的題。</li>
+    <li><strong>9–12 分</strong>：Day 13（補償分診）與 Day 16（回流）各花一小時重讀——前者是「開藥」的骨架、後者是下週串擾的地基；明晚重考本卷 Part B、C。</li>
+    <li><strong>&lt; 9 分</strong>：停下來。下週串擾的機制（互容互感、共阻抗）全部蓋在「回流迴圈」與「面積反推」上。Day 11–16 完整重讀、Anki 全刷，寧可慢兩天。</li>
+  </ul>
+  <p>另提醒：Day 15 的 stub 諧振實驗若還沒做（或記錄表有空格），<strong>下週找一天午休帶去公司補做</strong>——Part D 只能用理論值作答的話，「時域＝頻域」這格靈魂你還沒親手摸過。</p>
+</div>
+
+<h2>今日 Anki 卡片（第 3 週總結卡）</h2>
+<div class="anki">
+  <p class="q">Q1：第 3 週的一句話總綱？</p>
+  <p class="a">A1：真實通道的病灶會分岔（stub 雙面人：短＝電容 C≈t_d/Z₀、長＝λ/4 諧振 f₀=v/4ℓ）、會成串（connector C-L-C）、會互相遮蔽（(1−ρ²) 折扣）、會長鬼影（ρ₁ρ₂²）、還會躲在平面層（回流繞行＝感性尖峰）；醫法是分診——一過性的配平（L=Z₀²C）、持續/週期/電阻性的動結構。</p>
+  <p class="q">Q2：第 3 週三句靈魂？</p>
+  <p class="a">A2：①深度報阻抗、寬度報長度、位置報地點（一個凹陷三條情報）；②兩端各量一次（去遮蔽、抓鬼、台階後基準線失真）；③訊號層乾淨就往平面層找病（感性尖峰＋layout 無辜＝回流病灶；鄰線同位置同尖峰＝公共病灶鐵證）。</p>
+  <p class="q">Q3：五個必背數字（第 3 週版）？</p>
+  <p class="a">A3：①3 mm via stub → f₀ ≈ 12.5 GHz（f₀=v/4ℓ、15 cm/ns）；②50 Ω 系統每 1 ps stub 延遲 ≈ 0.02 pF；③配平 L[nH] = 2.5×C[pF]；④解析度 Δd ≈ v·t_r/2；⑤回流 ±3h 內約 80%（影子帶通常 &lt;1 mm）。</p>
+  <p class="q">Q4：補償分診口訣＋補償的頻寬極限？</p>
+  <p class="a">A4：一過性的交給蹺蹺板（面積反推 L=2Z₀A / C=(2/Z₀)A → 配平 L/C=Z₀²）；持續的（台階→改線寬疊構）、週期的（stub 諧振→back-drill）、電阻的（墊高不回基準→FA 接觸面）動結構。極限：配平後仍是低通 f_c≈1/(π√(LC))——比例管反射、總量管頻寬；f_c 沒明顯高於訊號頻寬就放棄補償、把結構做小。</p>
+  <p class="q">Q5：回流三種過橋＋跨槽四病？</p>
+  <p class="a">A5：過橋（代價由小到大）：同參考平面沿 antipad 翻面 ＜ GND-GND stitching via 緊鄰訊號 via ＜ 地換電源靠去耦電容（PT2 Ch.6 Fig 6.4），貼多近用 v·t_r/6 尺。跨槽四病（PT2 Ch.6）：①感性尖峰 A=ΔL/2Z₀（繞行約 1 nH/cm 量級）；②邊沿鈍化 τ=ΔL/2Z₀、貢獻 2.2τ RSS；③共享繞行點＝共阻抗耦合 V=L·di/dt（串擾）；④大迴圈＝環形天線（EMI）。解法：改道＞地橋＞跨槽電容（治標）。</p>
+</div>
+
+<h2>明日預告</h2>
+<div class="card">
+  <p><strong>Day 18（週一）：串擾 I——互容與互感：鄰線的悄悄話是怎麼傳過去的</strong></p>
+  <p>第 4 週開張。兩條線沒碰在一起，訊號卻會「隔空跳線」——因為它們共享電場（互容 C_M）與磁場（互感 L_M）。明天把 Day 16 埋的伏筆正式收割：為什麼線離平面越近（h 越小）串擾越小？PT2 Ch.6 那條 L<sub>M</sub> = L/(1+(s/h)²) 的公式終於登場——你會發現串擾的解藥，第一名不是拉大間距，而是<strong>把影子帶壓窄</strong>。近端（NEXT）與遠端（FEXT）為什麼一個往回跑、一個往前衝，也是明天的主菜。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 17 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 3/6）｜週日複習日</span>
+</footer>
+
+</div>
+</body>
+</html>

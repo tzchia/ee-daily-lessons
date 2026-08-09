@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 18｜串擾 I——互容與互感的雙重耦合：為什麼鄰線會偷聽，NEXT 往回跑、FEXT 往前衝</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 4 週・第 18 天（週一新觀念課）</div>
+  <h1>Day 18：串擾 I——互容與互感的雙重耦合：為什麼鄰線會偷聽，NEXT 往回跑、FEXT 往前衝</h1>
+  <div class="meta">2026-08-10（一）｜預估學習時間：90 分鐘｜難度：★★★★☆（串擾週開張——把 Day 16 的回流影子帶直接兌現成本週的主角機制）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>前三週我們研究「一條線自己」會出什麼事（反射、stub、回流）。這週研究「兩條線放在一起」會出什麼事——<strong>串擾（crosstalk）</strong>。今天先把機制講透，讀完你要能夠：</p>
+  <ol>
+    <li>解釋串擾的兩條耦合路徑：<strong>互容 C<sub>M</sub></strong>（電場偷渡）與<strong>互感 L<sub>M</sub></strong>（磁場偷渡），並知道 PT2 的判斷：<strong>數位系統中互感串擾通常等於或大於互容串擾</strong>（Perfect Timing II Ch.6）</li>
+    <li>用 PT2 Ch.6 的公式 <strong>L<sub>M</sub> = L/(1+(s/h)²)</strong> 定量回答「拉開間距 s」與「壓低線高 h」哪個更有效——收割 Day 16 埋的伏筆：<strong>解藥第一名是壓窄影子帶，不是拉間距</strong></li>
+    <li>畫出 NEXT（近端串擾）與 FEXT（遠端串擾）的方向與波形：一個往回跑、又寬又矮；一個往前衝、又窄又尖——並解釋為什麼方向不同</li>
+    <li>解釋為什麼<strong>帶狀線的 FEXT 近乎歸零、微帶線的 FEXT 是負尖峰</strong>——同一個「容性與感性打對台」的機制</li>
+    <li>用 PT2 的訊噪比算例（100 mV 噪聲在 3.3 V vs 1.0 V 擺幅上）理解：<strong>訊號擺幅越做越小，串擾的相對殺傷力越來越大</strong>——這是 2002 年的警告，在 MIPI 時代加倍成真</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：影子帶伏筆，今天收割</h2>
+<p>Day 16 我們說：每條訊號線正下方都有一條 ±3h 寬的回流影子帶，並且留了一句預告——「線離平面越遠，影子攤得越開，與鄰線的回流重疊越多」。Day 17 測驗卷的明日預告又埋了三個鉤子：L<sub>M</sub> = L/(1+(s/h)²)、NEXT/FEXT 方向之謎、「解藥第一名是壓窄影子帶不是拉間距」。今天三個鉤子全部收線。另外 Day 16 講跨槽時提過「共阻抗耦合」（多條線的回流擠同一個繞行點互灌）——那是串擾的一種，但<strong>不是</strong>今天的主角；今天講的是兩條線<strong>各自健康</strong>、平面<strong>完整無缺</strong>時，僅僅因為「靠得近」就會發生的<strong>場耦合串擾</strong>。這才是串擾的本尊。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：隔牆有耳的兩種偷聽法</span>
+  <p>兩間相鄰的房間（兩條走線），中間隔一道牆。A 房間開派對（aggressor，攻擊線），B 房間想安靜讀書（victim，受害線）。聲音會漏過去，而且漏法有兩種：<strong>①空氣傳聲</strong>——牆上有縫，聲波直接鑽過去（這是「電場」偷渡，走互容 C<sub>M</sub>）；<strong>②地板震動</strong>——派對跳舞震得地板晃，B 房間的桌子跟著抖（這是「磁場」偷渡，走互感 L<sub>M</sub>）。重點有三：第一，<strong>只有派對「開始」和「結束」那一瞬間最吵</strong>——串擾只對訊號的「邊沿」（dV/dt、dI/dt）有反應，訊號躺平不動時一點都不漏；第二，兩間房<strong>距離拉開</strong>漏得少，但更狠的一招是<strong>把每間房的天花板壓低</strong>（線貼近參考平面）——房間變矮，聲音和震動都被自家地板吸走，漏出去的自然少；第三，漏過去的噪聲會<strong>分成兩股往相反方向跑</strong>——一股往回跑向 B 房間的門口（NEXT），一股跟著派對音浪往前衝（FEXT）。公式看不懂可以先跳過——「串擾只咬邊沿、貼近平面比拉開間距更治本、噪聲兵分二路」，這三句懂了，今天就懂了大半。</p>
+</div>
+
+<h2>1. 兩條耦合路徑：C<sub>M</sub> 電場偷渡、L<sub>M</sub> 磁場偷渡</h2>
+
+<p>PT2 Ch.6 對串擾的開場定性非常乾淨：<strong>「訊號在走線上行進時會產生磁場，同時也會對路徑中其他磁場起反應——因此走線既是場的產生器，也是天線。造成串擾的那條線稱為 Source 或 Aggressor（攻擊線），被影響的線稱為 Victim（受害線）。」（Perfect Timing II Ch.6）</strong>而耦合的完整模型是兩條路並行：</p>
+
+<ul>
+  <li><strong>互容 C<sub>M</sub>（電場路徑）</strong>：兩條線之間隔著介質相望，本身就是一顆小電容。攻擊線電壓翻轉時，這顆電容把電流打進受害線。PT2 給的公式（Perfect Timing II Ch.6）：</li>
+</ul>
+<div class="formula">I<sub>M</sub> = C<sub>M</sub> · dV<sub>s</sub>/dt　（V<sub>s</sub>：攻擊線上的源電壓）</div>
+<p><em>白話翻譯：漏過去的電流 = 兩線之間的小電容 × 攻擊線電壓變化的速度。注意兇手是 <strong>dV/dt</strong> 不是電壓本身——3.3 V 慢慢爬不漏，0.5 V 陡峭翻轉反而漏得兇。這就是 Day 1 那句老話的第三次應驗：<strong>惹禍的是邊沿，不是頻率</strong>。</em></p>
+
+<ul>
+  <li><strong>互感 L<sub>M</sub>（磁場路徑）</strong>：攻擊線的電流變化產生變化磁場，磁力線穿過受害線的迴圈（記住 Day 16：迴圈＝訊號線＋它的回流影子帶），像變壓器一樣在受害線上感應出電壓 V = L<sub>M</sub>·dI/dt。PT2 的判斷值得背下來：<strong>「在數位系統中，互感造成的串擾通常等於或大於互容造成的串擾。」（Perfect Timing II Ch.6）</strong></li>
+</ul>
+
+<p>耦合量級由什麼決定？PT2 Ch.6 列了三個因子：<strong>與攻擊線的距離、訊號邊沿速率、受害線的阻抗</strong>——距離越近、邊沿越快、受害線阻抗越高，串擾越大。書中 Figure 6.7 的實測曲線顯示：受害線阻抗 70 Ω 的耦合大於 60 Ω、又大於 50 Ω；Figure 6.8 則顯示<strong>線越寬耦合越小</strong>。書中結論一句話收攏：<strong>「最小耦合來自最大間距、最大線寬與最小阻抗。」（Perfect Timing II Ch.6）</strong>為什麼高阻抗更慘？直覺版：同樣一股漏電流 I<sub>M</sub> 打進來，砸在越大的電阻上，砸出的電壓越高（V = I<sub>M</sub>·Z）；而高 Z₀ 的線本來就是「離平面遠、又細」的線（Day 5）——離平面遠，影子帶攤開，磁耦合也大。兩頭吃虧。</p>
+
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">串擾的兩條偷渡路徑：互容 C_M（電場）與互感 L_M（磁場）</text>
+  <!-- cross section -->
+  <text x="50" y="54" font-size="10" fill="#6b7280">板子橫截面（PT2 Ch.6 Fig 6.5/6.6 的模型）</text>
+  <rect x="200" y="90" width="90" height="14" fill="#dc2626"/>
+  <text x="245" y="82" text-anchor="middle" font-size="9.5" fill="#dc2626">Aggressor（攻擊線）</text>
+  <rect x="400" y="90" width="90" height="14" fill="#0e7490"/>
+  <text x="445" y="82" text-anchor="middle" font-size="9.5" fill="#0e7490">Victim（受害線）</text>
+  <rect x="80" y="190" width="600" height="12" fill="#9ca3af"/>
+  <text x="700" y="200" font-size="9.5" fill="#6b7280">參考平面</text>
+  <!-- E field -->
+  <path d="M292,97 Q345,80 398,97" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  <path d="M292,102 Q345,120 398,102" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  <text x="345" y="130" text-anchor="middle" font-size="9" fill="#b45309">電場（互容 C_M）：I_M = C_M·dVs/dt</text>
+  <!-- B field loops -->
+  <ellipse cx="245" cy="150" rx="120" ry="42" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <ellipse cx="245" cy="150" rx="180" ry="58" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="245" y="230" text-anchor="middle" font-size="9" fill="#7c3aed">磁場（互感 L_M）：磁力線掃過鄰線迴圈 → V = L_M·dI/dt</text>
+  <!-- dimensions -->
+  <line x1="245" y1="108" x2="245" y2="188" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="445" y1="108" x2="445" y2="188" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="255" y="176" font-size="9" fill="#6b7280">h（線離平面高度）</text>
+  <line x1="292" y1="70" x2="398" y2="70" stroke="#374151" stroke-width="1"/>
+  <text x="345" y="64" text-anchor="middle" font-size="9" fill="#374151">s（邊到邊間距）</text>
+  <line x1="200" y1="115" x2="290" y2="115" stroke="#374151" stroke-width="1"/>
+  <text x="245" y="126" text-anchor="middle" font-size="9" fill="#374151">W（線寬）</text>
+  <!-- shadow bands -->
+  <rect x="155" y="190" width="180" height="12" fill="#dc2626" opacity="0.25"/>
+  <rect x="355" y="190" width="180" height="12" fill="#0e7490" opacity="0.25"/>
+  <text x="380" y="216" text-anchor="middle" font-size="9" fill="#6b7280">兩條線的回流影子帶（Day 16）：h 越大攤越開、重疊越多 → 磁耦合越強</text>
+  <!-- key formula box -->
+  <rect x="80" y="252" width="600" height="80" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="380" y="276" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">L_M = L / (1 + (s/h)²)　（Perfect Timing II Ch.6）</text>
+  <text x="380" y="298" text-anchor="middle" font-size="9.5" fill="#166534">s/h 是唯一的旋鈕：s=1h → L_M=L/2；s=3h → L_M=L/10；s=5h → L_M≈L/26</text>
+  <text x="380" y="318" text-anchor="middle" font-size="9.5" fill="#166534">拉大 s 或壓小 h 都讓 s/h 變大——但 h 藏在分母的平方裡，而且壓 h 還「同時」縮小自家迴圈（L 本身也降）</text>
+  <!-- takeaway -->
+  <rect x="80" y="348" width="600" height="70" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="380" y="372" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#dc2626">PT2 Ch.6 三因子：距離越近、邊沿越快、受害線阻抗越高 → 串擾越大</text>
+  <text x="380" y="392" text-anchor="middle" font-size="9.5" fill="#991b1b">「最小耦合來自最大間距、最大線寬與最小阻抗」＋數位系統中互感串擾通常 ≥ 互容串擾</text>
+  <text x="380" y="410" text-anchor="middle" font-size="9.5" fill="#991b1b">串擾只咬邊沿（dV/dt、dI/dt）——訊號不翻轉，一點都不漏</text>
+</svg>
+<figcaption>圖 1：串擾雙路徑模型（PT2 Ch.6 Figure 6.5/6.6 的觀念重繪）。上：攻擊線的電場經 C<sub>M</sub> 打電流進受害線、磁場經 L<sub>M</sub> 感應電壓——注意磁力線掃過的是受害線「線＋影子帶」的迴圈，這就是 Day 16 影子帶與本週的接軌點。下：PT2 的 L<sub>M</sub> 公式與三因子結論。</figcaption>
+</figure>
+
+<h2>2. 收割伏筆：為什麼「壓 h」比「拉 s」更治本</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：搬遠一點 vs 把天花板壓低</span>
+  <p>要讓隔壁派對吵不到你，兩招：①把兩間房蓋遠一點（拉 s）——有效，但豪宅才有的奢侈，板子面積就這麼大；②把每間房的天花板壓到貼地（壓 h）——房間變矮之後，派對的聲音和震動<strong>絕大部分被自家地板當場吸收</strong>，根本漏不出來。第二招厲害在哪？它不是「把噪聲擋在半路」，是「讓噪聲從源頭就出不了門」——而且順便讓你自己家也更安靜（自家迴圈也變小）。這就是為什麼 SI 老手看疊構（stackup）比看走線間距更興奮：<strong>h 是全板每一條線的公共體質，s 只是兩條線之間的私人恩怨</strong>。</p>
+</div>
+
+<p>把 L<sub>M</sub> = L/(1+(s/h)²) 拆開看，同樣的目標「讓 s/h 從 1 變成 3」有兩條路：</p>
+<ul>
+  <li><strong>拉間距</strong>：s 從 1h 拉到 3h → L<sub>M</sub> 從 L/2 降到 L/10。代價：布線面積變成三倍寬——在 NB 主機板 DDR 兩百多條線、camera flex 只有幾 mm 寬的世界裡，這是用地皮換安靜；</li>
+  <li><strong>壓線高</strong>：h 壓成原來的 1/3（薄介質疊構）→ 同樣 s/h = 3、同樣 L/10。<strong>但還有兩筆額外紅利</strong>：①分母裡的 L 本身也變小了（自家迴圈面積 ∝ h，Day 16）——L<sub>M</sub> 是「變小的 L」再除以 10，絕對值降更多；②回流影子帶 ±3h 同比例收窄（Day 16 練習 1），鄰線回流重疊更少。這就是 Day 17 預告的那句話的完整版：<strong>解藥第一名是壓窄影子帶（降 h），不是拉間距（加 s）</strong>。</li>
+</ul>
+
+<p>PT2 Ch.6 給的第一條抗串擾規則是：<strong>「將走線間距拉大——效應與元件距離的平方成正比，因此距離加倍可將耦合降為四分之一。」（Perfect Timing II Ch.6）</strong>對照公式做個誠實的體檢：「加倍距離→耦合 1/4」在 <strong>s ≫ h</strong> 時精確成立（分母被 (s/h)² 主宰）；當 s 與 h 相當時衰減沒那麼快（s 從 1h 加倍到 2h：L/2 → L/5，是 2.5 倍不是 4 倍）。書的經驗法則沒錯，但適用區在「已經拉開之後再拉更開」——<strong>最貴的第一步，永遠是從貼著到分開的那一步</strong>。</p>
+
+<p>順帶收一條業界口訣：<strong>3W 規則</strong>——相鄰高速線中心距 ≥ 3 倍線寬（經驗法則，約對應「大部分」邊緣場已衰減的間距）。它好記，但今天你已經知道它的破綻：<strong>W 不是物理裡的主角，s/h 才是</strong>。同樣 3W，在 h 很大的疊構上串擾可以依然難看。口訣拿來快篩，定案要回到 s/h 與模擬。</p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「串擾＝兩條線靠太近」——只對了一半</span>
+  <p>間距 s 只是分子故事的一半，<strong>分母的 h 同等重要甚至更重要</strong>。實務上最容易踩的坑：換板廠或改疊構時，介質厚度 h 悄悄變了（例如為了成本從 3 mil 換成 5 mil prepreg），走線 gerber 一模一樣，串擾卻集體惡化——因為每一對線的 s/h 同時縮水。這與 Day 13「平台升級翻案潮」是同款劇本：<strong>設計餘量藏在你沒盯著的參數裡</strong>。Review 疊構變更時，把「s/h 是否維持」列入 checklist。</p>
+</div>
+
+<h2>3. NEXT 與 FEXT：一股往回跑、一股往前衝</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：石頭丟進河裡，漣漪兵分二路</span>
+  <p>攻擊線上的邊沿像一顆石頭沿著河（受害線）岸邊<strong>一路移動一路丟石頭</strong>——注意不是只丟一顆：邊沿行進到哪裡，就在哪裡漏一點噪聲進受害線。每一顆石頭激起的漣漪都往兩邊擴散：一半<strong>逆著</strong>攻擊訊號的方向往回跑（回到靠 driver 的那一端＝<strong>近端，NEXT</strong>），一半<strong>順著</strong>攻擊訊號往前衝（跟到 receiver 那一端＝<strong>遠端，FEXT</strong>）。妙的地方來了：<strong>往前衝的漣漪和攻擊邊沿同速並肩跑</strong>——後面漏的噪聲永遠疊在同一個波頭上，越滾越大、但寬度只有一個邊沿寬（又窄又尖）；<strong>往回跑的漣漪</strong>則是「第 1 公尺漏的先回來、第 10 公尺漏的晚回來」——先後到站、頭尾相接，攤成一條又寬又矮的長浪。這就是 NEXT 寬矮、FEXT 窄尖的全部祕密——純幾何，無魔法。</p>
+</div>
+
+<p>正式定義與機制。兩條平行耦合線，攻擊線由近端（driver 端）向遠端（receiver 端）發一個上升沿：</p>
+<ol>
+  <li><strong>容性耦合的貢獻</strong>：I<sub>M</sub> = C<sub>M</sub>·dV/dt 打進受害線的電流，看見左右兩邊各一條 Z₀，於是<strong>對半分流</strong>——往近端與往遠端各推一個<strong>正極性</strong>的波；</li>
+  <li><strong>感性耦合的貢獻</strong>：L<sub>M</sub> 像變壓器，在受害線上感應的電流方向<strong>與攻擊電流相反</strong>（楞次定律）——結果是往近端推一個<strong>正</strong>波、往遠端推一個<strong>負</strong>波；</li>
+  <li><strong>近端（NEXT）＝容性正＋感性正 → 同號相加</strong>，一定存在、極性為正（與攻擊邊沿同向）；</li>
+  <li><strong>遠端（FEXT）＝容性正＋感性負 → 異號相減</strong>，大小取決於兩種耦合誰佔上風——這正是 PT2 那句「互感通常 ≥ 互容」開始發威的地方。</li>
+</ol>
+
+<div class="formula">NEXT：容性與感性相加，波形寬 ≈ 2×T<sub>D,耦合段</sub>（又寬又矮的平台）　｜　FEXT：容性與感性相減，波形寬 ≈ t<sub>r</sub>（跟著攻擊邊沿跑的窄尖峰，形狀近似攻擊邊沿的「導數」）</div>
+<p><em>白話翻譯：NEXT 的寬度是「來回一趟耦合段」的時間——因為最遠處漏的噪聲要多花一趟單程才回得到近端；FEXT 的寬度就是一個邊沿的時間——因為所有噪聲全疊在同一個波頭上一起抵達。定量的振幅公式（飽和長度、耦合係數）留給明天 Day 19，今天先把「方向、極性、形狀」三件事焊死。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">NEXT 往回跑、FEXT 往前衝——方向、極性與形狀</text>
+  <!-- topology -->
+  <text x="60" y="52" font-size="10" fill="#6b7280">俯視：兩條平行耦合線</text>
+  <line x1="100" y1="80" x2="660" y2="80" stroke="#dc2626" stroke-width="4"/>
+  <text x="90" y="84" text-anchor="end" font-size="9.5" fill="#dc2626">Aggressor</text>
+  <line x1="100" y1="120" x2="660" y2="120" stroke="#0e7490" stroke-width="4"/>
+  <text x="90" y="124" text-anchor="end" font-size="9.5" fill="#0e7490">Victim</text>
+  <text x="100" y="144" font-size="9" fill="#6b7280">近端（driver 側）</text>
+  <text x="660" y="144" text-anchor="end" font-size="9" fill="#6b7280">遠端（receiver 側）</text>
+  <!-- edge moving -->
+  <polygon points="330,72 350,80 330,88" fill="#dc2626"/>
+  <text x="340" y="64" text-anchor="middle" font-size="9" fill="#dc2626">攻擊邊沿行進中（一路走一路漏）</text>
+  <!-- coupling arrows -->
+  <line x1="340" y1="88" x2="340" y2="112" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 2"/>
+  <line x1="250" y1="88" x2="250" y2="112" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3 2" opacity="0.5"/>
+  <line x1="160" y1="88" x2="160" y2="112" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3 2" opacity="0.3"/>
+  <!-- next / fext arrows on victim -->
+  <polygon points="150,112 120,120 150,128" fill="#16a34a"/>
+  <text x="180" y="108" font-size="9.5" fill="#16a34a">NEXT：逆向往回跑（先漏的先到，頭尾相接攤成長浪）</text>
+  <polygon points="610,112 640,120 610,128" fill="#7c3aed"/>
+  <text x="600" y="108" text-anchor="end" font-size="9.5" fill="#7c3aed">FEXT：與邊沿同速並肩跑（噪聲全疊同一波頭）</text>
+  <!-- waveform: NEXT -->
+  <text x="60" y="188" font-size="10" fill="#6b7280">近端看到的（NEXT）：</text>
+  <line x1="100" y1="260" x2="360" y2="260" stroke="#374151" stroke-width="1"/>
+  <path d="M100,260 L130,260 L140,238 L280,238 L290,260 L360,260" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="210" y="228" text-anchor="middle" font-size="9" fill="#16a34a">正極性、矮平台，寬 ≈ 2×T_D（耦合段來回一趟）</text>
+  <text x="210" y="282" text-anchor="middle" font-size="9" fill="#6b7280">容性＋感性同號相加 → 微帶、帶狀線都躲不掉</text>
+  <!-- waveform: FEXT -->
+  <text x="420" y="188" font-size="10" fill="#6b7280">遠端看到的（FEXT，微帶線）：</text>
+  <line x1="440" y1="260" x2="700" y2="260" stroke="#374151" stroke-width="1"/>
+  <path d="M440,260 L540,260 L548,286 L556,260 L700,260" fill="none" stroke="#7c3aed" stroke-width="2.5"/>
+  <text x="590" y="240" text-anchor="middle" font-size="9" fill="#7c3aed">窄尖峰，寬 ≈ t_r，形狀像攻擊邊沿的導數</text>
+  <text x="570" y="300" text-anchor="middle" font-size="9" fill="#6b7280">容性正－感性負相減；感性佔上風 → 上升沿打出「負」尖峰</text>
+  <!-- stripline vs microstrip -->
+  <rect x="60" y="330" width="640" height="120" rx="8" fill="#f0f9ff" stroke="#0e7490"/>
+  <text x="380" y="354" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">為什麼帶狀線 FEXT ≈ 0、微帶線 FEXT ≠ 0？</text>
+  <text x="380" y="376" text-anchor="middle" font-size="9.5" fill="#0f4c5c">帶狀線：電場全部泡在同一種介質裡 → 容性與感性耦合的比例恰好打平 → 相減 ≈ 歸零（理想情況）</text>
+  <text x="380" y="396" text-anchor="middle" font-size="9.5" fill="#0f4c5c">微帶線：電場一部分跑在空氣中（Day 5 的老朋友）→ 容性耦合被空氣「稀釋」、感性佔上風 → 相減不歸零，留下負尖峰</text>
+  <text x="380" y="424" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">同一個機制的兩張臉：NEXT 是加法躲不掉；FEXT 是減法，能不能歸零看介質均不均勻</text>
+</svg>
+<figcaption>圖 2：NEXT/FEXT 全景。上：攻擊邊沿一路行進一路漏，噪聲兵分二路。中：近端是寬矮正平台（寬度 2T<sub>D</sub>）、遠端（微帶）是窄的負尖峰（寬度 t<sub>r</sub>）。下：帶狀線因介質均勻、容性感性恰好相消 → FEXT 近乎歸零；微帶線電場半泡空氣、感性勝出 → FEXT 是負尖峰。「理想情況」三字要記得——實際帶狀線仍有殘餘 FEXT（介質不完全均勻、玻纖編織效應等），但比微帶小得多。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">一句話世界觀升級</span>
+  <p>從今天起，「兩條線靠很近」在你腦中要自動展開成一張四格表：<strong>誰是 aggressor、誰是 victim、victim 的哪一端在挨打（近端寬矮平台／遠端窄尖峰）、極性對不對得上</strong>。debug 時這張表就是指紋比對器：受害線上的噪聲寬度 ≈ 2T<sub>D</sub> → 近端串擾；寬度 ≈ t<sub>r</sub> 的尖峰且極性與攻擊邊沿相反 → 微帶遠端串擾。<strong>波形的形狀會自己招供它是從哪一端漏進來的。</strong></p>
+</div>
+
+<h2>4. 擺幅縮小時代：PT2 的訊噪比警告，MIPI 時代加倍成真</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：同一滴墨水，滴進游泳池 vs 滴進咖啡杯</span>
+  <p>串擾噪聲就是那滴墨水，訊號擺幅就是水體。2002 年的訊號是 3.3 V 的游泳池，滴一滴 100 mV 的墨水根本看不出來；今天的 MIPI 訊號是 0.2 V 的濃縮咖啡杯——同一滴墨水下去，整杯變色。<strong>串擾的絕對值沒變，是訊號自己變小了</strong>——所以串擾這門課越晚越重要，而你要面試的 camera 接口，正好是全板擺幅最小的那群訊號。</p>
+</div>
+
+<p>PT2 Ch.6 在 2002 年就把這個趨勢算給你看：<strong>「100 mV 的噪聲騎在 3.3 V 時脈上只有 3%，即 33:1 的訊噪比。但如果這 100 mV 出現在擺幅僅 1.0 V 的差動時脈上，就變成 10% 噪聲、10:1 的訊噪比問題——這足以造成一次非預期的時脈。」（Perfect Timing II Ch.6）</strong>書中的憂慮以現代標準需要繼續上修：MIPI D-PHY HS 模式的差動擺幅約 200 mV 量級（週 13 細講）——同樣 100 mV 噪聲已是 50% 量級，直接吃掉整個眼圖。這就是為什麼 camera flex 上的串擾管理是 Apple/Google 面試的常客：<strong>最窄的板材（flex）＋最小的擺幅（MIPI）＋最吵的鄰居（VCM/OIS 驅動），三個最字疊在同一條排線上。</strong></p>
+
+<p>PT2 Ch.6 給的三條抗串擾路線，今天先掛出來當本週地圖（Perfect Timing II Ch.6）：</p>
+<ol>
+  <li><strong>拉開距離</strong>——今天講完（含它的極限：地皮有限、s/h 才是本體）；</li>
+  <li><strong>屏蔽</strong>——換層走、或在兩線之間放 guard trace（書中建議兩端接地；現代高速實務還會沿線加 stitching via，Day 20 展開）；</li>
+  <li><strong>差動訊號</strong>——共模噪聲抑制；但書中話說得很老實：「若串擾只影響差動對的其中一條，噪聲耦合仍然成立」（Day 21 展開）。</li>
+</ol>
+
+<h2>5. 數學收口：把今天的量接回前三週</h2>
+<table>
+  <tr><th>今天的量</th><th>接回哪一課</th><th>一句話</th></tr>
+  <tr><td>I<sub>M</sub> = C<sub>M</sub>·dV/dt</td><td>Day 1（邊沿才是兇手）、Day 12（connector 針間互容）</td><td>串擾正比邊沿速率——平台升級（t_r 變快）串擾自動惡化，即使 layout 一字未改</td></tr>
+  <tr><td>L<sub>M</sub> = L/(1+(s/h)²)</td><td>Day 16（影子帶 ±3h、迴圈面積 ∝ h）</td><td>s/h 是唯一旋鈕；壓 h 一石三鳥（L<sub>M</sub>↓、L↓、影子帶收窄）</td></tr>
+  <tr><td>NEXT 寬度 ≈ 2T<sub>D</sub></td><td>Day 9/14（TDR 的來回一趟＝2T<sub>D</sub> 同款幾何）</td><td>凡是「往回走」的訊息，寬度都帶 2 倍單程——TDR 與 NEXT 是表兄弟</td></tr>
+  <tr><td>FEXT 容性感性相減</td><td>Day 5（微帶電場半泡空氣 → ε_eff）</td><td>微帶的「空氣稀釋」當年讓你算 ε_eff，今天讓 FEXT 減不乾淨——同一個物理收兩次帳</td></tr>
+  <tr><td>受害線阻抗越高串擾越大</td><td>Day 5（高 Z₀＝細線遠平面）</td><td>PT2 Fig 6.7：70 Ω > 60 Ω > 50 Ω——高阻抗線既是好天線也是好受害者</td></tr>
+</table>
+<p><em>白話翻譯：今天沒有一個公式是孤兒——串擾是前三週所有工具的第一個「多線」戰場。</em></p>
+
+<h2>6. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——DDR byte lane 的「假時脈」：</strong>PT2 Ch.6 開頭就點名串擾對時脈的殺傷力：「若串擾以足夠強的振幅出現在時脈訊號上，就可能造成錯誤觸發（false trigger）」（Perfect Timing II Ch.6）。主機板上的經典場景：一條 clock 或 strobe 與一整排 data 平行走了幾公分——data 同時翻轉時（最壞情況：整個 byte 同向切換），每條鄰線漏一點，疊加起來在 strobe 上打出一個過門檻的凸包 → 多打或漏打一拍。FA 指紋：錯誤與<strong>資料內容相關</strong>（特定 pattern 才會發生）——「pattern-dependent failure」四個字一出現，第一個抓的嫌犯就是串擾與 ISI（週 5）。</li>
+  <li><strong>鏡頭模組——flex 上 MIPI lane 與 VCM 驅動線的惡鄰關係：</strong>camera flex 又窄又長，MIPI 高速對（擺幅約 200 mV 量級）與 VCM/OIS 的驅動線（安培級 PWM 電流，陡峭 dI/dt）被迫擠在幾 mm 寬的排線上並肩跑幾公分——教科書級的 aggressor（大電流快邊沿）對 victim（小擺幅高敏感）。而且 Day 16 講過 flex 的地常是網格——h 等效變大、影子帶攤開、L<sub>M</sub> 雪上加霜。實務對策的優先序你今天已經能推出來：<strong>先分區（VCM 線與 MIPI 對各自靠邊、中間隔地）、再看疊構（MIPI 下方保實心地，至少局部）、最後才是加大間距</strong>。這條案例週 15（VCM/OIS 與 actuator 雜訊耦合）會用完整一課回收。</li>
+  <li><strong>面試白板：</strong>「Explain NEXT and FEXT」幾乎是高速板面試的固定戲碼，而分高下的追問是：<strong>「Why is FEXT nearly zero in stripline?」</strong>——答得出「容性感性相減、均勻介質恰好打平、微帶被空氣稀釋所以減不乾淨」，就從「背定義的人」升級成「懂機制的人」。今天第 3 節就是為這一題寫的。</li>
+</ul>
+
+<h2>7. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（L<sub>M</sub> 公式的手感）：兩條微帶線，h = 4 mil。(a) 邊到邊間距 s = 4、8、12、20 mil 時，L<sub>M</sub> 各是 L 的幾分之一？(b) 從 s = 4 拉到 s = 8（加倍），耦合降幾倍？符合 PT2「距離加倍→耦合 1/4」嗎？為什麼？(c) 改為壓 h：s 維持 4 mil、h 從 4 mil 壓到 2 mil，L<sub>M</sub>/L 變多少？再加上「L 本身也隨 h 下降」的紅利，總效果比 (b) 好還是差？</summary>
+<p><strong>解：</strong>(a) s/h = 1, 2, 3, 5 → L<sub>M</sub> = L/2、L/5、L/10、L/26。(b) L/2 → L/5，降 <strong>2.5 倍</strong>，不到 4 倍——因為 s 與 h 同量級時，分母裡的「1+」還沒被 (s/h)² 主宰；PT2 的「平方法則」在 s ≫ h 時才漸近成立（例如 s 從 12 拉到 24 mil：L/10 → L/37，接近 4 倍）。教訓：<strong>從貼著到分開的第一步最貴，之後遞減。</strong>(c) s/h 從 1 變 2 → L<sub>M</sub>/L 從 1/2 降到 1/5，與 (b) 同幅；<strong>但</strong> h 減半使迴圈面積（≈ 線長 × h）約減半 → L 本身也約降（量級估計）→ L<sub>M</sub> 絕對值總降幅約 5 × 2 = <strong>10 倍量級</strong>，優於 (b) 的 2.5 倍，且不佔任何布線面積、還收窄影子帶——「壓 h 比拉 s 治本」的數字版。</p>
+</details>
+
+<details>
+<summary>練習 2（波形指紋辨認）：受害線兩端各接 50 Ω，攻擊線邊沿 t<sub>r</sub> = 100 ps，兩線平行耦合段 3 cm，板內 v ≈ 15 cm/ns。受害線近端與遠端各會看到什麼？(a) 算近端噪聲平台的寬度。(b) 遠端尖峰的寬度大約多少？微帶線上極性為何（攻擊為上升沿）？(c) 現在 debug 現場：你在受害線某一端量到寬約 400 ps 的矮正平台——這是哪一端？耦合段多長？</summary>
+<p><strong>解：</strong>(a) 耦合段單程 T<sub>D</sub> = 3 cm ÷ 15 cm/ns = 200 ps → 近端平台寬 ≈ 2T<sub>D</sub> = <strong>400 ps</strong>（頭尾再帶 t_r 的過渡緣）。(b) 遠端尖峰寬 ≈ t<sub>r</sub> = <strong>100 ps 量級</strong>；微帶線感性佔上風、攻擊上升沿 → <strong>負</strong>尖峰。(c) 寬矮正平台＝<strong>近端（NEXT）</strong>指紋；由 400 ps = 2T<sub>D</sub> 反推 T<sub>D</sub> = 200 ps → 耦合段 ≈ <strong>3 cm</strong>。波形寬度直接供出耦合段長度——與 TDR 用 2T<sub>D</sub> 定位病灶是同一把尺（Day 9）。</p>
+</details>
+
+<details>
+<summary>練習 3（PT2 訊噪比算例的現代版）：照 PT2 Ch.6 的算法。(a) 驗算書中兩例：100 mV 噪聲在 3.3 V 單端與 1.0 V 差動擺幅上的百分比與 S/N。(b) 同樣 100 mV 打在差動擺幅約 200 mV 的 MIPI D-PHY HS 訊號上是幾 %？(c) 由 (a)(b) 推論：從 2002 到現在，若要維持相同的「串擾佔擺幅百分比」，串擾絕對值要壓低幾倍？這對 layout 規則意味著什麼？</summary>
+<p><strong>解：</strong>(a) 100 mV/3.3 V ≈ <strong>3%（33:1）</strong>；100 mV/1.0 V = <strong>10%（10:1）</strong>——與書中一致（Perfect Timing II Ch.6），書中並警告後者「足以造成非預期時脈」。(b) 100 mV/200 mV = <strong>50%</strong>——眼圖直接閉眼，連「marginal」都稱不上。(c) 3.3 V → 0.2 V，擺幅縮了約 16 倍；同百分比就要求串擾絕對值也壓 <strong>16 倍量級</strong>。但同期邊沿速率還變快（dV/dt、dI/dt 助攻攻擊方）——所以現代規則不是「多留一點間距」而是<strong>結構性隔離</strong>：實心參考地、薄介質、必要時 guard/換層、差動走線——正好是 PT2 三路線的現代加強版，本週後幾天逐一展開。</p>
+</details>
+
+<details>
+<summary>練習 4（帶狀線 vs 微帶線選層）：一條 camera 主板上的高速訊號可走 L1（微帶，h = 3 mil）或 L3（帶狀線，上下都有地）。從串擾角度：(a) NEXT 誰佔優？差多少（定性）？(b) FEXT 誰佔優？為什麼？(c) 什麼情況下你反而選微帶？（提示：Day 11-13 的舊識）</summary>
+<p><strong>解：</strong>(a) NEXT 兩者都有（加法躲不掉），帶狀線<strong>略優</strong>：同樣線寬下帶狀線的場被上下兩片地夾住、邊緣場外洩少，耦合較小——但只是「較小」，不是免疫。(b) FEXT <strong>帶狀線壓倒性優勢</strong>：均勻介質使容性/感性耦合恰好相消，理想 FEXT ≈ 0（實際仍有殘餘：玻纖編織、介質不均，量級遠小於微帶）；微帶電場半泡空氣 → 感性勝出 → 負尖峰躲不掉。(c) 選微帶的理由：①走內層要多打兩根 via——Day 11-13 教過 via/stub 是自帶的病灶，若這條線對反射比對串擾更敏感（短板、鄰居少），表層直達反而乾淨；②表層可量測、可 rework（FA 友善）；③疊構限制（層數不夠）。工程沒有免費午餐：<strong>選層是在「串擾稅」與「via 稅」之間選便宜的那張帳單。</strong></p>
+</details>
+
+<details>
+<summary>練習 5（FA 推理題）：量產機台回報某 camera 模組間歇性 MIPI CRC error。你在受害 lane 上抓到偶發的窄負尖峰（寬約 150 ps），且只在 AF 對焦動作（VCM 通電）時出現。(a) 這是 NEXT 還是 FEXT 指紋？aggressor 是誰？(b) 為什麼是「負」尖峰？這透露走線是微帶還是帶狀線？(c) 給三個「不改板」的佐證實驗與兩個改板方向。</summary>
+<p><strong>解：</strong>(a) 窄（≈ t_r 量級）尖峰＝<strong>FEXT 指紋</strong>（NEXT 是寬平台）；與 VCM 動作同步 → aggressor 是 <strong>VCM 驅動線</strong>（大電流 PWM、陡 dI/dt）。(b) 負尖峰＝感性耦合佔上風的遠端串擾 → 走線是<strong>微帶型</strong>（或地是網格、等效介質不均勻——flex 常態，Day 16）。(c) 佐證：①示波器同時抓 VCM 驅動邊沿與 error 時間戳，確認逐邊沿相關（每個 PWM 邊沿對一個尖峰）；②軟體把 VCM 驅動的 slew rate 調慢（若 driver IC 支援），尖峰應等比例縮小——dI/dt 是兇器的直接證明；③換一顆對焦行程不同的測試 pattern／固定對焦不動，error 應消失。改板：①<strong>分區＋隔地</strong>——VCM 線與 MIPI 對拉開並在中間布接地銅（guard 的雛形，Day 20 細講）；②MIPI 對正下方改<strong>實心地</strong>（局部不網格化），壓 h 收影子帶。加分：驅動端加 slew 控制或 RC snubber 從源頭鈍化 dI/dt——治 aggressor 永遠比治 victim 便宜。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>串擾是 camera HW 面試的一線考點——因為 flex 上「大電流 actuator 貼著小擺幅 MIPI」就是日常。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Explain near-end and far-end crosstalk. Why does far-end crosstalk nearly vanish in a stripline but not in a microstrip?"</summary>
+<p><strong>參考答案骨架：</strong>Crosstalk couples through two mechanisms at once: mutual capacitance, where the aggressor's dV/dt injects current into the victim, and mutual inductance, where the aggressor's dI/dt induces a voltage in the victim's loop — and in typical digital geometries the inductive part is equal or larger. As the aggressor edge travels down the line, it keeps injecting noise into the victim all along the coupled length, and that noise splits into two waves. The backward wave — NEXT — travels against the aggressor: noise coupled early arrives back first, noise coupled late arrives last, so it smears into a low, wide pulse whose width is twice the delay of the coupled region. The forward wave — FEXT — travels alongside the aggressor edge at the same speed, so every increment of noise piles onto the same wavefront: a narrow spike about one rise time wide, growing with coupled length. The polarities are the key: capacitive coupling drives positive noise in both directions, but inductive coupling — by Lenz's law — drives positive backward and negative forward. So at the near end they add, which is why NEXT always exists; at the far end they subtract. In a stripline the fields are entirely in a homogeneous dielectric and the capacitive and inductive coupling ratios exactly balance, so the forward terms cancel — ideally zero FEXT, small residual in practice from fiber weave and inhomogeneity. In a microstrip, part of the field travels in air, which dilutes the capacitive coupling, the inductive term wins, and you get a residual negative spike on a rising aggressor edge. That's why routing aggressive parallel buses on inner layers is a standard FEXT mitigation.</p>
+<p><strong>加分點：</strong>把「加法 vs 減法」講成兩種極性的機制推論（楞次定律），而不是背表格；NEXT 寬度 2T<sub>D</sub>、FEXT 寬度 t_r 的幾何理由講得出來；結尾自然接一條可操作的 layout 建議。</p>
+</details>
+
+<details>
+<summary>Q2: "On a camera flex, your MIPI lane shows sporadic errors only when the autofocus actuator is moving. Walk me through your debug approach and your mitigation options."</summary>
+<p><strong>參考答案骨架：</strong>The correlation with actuator motion already names the prime suspect: the VCM drive lines carry hundreds of milliamps of PWM current with sharp edges, running parallel to a MIPI pair whose differential swing is only a couple hundred millivolts — a textbook aggressor-victim pair, made worse on flex where the ground is often hatched, so the return path is spread out and mutual inductance is higher. First I'd confirm causality: probe the victim lane and the VCM drive together and check the noise is time-locked to each PWM edge, not just loosely correlated with focus events. The waveform shape tells me the entry point — a wide, low pedestal means near-end coupling, a narrow spike about one rise time wide means far-end; a negative spike on a rising aggressor edge points to inductance-dominated coupling, consistent with hatched-ground flex. Cheap experiments before any board change: slow the VCM driver's slew rate if the IC allows — crosstalk scales with dI/dt, so the noise should shrink proportionally, which is the smoking gun; hold focus fixed and confirm errors vanish; check whether errors are pattern- or lane-dependent. Mitigations, in order of cost-effectiveness: fix the aggressor first — slew control or snubbing at the VCM driver is the cheapest knob; then structural isolation on the flex — separate zones with ground between, keep solid ground under the MIPI pair even if the rest stays hatched, since lowering the effective h shrinks both the mutual inductance and the return-current spread; increase spacing only after those, because flex width is precious. And I'd note the design rule for the next spin, because a marginal pass today fails when the next platform speeds up the edges.</p>
+<p><strong>加分點：</strong>「waveform shape tells me the entry point」——用 NEXT/FEXT 指紋反推耦合端是今天的核心；先做不改板的因果確認（slew rate 實驗最有說服力）；對策排序「治 aggressor > 結構隔離 > 拉間距」；hatched ground 與 h 的連結顯示 Day 16 的功力。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：串擾的兩條耦合路徑？各自的公式與 PT2 對兩者強弱的判斷？</p>
+  <p class="a">A1：①互容 C<sub>M</sub>（電場）：I<sub>M</sub> = C<sub>M</sub>·dV<sub>s</sub>/dt——攻擊線電壓翻轉把電流打進受害線；②互感 L<sub>M</sub>（磁場）：V = L<sub>M</sub>·dI/dt——變化磁場掃過受害線迴圈（線＋回流影子帶）感應電壓。PT2 Ch.6：<strong>數位系統中互感串擾通常等於或大於互容串擾</strong>。三因子：距離越近、邊沿越快、受害線阻抗越高 → 串擾越大；「最小耦合＝最大間距＋最大線寬＋最小阻抗」（皆 Perfect Timing II Ch.6）。串擾只咬邊沿——訊號不翻轉不漏。</p>
+  <p class="q">Q2：L<sub>M</sub> = L/(1+(s/h)²) 怎麼用？為什麼「壓 h」比「拉 s」治本？</p>
+  <p class="a">A2：s/h 是唯一旋鈕：s=1h→L/2、s=3h→L/10、s=5h→L/26（Perfect Timing II Ch.6）。壓 h 一石三鳥：①s/h 變大（與拉 s 同效）；②L 本身隨迴圈面積下降；③回流影子帶 ±3h 收窄、鄰線回流重疊減少（Day 16）——且不佔布線面積。PT2「距離加倍→耦合 1/4」在 s≫h 時才漸近成立；s≈h 時第一步最貴、之後遞減。3W 規則只是快篩，本體是 s/h。</p>
+  <p class="q">Q3：NEXT 與 FEXT 的方向、極性、波形寬度？</p>
+  <p class="a">A3：攻擊邊沿一路行進一路漏，噪聲兵分二路。<strong>NEXT</strong>（近端）：逆行往回跑，容性＋感性<strong>同號相加</strong>→正極性、又寬又矮，寬 ≈ 2×T<sub>D,耦合段</sub>（先漏先到、頭尾相接）——永遠存在。<strong>FEXT</strong>（遠端）：與邊沿同速並肩跑、噪聲全疊同一波頭，容性正－感性負<strong>相減</strong>→窄尖峰，寬 ≈ t<sub>r</sub>，形似攻擊邊沿的導數；微帶上升沿打出負尖峰。指紋用法：寬平台=近端、由寬度反推耦合段長；窄尖峰=遠端。</p>
+  <p class="q">Q4：為什麼帶狀線 FEXT ≈ 0、微帶線 FEXT ≠ 0？</p>
+  <p class="a">A4：FEXT 是容性與感性兩貢獻的<strong>減法</strong>。帶狀線：場全泡在均勻介質裡，容性/感性耦合比例恰好打平 → 理想相消 ≈ 0（實際有殘餘：玻纖編織、介質不均，遠小於微帶）。微帶線：電場一部分在空氣中（ε_eff 的同一個物理，Day 5）→ 容性耦合被空氣稀釋、感性勝出 → 負尖峰。應用：怕 FEXT 的長平行 bus 走內層帶狀線；但要付 via 稅（Day 11-13）——選層是兩張帳單挑便宜的。</p>
+  <p class="q">Q5：PT2 Ch.6 的訊噪比算例與三條抗串擾路線？現代要怎麼上修？</p>
+  <p class="a">A5：算例：100 mV 噪聲在 3.3 V 上＝3%（33:1）；在 1.0 V 差動擺幅上＝10%（10:1），「足以造成非預期時脈」（Perfect Timing II Ch.6）。現代上修：MIPI D-PHY HS 差動擺幅約 200 mV 量級 → 同樣 100 mV ≈ 50%，眼圖直接關門——擺幅縮 16 倍，串擾絕對值也要等比壓低。三路線（PT2 Ch.6）：①拉開距離（平方衰減，s≫h 才成立）；②屏蔽（換層／guard trace，書中建議兩端接地；現代加沿線 stitching）；③差動訊號（共模抑制；但只咬到一條時仍會漏——書中原話）。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 19（週二）：串擾 II——NEXT/FEXT 定量：飽和長度、耦合係數與防護間距設計</strong></p>
+  <p>今天你認識了兩股噪聲的長相，明天給它們裝上刻度：NEXT 的振幅為什麼「耦合段超過某個長度就不再變大」（飽和長度——答案跟 t<sub>r</sub> 有關，你可以先猜猜看）；FEXT 為什麼「越長越大、越快越大」；間距要拉多開才夠的設計流程（從噪聲預算倒推，而不是背 3W）。把今天的 L<sub>M</sub> 公式和 2T<sub>D</sub>/t<sub>r</sub> 兩把尺帶著——明天全部要用。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 18 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 4/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

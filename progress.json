@@ -1,11 +1,11 @@
 {
-  "current_day": 17,
-  "current_week": 3,
+  "current_day": 18,
+  "current_week": 4,
   "phase": 1,
-  "last_lesson_date": "2026-08-09",
-  "last_topic": "Day 17（週日複習日）：第 3 週複習＋20 題自我測驗附詳解，範圍 Day 11-16（stub 雙面人、connector C-L-C、補償分診與極限、遮蔽/鬼影/解析度、Day 15 實驗對帳、回流路徑三過橋與跨槽四病）；三句靈魂：深度報阻抗寬度報長度位置報地點／兩端各量一次／訊號層乾淨往平面層找病",
-  "next_day": 18,
-  "next_topic": "Day 18（週一新觀念課）：第 4 週串擾開張——串擾 I：互容 C_M 與互感 L_M 的耦合機制、為何 h 越小串擾越小（收割 Day 16 影子帶伏筆、PT2 Ch.6 公式 L_M = L/(1+(s/h)²) 正式登場）、NEXT 近端 vs FEXT 遠端（一個往回跑一個往前衝的機制）、微帶 vs 帶狀線 FEXT 差異。務必先讀 reference/chapters/ch06（crosstalk/guard trace 段落——Day 16 特意留下未引用）",
-  "notes": "Day17（2026-08-09 週日複習日）已出：第 3 週 20 題測驗附詳解（day-017.html，格式沿用 Day 10 週日卷：速查表→Part A 觀念 6 題→Part B 計算 6 題→Part C 讀圖 3 題（2 張 SVG：stub 凹陷三情報判讀、雙鄰線同位置感性尖峰=平面公共病灶）→Part D 實驗對帳 2 題（對 Day 15 記錄表：掃頻谷 f₀×ℓ=v/4 收斂、融合臨界間距與鬼影平均次數）→Part E PT2 延伸 3 題（Ch.7 多負載三條路+路2公式 R_D+R_S1∥R_S2=Z₀/2 陷阱、Ch.6 平面電容 184pF/in² 驗算+電源當參考警告、5Ω/50Ω 金句解讀+via 三招現代校訂）→評分表→週總結 Anki 5 卡→明日預告）。考點覆蓋：f₀=v/4ℓ（3mm stub→12.5GHz、back-drill 推到 150GHz）、C_stub≈t_d/Z₀、1/6 門檻與平台升級翻案潮、C-L-C 扭波回不回基準線=layout藥vs機構藥、配平三公理+三禁忌症+f_c≈1/(π√LC) 頻寬極限（Q9：2.5nH 配 1pF→f_c 6.4GHz 對 10Gbps 不夠→動結構）、遮蔽 (1−ρ²) 折扣除回、鬼影三判別（間距胎記/振幅 ρ₁ρ₂²≈4%/動D1）、Δd≈v·t_r/2、回流影子帶/三過橋/跨槽四病一刀全算（Q12）。已在 Day 18 預告埋鉤：L_M=L/(1+(s/h)²)、NEXT/FEXT 方向之謎、「解藥第一名是壓窄影子帶不是拉間距」。提醒學員：Day 15 實驗未完成者下週平日午休補做。已引用 PT2 章節累計：Ch2、Ch3、Ch6（via/return path/planes 已深引；crosstalk/guard trace/差動 traces 段落留給週4=下週，Day 18 出課前必讀 ch06 檔案）、Ch7（端接+多負載充分引用；差動端接留週4）、Ch11（量測鏈 RSS 多用；探棒負載留週6）。學員注意事項：白話優先規則持續有效（測驗卷開頭有三句靈魂白話卡）。",
+  "last_lesson_date": "2026-08-10",
+  "last_topic": "Day 18（週一新觀念課）：串擾 I——互容 C_M 與互感 L_M 雙耦合機制（I_M=C_M·dV/dt；PT2：數位系統互感串擾通常≥互容）、L_M=L/(1+(s/h)²) 正式登場並收割 Day 16 影子帶伏筆（壓 h 一石三鳥優於拉 s；PT2「加倍距離→1/4」僅 s≫h 漸近成立；3W 只是快篩本體是 s/h）、NEXT/FEXT 方向極性形狀（NEXT 容感同號相加=正寬矮平台寬≈2T_D；FEXT 容正感負相減=窄尖峰寬≈t_r、微帶上升沿打負尖峰）、帶狀線 FEXT≈0 vs 微帶不歸零（均勻介質相消 vs 空氣稀釋容性）、PT2 訊噪比算例（100mV@3.3V=3% vs @1.0V=10%）現代上修至 MIPI 200mV≈50%、抗串擾三路線地圖（距離/屏蔽/差動——後兩者留 Day 20/21）",
+  "next_day": 19,
+  "next_topic": "Day 19（週二新觀念課）：串擾 II——NEXT/FEXT 定量：NEXT 飽和長度（耦合段 T_D > t_r/2 後振幅飽和、飽和值＝耦合係數 k_b）、FEXT 隨耦合長度線性成長且正比 1/t_r、由噪聲預算倒推防護間距的設計流程（取代背 3W）、多攻擊線疊加（兩側夾擊最壞情況）。Day 18 已埋鉤：『飽和長度答案跟 t_r 有關先猜猜看』、2T_D 與 t_r 兩把尺要帶著。PT2 Ch.6 crosstalk 段落已於 Day 18 深引（Fig 6.7 阻抗 70/60/50Ω、Fig 6.8 線寬、L_M 公式、S/N 算例），Day 19 可續引 Ch.6 或開始鋪 guard trace（留 Day 20）與 Ch.14 skew/差動（留 Day 21）",
+  "notes": "Day18（2026-08-10 週一）已出：串擾 I 機制課（day-018.html，90 分鐘量，2 張 SVG：①雙耦合路徑截面圖含 s/h/W 標註+影子帶重疊+L_M 公式盒；②NEXT/FEXT 方向極性波形全景含帶狀線vs微帶 FEXT 對比）。練習 5 題：L_M 手感（s/h=1,2,3,5→L/2,L/5,L/10,L/26；加倍距離僅降 2.5 倍揭 PT2 平方法則適用區；壓 h 總效果約 10 倍量級）、波形指紋反推耦合段長（400ps 平台→2T_D→3cm）、PT2 S/N 算例驗算+MIPI 200mV 現代版=50%、帶狀線vs微帶選層（串擾稅 vs via 稅）、FA 推理（VCM PWM→MIPI FEXT 負尖峰：slew rate 實驗當 smoking gun、治 aggressor>結構隔離>拉間距）。面試題：NEXT/FEXT+帶狀線 FEXT 歸零機制、camera flex VCM-MIPI debug 流程。已在 Day 19 埋鉤：飽和長度與 t_r 的關係（讓學員先猜）、噪聲預算倒推間距流程。重要區分已講明：Day 16 跨槽的共阻抗耦合≠今天的場耦合串擾（兩線各自健康、平面完整時仍發生）。VCM/OIS 案例標註週 15 回收；guard trace 留 Day 20；差動留 Day 21；ISI/pattern-dependent 提及留週 5。白話卡：隔牆有耳兩種偷聽法（空氣傳聲=C_M/地板震動=L_M）、搬遠 vs 壓天花板、石頭丟河漣漪兵分二路、墨水滴游泳池vs咖啡杯。已引用 PT2 章節累計：Ch2、Ch3、Ch6（via/return path/planes/crosstalk 段落均已深引——aggressor/victim 定義、三因子、Fig 6.7/6.8、L_M 公式、最小耦合三條件、互感≥互容、false trigger、S/N 33:1 vs 10:1、三條抗串擾路線；guard trace 段落細節與差動 traces 四規則留 Day 20/21 引用）、Ch7、Ch11。Ch14 skew control 尚未引用（排差動/等長日）。學員注意事項：白話優先規則持續有效。",
   "pt2_chapters_cited": ["Ch2", "Ch3", "Ch6", "Ch7", "Ch11"]
 }

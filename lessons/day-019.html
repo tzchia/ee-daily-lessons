@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 19｜串擾 II——給噪聲裝上刻度：NEXT 飽和長度、FEXT 線性成長與「從噪聲預算倒推間距」的設計流程</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 4 週・第 19 天（週二新觀念課）</div>
+  <h1>Day 19：串擾 II——給噪聲裝上刻度：NEXT 飽和長度、FEXT 線性成長與「從噪聲預算倒推間距」的設計流程</h1>
+  <div class="meta">2026-08-11（二）｜預估學習時間：90 分鐘｜難度：★★★★☆（昨天認長相，今天量身高——兩條公式、一條飽和線，把「間距要多開」從口訣變成算式）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>昨天你學會了 NEXT/FEXT 的方向、極性與形狀（寬矮平台 vs 窄尖峰）。今天回答昨天留下的懸念——<strong>「NEXT 的振幅為什麼超過某個耦合長度就不再變大？」</strong>（提示是 t<sub>r</sub>，你猜對了嗎？）讀完你要能夠：</p>
+  <ol>
+    <li>推導並解釋 <strong>NEXT 飽和長度</strong>：耦合段單程延遲 T<sub>D</sub> ≥ t<sub>r</sub>/2（等價說法：耦合段長 ≥ v·t<sub>r</sub>/2）之後，NEXT 振幅鎖死在飽和值 <strong>k<sub>b</sub>·V<sub>a</sub></strong>，再長只會變寬不會變高</li>
+    <li>解釋為什麼 <strong>FEXT 沒有飽和</strong>：振幅隨耦合長度<strong>線性成長</strong>、且正比 <strong>1/t<sub>r</sub></strong>——「越長越大、越快越大」的雙重罪</li>
+    <li>會跑一遍<strong>從噪聲預算倒推防護間距</strong>的正規設計流程——這是取代「背 3W」的成人版做法，也是 PT2 Ch.6 那兩張「耦合 % vs 間距」實測曲線（Fig 6.7/6.8）真正的用法</li>
+    <li>處理<strong>多攻擊線疊加</strong>：受害線被兩側夾擊、且兩邊同時同向翻轉的最壞情況——以及為什麼串擾故障總是 pattern-dependent</li>
+    <li>把昨天的兩把尺（2T<sub>D</sub> 與 t<sub>r</sub>）升級成三把：<strong>2T<sub>D</sub> 量寬度、t<sub>r</sub> 量 FEXT 寬度、v·t<sub>r</sub>/2 量飽和線</strong></li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：懸念揭曉前，先對答案</h2>
+<p>Day 18 的結尾我請你先猜：「NEXT 振幅為什麼耦合段超過某個長度就不再變大？答案跟 t<sub>r</sub> 有關。」如果你的猜想沿著「往回跑的噪聲是先漏先到、頭尾相接攤開的」這條線走，你已經摸到門把了——<strong>攤開的東西，高度是由『同一瞬間有多少貢獻疊在一起』決定的，而不是由總量決定的</strong>。今天第 1 節就把這句話變成一條可以算的公式。另外昨天的三因子（距離、邊沿速率、受害線阻抗）與 L<sub>M</sub> = L/(1+(s/h)²) 今天全程要用，忘了就先回 Day 18 第 1、2 節掃一眼。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：灑水車與滾雪球</span>
+  <p>先把今天兩個主角的性格講清楚。<strong>NEXT 是灑水車</strong>：一輛灑水車沿路開過去（攻擊邊沿行進），你站在路口（近端）。你鼻子聞到的水氣濃度，只由「此刻飄得到你鼻子的那一小段路」決定——車開得再遠、路再長，同一瞬間能飄到你面前的水氣就只有附近幾十公尺貢獻的，所以<strong>濃度會封頂（飽和）</strong>；路更長只代表你「聞更久」（平台變寬），不會「聞更濃」（振幅不變）。而那一小段路的長度，就是由邊沿時間 t<sub>r</sub> 換算出來的——這就是飽和長度。<strong>FEXT 是滾雪球</strong>：噪聲跟著攻擊邊沿<strong>同速並肩跑</strong>，每前進一公分就往同一顆雪球上再糊一層雪——跑得越遠球越大（正比長度），而邊沿越陡、單位長度糊上去的雪越多（正比 1/t<sub>r</sub>）——<strong>永不飽和，雙重成長</strong>。公式看不懂可以先跳過：「NEXT 會封頂、FEXT 不封頂還吃兩份成長」，這兩句就是今天的骨架。</p>
+</div>
+
+<h2>1. NEXT 的飽和：為什麼「更長」只會「更寬」不會「更高」</h2>
+
+<p>把昨天的漣漪圖拿出來重看一次，這次盯緊時間軸。攻擊邊沿從近端出發沿線行進，行進到位置 x 時在那裡漏一份噪聲；這份噪聲要<strong>往回走 x 的距離</strong>才回得到近端。所以：</p>
+<div class="formula">位置 x 漏的噪聲抵達近端的時刻：t = x/v（邊沿走過去）+ x/v（噪聲走回來）= 2x/v</div>
+<p><em>白話翻譯：越遠處漏的，回來得越晚——這就是昨天「先漏先到、頭尾相接攤成長浪」的數學版，也是 NEXT 平台寬度 = 2T<sub>D</sub> 的出處。</em></p>
+
+<p>關鍵一步來了。每個位置漏的噪聲不是一個瞬間脈衝，而是一段<strong>持續 t<sub>r</sub></strong> 的小波（因為攻擊邊沿翻轉需要 t<sub>r</sub> 這麼久）。那麼「近端在某一瞬間 t 收到的總噪聲」，是哪些位置的貢獻？——是所有滿足「2x/v 落在 (t − t<sub>r</sub>, t] 之間」的位置，解出來是一段<strong>空間窗口，寬度 = v·t<sub>r</sub>/2</strong>。這個窗口就是灑水車比喻裡「此刻飄得到你鼻子的那段路」：</p>
+
+<div class="formula">NEXT 飽和條件：耦合段長 Len ≥ L<sub>sat</sub> = v·t<sub>r</sub>/2　⟺　T<sub>D</sub> ≥ t<sub>r</sub>/2　⟺　2T<sub>D</sub> ≥ t<sub>r</sub></div>
+<p><em>白話翻譯：當耦合段長到「來回一趟的時間超過一個邊沿時間」，同一瞬間疊在近端的貢獻數就到頂了——之後再加長，只是讓平台持續更久（寬度 2T<sub>D</sub> 繼續長大），高度紋風不動。注意第三種寫法 2T<sub>D</sub> ≥ t<sub>r</sub>：左邊正是昨天 NEXT 平台的寬度，右邊是它的過渡緣——<strong>「平台寬度長到超過它自己的上升緣」的那一刻，就是飽和的那一刻</strong>。三種寫法是同一句話，面試時能自由切換會非常好看。</em></p>
+
+<p>飽和之後的振幅是多少？標準 SI 理論給它一個名字——<strong>後向串擾係數（backward crosstalk coefficient）k<sub>b</sub></strong>：</p>
+<div class="formula">V<sub>NEXT,飽和</sub> = k<sub>b</sub> · V<sub>a</sub>，其中 k<sub>b</sub> = ¼ ( C<sub>M</sub>/C + L<sub>M</sub>/L )　　（未飽和時：V<sub>NEXT</sub> ≈ k<sub>b</sub> · V<sub>a</sub> · 2T<sub>D</sub>/t<sub>r</sub>，線性爬升）</div>
+<p><em>白話翻譯：k<sub>b</sub> 是「容性耦合比例與感性耦合比例的平均，再打對折」——打對折是因為漏進受害線的噪聲對半分流、只有一半往近端跑（Day 18 第 3 節）。它是純幾何量：只跟截面（s、h、W、介質）有關，跟長度、跟 t<sub>r</sub> 都無關——這就是為什麼它能當「飽和值」。緊耦合的 50 Ω 微帶（s ≈ W）k<sub>b</sub> 約在 <strong>5% 量級</strong>（精確值依疊構而定，定案要靠場解器模擬）。V<sub>a</sub> 是攻擊訊號擺幅。公式推導看不懂沒關係，記住行為：<strong>沒飽和前，NEXT 隨長度線性爬；碰到 k<sub>b</sub> 就封頂</strong>。</em></p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「我的耦合段才 1 公分，很短，串擾一定小」</span>
+  <p>短不短要跟 <strong>v·t<sub>r</sub>/2</strong> 比，不是跟直覺比。板內 v ≈ 15 cm/ns：t<sub>r</sub> = 1 ns 的老訊號，飽和長度 7.5 cm——1 cm 確實只爬到飽和值的一小段；但 t<sub>r</sub> = 100 ps 的現代訊號，飽和長度只有 <strong>0.75 cm</strong>——你那「才 1 公分」的並行段<strong>已經飽和</strong>，NEXT 一毛不少全額奉上。這是 Day 13「平台升級翻案潮」的串擾版：<strong>layout 一字未改，新平台把 t<sub>r</sub> 變快，昨天沒飽和的耦合段今天飽和了</strong>，串擾憑空長大。練習 5 會讓你把這個翻案算出確切倍數。</p>
+</div>
+
+<h2>2. FEXT 的線性成長：越長越大、越快越大</h2>
+
+<p>FEXT 為什麼沒有飽和？回到滾雪球：前向噪聲與攻擊邊沿<strong>同速同向</strong>，兩者永遠肩並肩——耦合段的每一公分都在往<strong>同一個波頭</strong>上追加貢獻，沒有「先到後到攤開」的機制，自然沒有封頂。標準結果（微帶線，攻擊為上升沿時取負號）：</p>
+<div class="formula">V<sub>FEXT</sub> ≈ − ½ ( L<sub>M</sub>/L − C<sub>M</sub>/C ) · (T<sub>D</sub>/t<sub>r</sub>) · V<sub>a</sub>　——振幅 ∝ 耦合長度（T<sub>D</sub> = Len/v），∝ 1/t<sub>r</sub>，尖峰寬度 ≈ t<sub>r</sub></div>
+<p><em>白話翻譯：括號裡是「感性比例減容性比例」——昨天講過的減法：帶狀線介質均勻、兩項打平，括號 ≈ 0，FEXT ≈ 0；微帶被空氣稀釋容性、感性勝出，括號為正、前面掛負號 → 上升沿打出負尖峰。括號外是兩個成長引擎：<strong>T<sub>D</sub>（越長越大）與 1/t<sub>r</sub>（越快越大）</strong>。兩個引擎相乘意味著：平行段加倍、同時邊沿又快一倍 → FEXT 直接 ×4。這也解釋了一個工程直覺：<strong>FEXT 是長平行 bus 與快邊沿時代的病，NEXT 則是「有並行就有」的地板價</strong>。</em></p>
+
+<table>
+  <tr><th></th><th>NEXT（近端）</th><th>FEXT（遠端）</th></tr>
+  <tr><td>隨耦合長度</td><td>線性爬升 → <strong>T<sub>D</sub> = t<sub>r</sub>/2 飽和封頂</strong></td><td><strong>線性成長，無飽和</strong></td></tr>
+  <tr><td>隨邊沿速率</td><td>飽和後振幅<strong>與 t<sub>r</sub> 無關</strong>（只由 k<sub>b</sub> 決定）</td><td>振幅 ∝ <strong>1/t<sub>r</sub></strong></td></tr>
+  <tr><td>波形</td><td>正極性寬矮平台，寬 ≈ 2T<sub>D</sub></td><td>窄尖峰，寬 ≈ t<sub>r</sub>；微帶上升沿為負</td></tr>
+  <tr><td>介質均勻（帶狀線）</td><td>照樣存在（加法躲不掉）</td><td>理想 ≈ 0（減法打平）</td></tr>
+  <tr><td>一句話性格</td><td>灑水車：封頂之後只變寬</td><td>滾雪球：兩個引擎、永不封頂</td></tr>
+</table>
+<p><em>白話翻譯：這張表建議直接抄進筆記本——debug 與面試各用得上一半。特別記「飽和後 NEXT 與 t<sub>r</sub> 無關」這格：它意味著<strong>放慢邊沿救得了未飽和的 NEXT 與所有 FEXT，救不了已飽和的 NEXT</strong>——已飽和的 NEXT 只能動幾何（s、h）。開藥前先判斷病人在曲線的哪一段。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">NEXT 飽和封頂 vs FEXT 線性成長——振幅對耦合長度的兩種性格</text>
+  <!-- axes -->
+  <line x1="90" y1="380" x2="700" y2="380" stroke="#374151" stroke-width="1.5"/>
+  <line x1="90" y1="380" x2="90" y2="60" stroke="#374151" stroke-width="1.5"/>
+  <text x="700" y="400" text-anchor="end" font-size="10" fill="#374151">耦合段長度 Len →</text>
+  <text x="60" y="70" font-size="10" fill="#374151" transform="rotate(-90 60 70)"></text>
+  <text x="82" y="56" text-anchor="end" font-size="10" fill="#374151">串擾振幅</text>
+  <!-- saturation line -->
+  <line x1="300" y1="380" x2="300" y2="80" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="300" y="72" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">飽和長度 L_sat = v·t_r/2（T_D = t_r/2）</text>
+  <!-- NEXT curve: linear then flat -->
+  <path d="M90,380 L300,220 L700,220" fill="none" stroke="#16a34a" stroke-width="3"/>
+  <text x="470" y="208" text-anchor="middle" font-size="11" font-weight="bold" fill="#16a34a">NEXT：封頂在 k_b·V_a，再長只變寬不變高</text>
+  <line x1="90" y1="220" x2="300" y2="220" stroke="#16a34a" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="86" y="224" text-anchor="end" font-size="9.5" fill="#16a34a">k_b·V_a</text>
+  <text x="185" y="300" text-anchor="middle" font-size="9" fill="#166534" transform="rotate(-37 185 300)">未飽和：∝ 2T_D/t_r 線性爬升</text>
+  <!-- FEXT curve: linear no saturation -->
+  <path d="M90,380 L700,120" fill="none" stroke="#7c3aed" stroke-width="3" stroke-dasharray="8 4"/>
+  <text x="600" y="128" text-anchor="end" font-size="11" font-weight="bold" fill="#7c3aed">FEXT：∝ Len/t_r，永不飽和</text>
+  <!-- annotation boxes -->
+  <rect x="110" y="86" width="168" height="88" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="194" y="106" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#166534">灑水車（NEXT）</text>
+  <text x="194" y="124" text-anchor="middle" font-size="8.5" fill="#166534">同一瞬間只有寬 v·t_r/2 的</text>
+  <text x="194" y="138" text-anchor="middle" font-size="8.5" fill="#166534">空間窗口在貢獻 → 濃度封頂</text>
+  <text x="194" y="156" text-anchor="middle" font-size="8.5" fill="#166534">板內 v≈15cm/ns、t_r=100ps</text>
+  <text x="194" y="168" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#dc2626">→ L_sat 只有 0.75 cm！</text>
+  <rect x="480" y="288" width="200" height="74" rx="8" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="580" y="308" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#5b21b6">滾雪球（FEXT）</text>
+  <text x="580" y="326" text-anchor="middle" font-size="8.5" fill="#5b21b6">每公分都往同一波頭追加</text>
+  <text x="580" y="340" text-anchor="middle" font-size="8.5" fill="#5b21b6">長度×2 且 t_r÷2 → 振幅 ×4</text>
+  <text x="580" y="354" text-anchor="middle" font-size="8.5" fill="#5b21b6">（帶狀線例外：減法打平 ≈ 0）</text>
+  <!-- bottom takeaway -->
+  <rect x="90" y="412" width="610" height="38" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="395" y="428" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">開藥前先定位：已飽和的 NEXT 對「放慢邊沿」免疫，只能動幾何（s、h）；FEXT 與未飽和 NEXT 則吃 t_r 的藥</text>
+  <text x="395" y="443" text-anchor="middle" font-size="9" fill="#991b1b">平台升級 t_r 變快 → 飽和線 L_sat 左移 → 昨天沒飽和的耦合段今天飽和（layout 未改、串擾長大）</text>
+</svg>
+<figcaption>圖 1：串擾振幅 vs 耦合長度。NEXT（實線）線性爬升至 L<sub>sat</sub> = v·t<sub>r</sub>/2 後封頂在 k<sub>b</sub>·V<sub>a</sub>；FEXT（虛線）雙引擎線性成長、無飽和。紅色虛線（飽和線）的位置由 t<sub>r</sub> 決定——邊沿越快、飽和線越往左移，越短的並行段也會「全額」交出 NEXT。</figcaption>
+</figure>
+
+<h2>3. 從噪聲預算倒推間距：取代「背 3W」的正規流程</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：家庭記帳法——先分信封，再回頭定規矩</span>
+  <p>接收端能容忍的總噪聲，就像一份月薪：房租、伙食、交通各拿一個信封，加起來不能超過薪水。訊號的「噪聲裕度（noise margin）」也是這樣分信封的：反射拿一份、電源雜訊拿一份、串擾拿一份……<strong>串擾分到的那個信封有多厚，反過來就決定了間距要拉多開</strong>。3W 這種口訣像「聽說每月伙食一萬就夠」——單身可能夠，一家五口一定爆。正規做法是<strong>先算自己家的帳，再回頭定自己家的規矩</strong>。這一節的五步流程，就是 SI 工程師的記帳本——也是面試官聽到會坐直的答法。</p>
+</div>
+
+<p>五步流程（設計新板或 review 疊構變更時走一遍）：</p>
+<ol>
+  <li><strong>定總預算</strong>：受害訊號的噪聲裕度是多少？（接收端規格書給：V<sub>IH</sub>/V<sub>IL</sub> 裕度、或差動介面的最小眼高。）</li>
+  <li><strong>分信封</strong>：總裕度分給各路噪聲源——反射、電源塌陷、串擾、ISI……常見起手式是給串擾分到<strong>總裕度的一個固定比例</strong>（各家設計準則不同，常見約在噪聲裕度的四分之一到三分之一量級），得到「串擾上限 V<sub>xtalk,max</sub>」。</li>
+  <li><strong>換算成耦合係數上限</strong>：k<sub>b,max</sub> = V<sub>xtalk,max</sub> / V<sub>a</sub>（攻擊訊號擺幅）。注意用<strong>最壞情況</strong>：NEXT 按飽和值算（除非你能保證並行段永遠短於 L<sub>sat</sub>），多攻擊線要先疊加（第 4 節）再比對上限。</li>
+  <li><strong>把 k<sub>b,max</sub> 翻譯成幾何</strong>：用場解器（2D field solver）掃 s/h 對 k<sub>b</sub> 的曲線，找出滿足上限的最小間距——這正是 PT2 Ch.6 Figure 6.7/6.8 那兩張圖在做的事：<strong>橫軸間距（0–20 mil）、縱軸耦合百分比（0–20%），一條曲線一種疊構</strong>，實測畫出「耦合 % 隨間距衰減」讓你反查（Perfect Timing II Ch.6）。書中曲線同時展示：受害線阻抗越高耦合越大（70 Ω &gt; 60 Ω &gt; 50 Ω）、線越寬耦合越小——所以查表前先固定自己的 Z₀ 與 W。2002 年的曲線對應當年的疊構與邊沿，<strong>數值不能直接搬到現代板，方法論照搬</strong>：用你自己疊構的模擬曲線做同一件事。</li>
+  <li><strong>回寫成 layout 規則</strong>：把查到的最小間距（以及「MIPI 下方保實心地」這類結構性前提）寫進設計規範與 DRC——讓規則帶著自己的推導出處，下次平台升級（t<sub>r</sub> 變快、擺幅變小）才知道哪一步要重算。</li>
+</ol>
+
+<p>對照組：<strong>3W 規則</strong>只回答了第 4 步的一半（而且用 W 偷換了主角 s/h，Day 18 講過），前三步全部跳過——它不知道你的裕度多大、鄰居多吵、並行多長。快篩可以，定案不行。<strong>面試時被問 spacing rule，能把五步講完的人，跟只會背 3W 的人，是兩個世界。</strong></p>
+
+<div class="card takeaway">
+  <span class="label">一句話世界觀升級</span>
+  <p>間距規則不是常數，是<strong>推導結果</strong>——輸入是「裕度、擺幅、邊沿、疊構、並行長度」，其中任何一個變了，答案就該重算。把規則當常數背的團隊，每次平台升級都會被同一顆石頭絆倒；把規則當推導存的團隊，升級時只要重跑第 3、4 步。</p>
+</div>
+
+<h2>4. 多攻擊線疊加：兩側夾擊與 pattern 的陰謀</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：兩邊鄰居同一晚開派對</span>
+  <p>你家（受害線）左右兩戶（兩條攻擊線）各自開派對都還能忍——最慘的是<strong>同一晚、同一首歌、同一拍</strong>一起開：兩邊的噪聲同相位疊加，直接翻倍。bus 上這件事天天發生：一整排 data 線常常<strong>同時同向翻轉</strong>（例如 0x00 → 0xFF），夾在中間的那條線就是被全員圍毆的受害者。這也解釋了串擾故障的招牌長相——<strong>只在特定資料 pattern 出現</strong>：pattern 決定了哪幾戶今晚開派對、放的歌同不同拍。</p>
+</div>
+
+<p>工程處理三原則：</p>
+<ul>
+  <li><strong>疊加要用最壞情況</strong>：受害線兩側各一條攻擊線、耦合各為 k，兩側同時同向翻轉 → 串擾約 <strong>2k</strong>（第二圈鄰居也有貢獻，但耦合隨距離平方衰減——Day 18 的 L<sub>M</sub> 公式——通常小一個量級，預算緊時才納入）。第 3 節第 3 步的比對，用的是這個疊加後的值。</li>
+  <li><strong>方向也算 pattern</strong>：兩側攻擊線<strong>反向</strong>翻轉時串擾部分抵消——所以同一塊板、同一組線，有的 pattern 過、有的 pattern 掛。FA 時「掃 pattern 找出最壞組合」本身就是定位串擾的武器：最壞 pattern 的形狀，會告訴你哪幾條線在合謀。</li>
+  <li><strong>受害端狀態有關</strong>：串擾打在受害線「正要採樣」的時刻才致命——同樣振幅的噪聲，落在資料眼中央是 error，落在切換沿附近可能只是 jitter（週 5 的 ISI/jitter 會接手這條線）。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">噪聲預算倒推間距（五步流程）＋ 兩側夾擊的最壞情況</text>
+  <!-- flow -->
+  <rect x="40" y="50" width="130" height="58" rx="8" fill="#f0f9ff" stroke="#0e7490"/>
+  <text x="105" y="72" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">① 總噪聲裕度</text>
+  <text x="105" y="88" text-anchor="middle" font-size="8.5" fill="#0f4c5c">接收端規格書</text>
+  <text x="105" y="100" text-anchor="middle" font-size="8.5" fill="#0f4c5c">（V_IH/V_IL、眼高）</text>
+  <polygon points="176,79 194,79 190,73 202,79 190,85 194,79" fill="#0e7490"/>
+  <rect x="204" y="50" width="130" height="58" rx="8" fill="#f0f9ff" stroke="#0e7490"/>
+  <text x="269" y="72" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">② 分信封</text>
+  <text x="269" y="88" text-anchor="middle" font-size="8.5" fill="#0f4c5c">反射/電源/串擾/ISI</text>
+  <text x="269" y="100" text-anchor="middle" font-size="8.5" fill="#0f4c5c">→ V_xtalk,max</text>
+  <polygon points="340,79 358,79 354,73 366,79 354,85 358,79" fill="#0e7490"/>
+  <rect x="368" y="50" width="130" height="58" rx="8" fill="#f0f9ff" stroke="#0e7490"/>
+  <text x="433" y="72" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">③ 換算係數上限</text>
+  <text x="433" y="88" text-anchor="middle" font-size="8.5" fill="#0f4c5c">k_max = V_xtalk/V_a</text>
+  <text x="433" y="100" text-anchor="middle" font-size="8.5" fill="#0f4c5c">最壞情況：飽和＋疊加</text>
+  <polygon points="504,79 522,79 518,73 530,79 518,85 522,79" fill="#0e7490"/>
+  <rect x="532" y="50" width="130" height="58" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="597" y="72" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#166534">④ 翻譯成幾何</text>
+  <text x="597" y="88" text-anchor="middle" font-size="8.5" fill="#166534">場解器掃 s/h→k 曲線</text>
+  <text x="597" y="100" text-anchor="middle" font-size="8.5" fill="#166534">（PT2 Fig 6.7/6.8 的用法）</text>
+  <polygon points="597,114 597,132 591,128 597,140 603,128 597,132" fill="#16a34a"/>
+  <rect x="532" y="144" width="130" height="46" rx="8" fill="#fefce8" stroke="#ca8a04"/>
+  <text x="597" y="163" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#854d0e">⑤ 回寫 layout 規則</text>
+  <text x="597" y="179" text-anchor="middle" font-size="8.5" fill="#854d0e">規則要帶推導出處</text>
+  <text x="380" y="216" text-anchor="middle" font-size="9.5" fill="#dc2626" font-weight="bold">對照組：3W 只做了④的一半，①②③⑤全跳過——快篩可以，定案不行</text>
+  <!-- sandwich cross-section -->
+  <text x="60" y="252" font-size="10" fill="#6b7280">兩側夾擊（俯視）：bus 中間那條線的最壞一天</text>
+  <line x1="100" y1="280" x2="660" y2="280" stroke="#dc2626" stroke-width="4"/>
+  <text x="90" y="284" text-anchor="end" font-size="9.5" fill="#dc2626">Aggressor A</text>
+  <line x1="100" y1="320" x2="660" y2="320" stroke="#0e7490" stroke-width="4"/>
+  <text x="90" y="324" text-anchor="end" font-size="9.5" fill="#0e7490">Victim</text>
+  <line x1="100" y1="360" x2="660" y2="360" stroke="#dc2626" stroke-width="4"/>
+  <text x="90" y="364" text-anchor="end" font-size="9.5" fill="#dc2626">Aggressor B</text>
+  <line x1="280" y1="288" x2="280" y2="312" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 2"/>
+  <line x1="280" y1="352" x2="280" y2="328" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 2"/>
+  <text x="292" y="304" font-size="9" fill="#b45309">k</text>
+  <text x="292" y="344" font-size="9" fill="#b45309">k</text>
+  <rect x="420" y="288" width="230" height="64" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="535" y="308" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">同時同向翻轉 → 約 2k（同相疊加）</text>
+  <text x="535" y="324" text-anchor="middle" font-size="8.5" fill="#991b1b">反向翻轉 → 部分抵消</text>
+  <text x="535" y="340" text-anchor="middle" font-size="8.5" fill="#991b1b">→ 故障必然 pattern-dependent</text>
+  <text x="380" y="392" text-anchor="middle" font-size="9.5" fill="#6b7280">第二圈鄰居：耦合隨距離平方衰減（L_M = L/(1+(s/h)²)），通常小一個量級——預算緊時才納入</text>
+  <text x="380" y="414" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">FA 武器：掃 pattern 找最壞組合——最壞 pattern 的形狀會供出哪幾條線在合謀</text>
+</svg>
+<figcaption>圖 2：上——噪聲預算倒推間距的五步流程，PT2 Ch.6 Fig 6.7/6.8 的「耦合 % vs 間距」曲線就是第④步的查表工具（現代做法換成自家疊構的場解器曲線）。下——兩側夾擊：同時同向翻轉時兩份耦合同相疊加約 2k，這就是串擾故障 pattern-dependent 的根源。</figcaption>
+</figure>
+
+<h2>5. 數學收口：三把尺與它們的親戚</h2>
+<table>
+  <tr><th>今天的量</th><th>接回哪一課</th><th>一句話</th></tr>
+  <tr><td>L<sub>sat</sub> = v·t<sub>r</sub>/2</td><td>Day 3（t<sub>r</sub> 對應的空間長度 ℓ = v·t<sub>r</sub>）、Day 4（何時當傳輸線）</td><td>飽和長度就是「邊沿空間長度的一半」——跟「線長超過 ℓ/6 要當傳輸線」同一家族：都是拿 t<sub>r</sub> 換算成尺寸再跟板上長度比</td></tr>
+  <tr><td>2T<sub>D</sub> ≥ t<sub>r</sub> 的飽和條件</td><td>Day 18（NEXT 平台寬 2T<sub>D</sub>）、Day 9（TDR 的 2T<sub>D</sub>）</td><td>平台寬度長到超過自己的上升緣就封頂——「來回一趟」第三次出場</td></tr>
+  <tr><td>k<sub>b</sub> = ¼(C<sub>M</sub>/C + L<sub>M</sub>/L)</td><td>Day 18（對半分流、L<sub>M</sub> 公式）</td><td>純截面幾何量，長度與 t<sub>r</sub> 都碰不到它——所以它有資格當飽和值</td></tr>
+  <tr><td>FEXT ∝ (L<sub>M</sub>/L − C<sub>M</sub>/C)·T<sub>D</sub>/t<sub>r</sub></td><td>Day 18（減法機制）、Day 5（微帶空氣稀釋）</td><td>括號管「有沒有」（帶狀線 ≈ 0），括號外管「有多大」（雙引擎）</td></tr>
+  <tr><td>噪聲預算五步流程</td><td>Day 8（端接的預算思維）、Day 13（規則要帶出處）</td><td>SI 的所有 layout 規則都是推導結果——輸入變了就重算，這句話反射、串擾通用</td></tr>
+</table>
+<p><em>白話翻譯：注意 L<sub>sat</sub> 與 Day 4「要不要當傳輸線」的判斷式長得像親戚不是巧合——SI 裡一大半的門檻，都是「把 t<sub>r</sub> 換算成長度，再跟板上的實際長度比大小」。抓住這個模式，新公式會越背越少。</em></p>
+
+<h2>6. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——DDR 並行段的「翻案」帳單：</strong>address/command 線成排並行是主機板日常。老平台 t<sub>r</sub> ≈ 1 ns 時飽和長度 7.5 cm，多數並行段沒飽和、NEXT 只收部分；新平台 t<sub>r</sub> 掉到幾百 ps，飽和線左移到 1–2 cm——<strong>板上幾乎所有並行段一夜之間全額繳稅</strong>，而且是整個 byte 同向翻轉的疊加版。這就是為什麼資深 SI 工程師拿到新平台的第一件事是查 t<sub>r</sub>，第二件事是把舊 spacing rule 的推導翻出來重跑——規則沒帶出處的團隊，這時只能重新試錯。</li>
+  <li><strong>鏡頭模組——flex 上的間距值多少錢：</strong>camera flex 寬度以 mm 計，每 0.1 mm 間距都是真金白銀（更寬的 flex＝更貴＋更難繞進轉軸）。所以 flex 上「間距要多開」比主機板更值得走五步流程精算而不是抓大放小：MIPI 差動擺幅約 200 mV 量級，眼高預算裡分給串擾的信封可能只有幾十 mV——除以 VCM 驅動的攻擊擺幅，k<sub>max</sub> 常是主機板規則的好幾倍嚴。算出來若間距不可行，答案不是硬塞，而是回頭改結構：VCM 線與 MIPI 分區、中間布地（Day 20 的 guard trace）、MIPI 下方局部實心地壓 h——<strong>結構性手段把 k 曲線整條往下搬，比在同一條曲線上滑動便宜</strong>。週 15 的 VCM/OIS 專課會帶完整數字再走一遍。</li>
+  <li><strong>面試白板：</strong>「How do you determine trace spacing?」是 Apple/Google HW 面試的送分題兼陷阱題——答 3W 送分（給面試官扣你分）。期待的答案是五步流程＋最壞情況疊加＋「飽和後放慢邊沿無效」這種顯示你懂機制的細節。今天第 3 節整節就是這一題的逐字稿。</li>
+</ul>
+
+<h2>7. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。板內傳播速度一律取 v ≈ 15 cm/ns。</p>
+
+<details>
+<summary>練習 1（飽和長度的手感）：(a) t<sub>r</sub> = 1 ns、300 ps、100 ps 三種邊沿的 NEXT 飽和長度各是多少？(b) 一段 3 cm 的並行段，在這三種邊沿下各處於「未飽和／剛好／已飽和」哪一區？(c) 已飽和的情況下，攻擊擺幅 V<sub>a</sub> = 1.0 V、k<sub>b</sub> = 0.05（假設值），NEXT 振幅多大？(d) 未飽和的那一種，NEXT 振幅是飽和值的幾成？</summary>
+<p><strong>解：</strong>(a) L<sub>sat</sub> = v·t<sub>r</sub>/2 = 7.5 cm、2.25 cm、0.75 cm。(b) 3 cm 對 7.5 cm → <strong>未飽和</strong>；對 2.25 cm → <strong>已飽和</strong>（3 &gt; 2.25）；對 0.75 cm → <strong>深度飽和</strong>。(c) V<sub>NEXT</sub> = k<sub>b</sub>·V<sub>a</sub> = 0.05 × 1.0 V = <strong>50 mV</strong>——注意 300 ps 與 100 ps 兩種邊沿答案<strong>一樣</strong>（飽和後與 t<sub>r</sub> 無關）。(d) t<sub>r</sub> = 1 ns：未飽和比例 = 2T<sub>D</sub>/t<sub>r</sub> = (2 × 3/15 ns)/1 ns = 0.4 → 振幅 ≈ 0.4 × 50 mV = <strong>20 mV，即飽和值的四成</strong>。同一段銅，三種邊沿三種帳單——<strong>串擾是邊沿的函數，不是 layout 的函數</strong>（layout 只決定上限）。</p>
+</details>
+
+<details>
+<summary>練習 2（FEXT 的雙引擎）：微帶線耦合段 2 cm、t<sub>r</sub> = 200 ps 時，遠端量到 −30 mV 尖峰（假設值）。平台升級後耦合段改走 4 cm、t<sub>r</sub> 變 100 ps。(a) 新的 FEXT 約多大？(b) 尖峰寬度從多少變多少？(c) 若升級同時把這段改到內層帶狀線，FEXT 大約變怎樣？NEXT 呢？(d) 「放慢邊沿」對 (a) 的新情況有效嗎？對比：同樣的藥對練習 1(c) 的飽和 NEXT 有效嗎？</summary>
+<p><strong>解：</strong>(a) FEXT ∝ 長度/t<sub>r</sub>：長度 ×2、t<sub>r</sub> ÷2 → ×4 → 約 <strong>−120 mV</strong>。(b) 寬度 ≈ t<sub>r</sub>：200 ps → <strong>100 ps</strong>（更窄但更高——能量更集中，對採樣點更致命）。(c) 帶狀線介質均勻、容感打平 → FEXT 理想 ≈ 0，實際剩殘餘（玻纖編織等，遠小於微帶）；<strong>NEXT 照舊存在</strong>（加法躲不掉），只小幅受益於場被上下地夾住。(d) 對 FEXT <strong>有效</strong>——FEXT 全程 ∝ 1/t<sub>r</sub>，t<sub>r</sub> 放慢一倍尖峰減半；對已飽和的 NEXT <strong>無效</strong>——飽和值只由 k<sub>b</sub> 決定。這就是「開藥前先定位在曲線哪一段」的實戰意義：同一顆 slew-rate 藥，一個病人有效、另一個免疫。</p>
+</details>
+
+<details>
+<summary>練習 3（五步流程完整走一遍）：某單端訊號接收端噪聲裕度 400 mV（假設值），設計準則分給串擾 25%。攻擊訊號擺幅 1.8 V，受害線在 bus 中間、兩側各一條攻擊線，並行段 5 cm、t<sub>r</sub> = 200 ps。場解器對此疊構掃出的單側 k<sub>b</sub>（假設值）：s = 1W → 6%、s = 2W → 3.5%、s = 3W → 2.2%、s = 4W → 1.5%。最小間距要選多少？「3W」在這題夠嗎？</summary>
+<p><strong>解：</strong>①總裕度 400 mV → ②串擾信封 = 100 mV → ③k<sub>max</sub>（疊加後）= 100 mV / 1.8 V ≈ 5.6%。最壞情況檢查：L<sub>sat</sub> = 15 × 0.2/2 = 1.5 cm，並行 5 cm <strong>已飽和</strong> → 用飽和值；兩側同向夾擊 → 單側上限 = 5.6%/2 = <strong>2.8%</strong>。④查表：s = 2W 的 3.5% 超標，s = 3W 的 2.2% 過關 → <strong>最小間距 s = 3W</strong>。⑤寫進規則並註明推導輸入（裕度 400 mV、擺幅 1.8 V、雙側夾擊、已飽和）。這題 3W「剛好」夠——但這是這組假設數字的巧合：把並行段換成單側攻擊（上限 5.6%），2W 就過；把裕度砍半，4W 都不夠。<strong>3W 對不對，要算完才知道——這正是它不能當定案的理由。</strong></p>
+</details>
+
+<details>
+<summary>練習 4（pattern 偵探）：一條 8-bit bus 間歇性資料錯誤，錯誤率隨測試 pattern 劇烈變化：走 0x55↔0xAA（相鄰位元反向翻轉）幾乎不錯，走 0x00↔0xFF（全體同向翻轉）錯誤最多，且錯的總是 bit 3、bit 4（bus 中間的線）。(a) 為什麼 0x00↔0xFF 最慘、0x55↔0xAA 反而沒事？(b) 為什麼中槍的是中間的線？(c) 若把資料線重新排序，把最關鍵的訊號換到 bus 邊緣，錯誤率會怎樣？這算不算正規對策？</summary>
+<p><strong>解：</strong>(a) 0x00↔0xFF：所有攻擊線<strong>同時同向</strong>翻轉，兩側耦合同相疊加（約 2k＋外圈貢獻）——最壞 pattern；0x55↔0xAA：相鄰線<strong>反向</strong>翻轉，耦合互相抵消一部分——接近最好 pattern。(b) 中間的線兩側都有全速攻擊者，外側的線只有單側鄰居（另一側是空地或別的訊號群）——同一條 bus 上，<strong>位置就是命運</strong>。(c) 錯誤率會下降——把敏感訊號調到邊緣是真實可用的手段（零成本、只動 pin swap/繞線順序）；但它是<strong>重新分配</strong>風險不是消滅風險（總得有線住中間），所以算「便宜的緩解」，正規對策仍是回五步流程檢查間距/疊構是否本來就不及格。FA 上這題的教訓更值錢：<strong>pattern 掃描本身就是串擾的定位儀</strong>——最壞 pattern 的組合方式，直接供出耦合的幾何關係。</p>
+</details>
+
+<details>
+<summary>練習 5（平台升級翻案的定量版）：舊平台某兩條線並行 3 cm、t<sub>r</sub> = 1 ns，NEXT 實測約 20 mV、通過（裕度 40 mV）。新平台唯一的改變：t<sub>r</sub> 變 300 ps。(a) 新 NEXT 約多大？用練習 1 的框架算。(b) 過不過？(c) 有人提議「把並行段從 3 cm 縮到 2 cm」救火，有效嗎？要縮到多短才回到 20 mV？(d) 這個案例對「layout 規則要帶推導出處」是什麼註腳？</summary>
+<p><strong>解：</strong>(a) 舊：L<sub>sat</sub> = 7.5 cm，3 cm 未飽和，比例 2T<sub>D</sub>/t<sub>r</sub> = 0.4 → 20 mV 對應飽和值 k<sub>b</sub>·V<sub>a</sub> = 50 mV。新：L<sub>sat</sub> = 2.25 cm，3 cm <strong>已飽和</strong> → NEXT = 全額 <strong>50 mV</strong>（漲 2.5 倍，layout 一字未改）。(b) 50 &gt; 40 mV，<strong>不過</strong>。(c) 縮到 2 cm 仍接近飽和線（2.25 cm）、只降回約 50 × (2×2/15/0.3) ≈ 44 mV 量級，不夠；要回 20 mV 需比例 = 0.4 → 2T<sub>D</sub> = 0.4 × 300 ps = 120 ps → T<sub>D</sub> = 60 ps → 長度 = <strong>0.9 cm</strong>——並行段要砍到三分之一以下，多半繞不出來，實際解要動 s/h 或結構（把 k<sub>b</sub> 本身壓低）。(d) 舊規則「並行 3 cm 可接受」其實隱含前提「t<sub>r</sub> = 1 ns、未飽和、只收四成」——前提沒寫下來，升級時就沒人知道要重算。<strong>規則不帶出處，等於埋了一顆定時炸彈並拆掉倒數計時器。</strong></p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>定量串擾是分辨「背過」與「懂了」的分水嶺題——面試官最愛從定性答案往下追一句「how much?」。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Your simulation shows the near-end crosstalk stops growing once the coupled length exceeds some value, while far-end crosstalk keeps growing. Explain why, and tell me what knobs actually reduce each one."</summary>
+<p><strong>參考答案骨架：</strong>The two behave differently because of how the noise travels relative to the aggressor edge. The backward wave — NEXT — fights its way back against the edge, so noise coupled at different positions arrives at the near end at different times: noise from position x arrives at 2x/v. Since each position only injects noise for one rise time, the near end at any instant only sums contributions from a spatial window of length v times t_r over two. Once the coupled length exceeds that window — equivalently, once the round-trip delay exceeds one rise time — the amplitude saturates at the backward coupling coefficient k_b times the aggressor swing, and extra length only widens the pulse. With 15 centimeters per nanosecond and a 100-picosecond edge, that saturation length is only about 7.5 millimeters, so on modern boards nearly every parallel run is saturated. The forward wave — FEXT — travels alongside the aggressor edge at the same speed, so every increment of coupled length adds onto the same wavefront: amplitude grows linearly with length and inversely with rise time, no saturation. That difference dictates the fixes. Slowing the edge helps FEXT everywhere and helps NEXT only below saturation — a saturated NEXT is immune to slew-rate control, because its amplitude is set purely by the cross-section geometry. For saturated NEXT you must change the geometry: more spacing, thinner dielectric so the trace hugs its return plane, or a solid reference where it was hatched. For FEXT you additionally get a structural cure: route the parallel section as stripline, where the homogeneous dielectric balances the capacitive and inductive coupling and the forward terms nearly cancel.</p>
+<p><strong>加分點：</strong>推導講到「空間窗口 v·t<sub>r</sub>/2」而不是背條件式；算出現代邊沿下飽和長度只有 mm 級的震撼數字；明確說出「飽和 NEXT 對 slew-rate 藥免疫」——這是只有懂機制的人講得出的臨床細節。</p>
+</details>
+
+<details>
+<summary>Q2: "On a camera flex you must route a MIPI pair near VCM drive lines. How do you decide the required spacing? I don't want to hear a rule of thumb."</summary>
+<p><strong>參考答案骨架：</strong>I'd treat spacing as the output of a noise-budget calculation, not an input from a rulebook. Step one, establish the victim's total noise margin — for a MIPI D-PHY lane in HS mode the differential swing is only a couple hundred millivolts, and the eye-height budget at the receiver is the hard number. Step two, allocate that budget across noise sources — reflections, supply noise, ISI, crosstalk — so crosstalk only gets a fraction, maybe a few tens of millivolts. Step three, convert to a maximum coupling coefficient by dividing by the aggressor swing — and here the aggressor is brutal: amps-level PWM with sharp edges, so the allowed coefficient comes out far stricter than on a motherboard. I'd use worst case: the coupled run on a flex is long, and with modern edge rates the saturation length is millimeters, so NEXT is at its full saturated value; if there are aggressors on both sides, sum them switching in phase. Step four, translate the coefficient into geometry with a field solver sweep of coupling versus spacing for this exact stackup — flex ground is often hatched, which raises the effective height and the coupling, so I'd model that honestly rather than reuse rigid-board curves. If the required spacing doesn't fit in the flex width — and it often doesn't — the answer isn't to squeeze the rule, it's to move to a lower coupling curve entirely: zone the flex with the VCM lines and MIPI pair on opposite edges, put grounded copper between them, keep solid ground under the MIPI pair even if the rest stays hatched, and ask for slew control at the VCM driver since taming the aggressor is the cheapest knob of all. Step five, write the result into the design rules with its assumptions attached, so when the next platform shortens the rise time we know exactly which step to redo.</p>
+<p><strong>加分點：</strong>五步結構清楚、每步有 camera flex 的在地化細節（hatched ground 要誠實建模、flex 寬度放不下時改結構而非硬塞）；「rules carry their assumptions」收尾直接回應面試官對 rule of thumb 的不屑；治 aggressor 優先的成本排序再次出現。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：NEXT 飽和條件與飽和長度？為什麼會飽和？</p>
+  <p class="a">A1：飽和條件三種等價寫法：Len ≥ L<sub>sat</sub> = v·t<sub>r</sub>/2 ⟺ T<sub>D</sub> ≥ t<sub>r</sub>/2 ⟺ 2T<sub>D</sub> ≥ t<sub>r</sub>（平台寬度超過自己的上升緣）。原因：位置 x 的噪聲在 2x/v 時刻返抵近端、每點只漏 t<sub>r</sub> 這麼久 → 同一瞬間疊加的貢獻只來自寬 v·t<sub>r</sub>/2 的空間窗口（灑水車：路再長、同時飄到鼻子的水氣有限）。數字手感：v ≈ 15 cm/ns 時，t<sub>r</sub> = 1 ns → 7.5 cm；100 ps → 0.75 cm——現代板幾乎所有並行段都已飽和。</p>
+  <p class="q">Q2：NEXT 飽和值公式？未飽和時怎麼縮放？哪種藥對飽和 NEXT 無效？</p>
+  <p class="a">A2：飽和值 V<sub>NEXT</sub> = k<sub>b</sub>·V<sub>a</sub>，k<sub>b</sub> = ¼(C<sub>M</sub>/C + L<sub>M</sub>/L)（對半分流所以打對折；緊耦合 50 Ω 微帶約 5% 量級，定案靠場解器）。k<sub>b</sub> 是純截面幾何量，與長度、t<sub>r</sub> 無關。未飽和：V<sub>NEXT</sub> ≈ k<sub>b</sub>·V<sub>a</sub>·(2T<sub>D</sub>/t<sub>r</sub>) 線性爬升。<strong>放慢邊沿救不了已飽和的 NEXT</strong>（振幅只由 k<sub>b</sub> 決定）——只能動幾何：拉 s、壓 h、實心地。</p>
+  <p class="q">Q3：FEXT 的定量行為？與 NEXT 的關鍵對比？</p>
+  <p class="a">A3：V<sub>FEXT</sub> ≈ −½(L<sub>M</sub>/L − C<sub>M</sub>/C)·(T<sub>D</sub>/t<sub>r</sub>)·V<sub>a</sub>。括號管有無（帶狀線打平 ≈ 0；微帶感性勝出、上升沿負尖峰），括號外雙引擎：∝ 耦合長度、∝ 1/t<sub>r</sub>，<strong>永不飽和</strong>（滾雪球：噪聲與邊沿同速並肩、全疊同一波頭）。長度 ×2 且 t<sub>r</sub> ÷2 → FEXT ×4。對比：NEXT 封頂後與 t<sub>r</sub> 無關；FEXT 全程吃 t<sub>r</sub> 的藥、還可用帶狀線結構性歸零。</p>
+  <p class="q">Q4：從噪聲預算倒推間距的五步流程？</p>
+  <p class="a">A4：①定總噪聲裕度（接收端規格：V<sub>IH</sub>/V<sub>IL</sub> 或眼高）→ ②分信封給各噪聲源（反射/電源/串擾/ISI），得串擾上限 → ③換算 k<sub>max</sub> = V<sub>xtalk,max</sub>/V<sub>a</sub>，用最壞情況（NEXT 取飽和值、多攻擊線先疊加）→ ④場解器掃 s/h→k 曲線反查最小間距（PT2 Ch.6 Fig 6.7/6.8「耦合 % vs 間距」實測曲線就是這用法；2002 數值不可搬、方法論照搬）→ ⑤回寫 layout 規則<strong>並附推導輸入</strong>。3W 只做了④的一半、前三步全跳過——快篩可以，定案不行。</p>
+  <p class="q">Q5：多攻擊線的最壞情況？串擾故障為什麼 pattern-dependent？</p>
+  <p class="a">A5：受害線兩側各一條攻擊線（耦合各 k）<strong>同時同向</strong>翻轉 → 同相疊加約 2k（第二圈鄰居隨距離平方衰減、通常小一個量級）；反向翻轉則部分抵消。pattern 決定哪些攻擊線同時翻、同不同向 → 0x00↔0xFF（全同向）最壞、0x55↔0xAA（相鄰反向）最好；bus 中間的線兩側受敵最慘。FA 應用：<strong>pattern 掃描就是串擾定位儀</strong>——最壞 pattern 的組合供出耦合幾何。緩解：敏感訊號調到 bus 邊緣（零成本但只是重分配風險）。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 20（週三）：串擾 III——guard trace 與屏蔽：什麼時候有效、什麼時候是安慰劑</strong></p>
+  <p>PT2 三條抗串擾路線的第二條明天開箱：在兩條線中間塞一條接地的「保鑣線」，聽起來穩賺——但做錯了（只接一端、沒打 stitching via、guard 自己諧振）反而比不加更糟。明天講清楚 guard trace 的生效機制、PT2 Ch.6 的兩端接地建議與現代 stitching via 的升級版、以及「先拉間距還是先加 guard」的決策樹。把今天的 k<sub>b</sub> 概念帶著——guard 的本事就是把 k 曲線整條往下搬。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 19 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 4/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

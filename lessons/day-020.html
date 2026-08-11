@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 20｜串擾 III——guard trace 與屏蔽：什麼時候是保鑣、什麼時候是安慰劑、什麼時候是內鬼</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 4 週・第 20 天（週三新觀念課）</div>
+  <h1>Day 20：串擾 III——guard trace 與屏蔽：什麼時候是保鑣、什麼時候是安慰劑、什麼時候是內鬼</h1>
+  <div class="meta">2026-08-12（三）｜預估學習時間：90 分鐘｜難度：★★★★☆（觀念不難，但「做對」與「做錯」只差幾顆 via——今天要學會分辨保鑣、安慰劑與內鬼）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 18 給了三條抗串擾路線（拉間距、屏蔽、差動），Day 19 把第一條「拉間距」升級成五步流程。今天開箱第二條——<strong>在攻擊線與受害線之間塞一條接地的「保鑣線」（guard trace）</strong>。也兌現 Day 19 埋的鉤子：「做錯（只接一端、沒 stitching、guard 自己諧振）反而比不加更糟」。讀完你要能夠：</p>
+  <ol>
+    <li>用場的語言解釋 guard trace 的<strong>生效機制</strong>：磁力線先在保鑣身上耗能、電力線提前終止——本質是<strong>把 k 曲線整條往下搬</strong>（Day 19 的語言）</li>
+    <li>複述 PT2 Ch.6 對 guard 的三句忠告：<strong>多數情況拉間距就解決、頑固案例才用 guard、guard 要兩端接地</strong>——並說明第三句在 2002 年夠用、在現代邊沿下為什麼<strong>不夠</strong></li>
+    <li>推導 guard 的<strong>諧振失效模式</strong>：只接兩端的 guard 是一段兩端短路的傳輸線諧振腔，第一諧振頻率 f₁ = v/(2·Len)——落在訊號頻寬內時，guard 從保鑣變<strong>內鬼</strong>（把噪聲存起來再重新發射）</li>
+    <li>會算 <strong>stitching via 間距</strong>：把 guard 的第一諧振推到訊號頻寬（f_knee ≈ 0.5/t<sub>r</sub>）之上、留足倍數餘裕的間距規則</li>
+    <li>走一遍「<strong>先拉間距還是先加 guard</strong>」決策樹，並比較第三個選項：<strong>換層屏蔽</strong>（把受害線遷到內層帶狀線）的代價與收益</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：三把尺與一條曲線</h2>
+<p>今天全程要用 Day 18/19 的家當：耦合三因子與 L<sub>M</sub> = L/(1+(s/h)²)（間距平方衰減、h 在分母裡也是平方）；k<sub>b</sub> 是純截面幾何量、飽和 NEXT 對放慢邊沿免疫；五步流程的第④步「場解器掃 s/h 對 k 的曲線」。還要借 Day 16 的回流路徑觀念（訊號線下方的平面是它的鏡像與歸途）與 Day 12 的 stub 諧振（一段沒管好的銅會在特定頻率變成諧振腔）。如果「k 曲線」三個字沒畫面，回 Day 19 第 3 節掃一眼再回來。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：吸音牆、紙糊的牆、會回音的牆</span>
+  <p>兩戶人家中間隔一道牆，吵鬧就少一點——這是 guard trace 的直覺：<strong>攻擊線發出的「場」，一部分先打在中間這條接地的銅線上被吃掉，穿到受害線的就變少了</strong>。但牆有三種。<strong>吸音牆</strong>：接地接得紮實（兩端＋中間多點打 via 到地），場打上來的能量真的被導走——這是做對的 guard。<strong>紙糊的牆</strong>：間距本來就夠、串擾本來就小，塞一條 guard 只是心理安慰，還吃掉寶貴的繞線空間——PT2 說「多數情況拉間距就解決了」講的就是這個。<strong>會回音的牆</strong>：牆只有兩端固定、中間懸空——聲音打上去不但沒被吸掉，還在牆體裡來回反彈，在特定音高（諧振頻率）越彈越響，最後整面牆變成第二個音源對著你家唱歌——這是只接兩端、沒打 stitching via 的 guard 在高速訊號下的下場，<strong>比不加牆更糟</strong>。今天的任務就一句話：學會蓋吸音牆，認出紙糊的牆，拆掉會回音的牆。公式看不懂可以先跳過，抓住「三種牆」就抓住今天了。</p>
+</div>
+
+<h2>1. 生效機制：保鑣是怎麼擋子彈的</h2>
+
+<p>把 Day 18 的耦合圖拿出來，在攻擊線與受害線中間插一條接地銅線，發生兩件事：</p>
+<ul>
+  <li><strong>電場（容性耦合 C<sub>M</sub>）</strong>：攻擊線發出的電力線本來有一部分終止在受害線上（這就是 C<sub>M</sub>）。插入接地的 guard 之後，相當一部分電力線<strong>提前終止在 guard 上</strong>——guard 電位被地釘死，這些電荷直接被導走，到不了受害線。C<sub>M</sub> 變小。</li>
+  <li><strong>磁場（感性耦合 L<sub>M</sub>）</strong>：攻擊電流的磁力線切過 guard 時，在 guard 上感應出<strong>反向的渦流／鏡像電流</strong>；這股電流自己產生的磁場與原磁場相消，等效於磁力線的一部分能量「在保鑣身上先耗掉了」。穿到受害線的磁通變少，L<sub>M</sub> 變小。PT2 的原話值得整句記下：「the magnetic lines will have a portion of their energy developed in the protective traces, usually at ground potential, and the field that cuts across the trace being shielded is less」（磁力線的一部分能量會在這些通常接地的防護線上被消耗，切過受屏蔽線的場因此變小）（Perfect Timing II Ch.6）。</li>
+</ul>
+
+<div class="formula">guard 的本質：C<sub>M</sub>↓ 且 L<sub>M</sub>↓ ⇒ k<sub>b</sub> = ¼(C<sub>M</sub>/C + L<sub>M</sub>/L) 整體下降 ⇒ <strong>k 對 s 的整條曲線向下平移</strong></div>
+<p><em>白話翻譯：Day 19 說過，在同一條 k 曲線上滑動（拉間距）是一種手段，把曲線整條往下搬（改結構）是更強的手段。guard 就是「往下搬」家族的成員——它不是把鄰居推遠，而是在你們中間裝了一台除噪機。順帶一提，這個家族的老大哥你早就認識：<strong>訊號線下方的實心地平面，就是效果最好的 guard</strong>——壓 h 讓場緊貼平面（L<sub>M</sub> 分母裡的 (s/h)² 暴漲），比同層塞任何銅條都有效。同層 guard 是「平面顧不到的側向」的補丁。</em></p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「guard 越寬越好、越多條越好」</span>
+  <p>guard 吃掉的是<strong>繞線空間</strong>：一條 guard 的代價 = 一條線寬 + 兩個間隙。同樣的橫向預算若直接拿去拉大 s，靠 L<sub>M</sub> 的平方衰減（PT2 Ch.6：「doubling the distance will reduce the coupling by a factor of four」——間距加倍、耦合降四倍）常常已經達標。<strong>guard 不是免費的外掛，是跟「拉間距」搶同一塊地的競爭方案</strong>——所以才有第 4 節的決策樹。這也是 PT2 把話講得很直白的原因：「This is not often the case as increasing the signal separation will solve the crosstalk issues.（多數情況下拉大間距就能解決串擾問題）But in stubborn cases or when the absolutely lowest noise environment must be obtained, guard traces should be considered.（但在頑固案例、或必須取得絕對最低噪聲環境時，才應考慮 guard trace）」（Perfect Timing II Ch.6）。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">guard trace 生效機制（剖面）＋ PT2 Fig 6.9 的結構</text>
+  <!-- left: no guard -->
+  <text x="190" y="52" text-anchor="middle" font-size="11" font-weight="bold" fill="#374151">沒有 guard：場直達受害線</text>
+  <rect x="60" y="180" width="260" height="10" fill="#94a3b8"/>
+  <text x="190" y="206" text-anchor="middle" font-size="9" fill="#64748b">地平面（h 越薄、場抓得越緊）</text>
+  <rect x="100" y="130" width="44" height="14" rx="2" fill="#dc2626"/>
+  <text x="122" y="122" text-anchor="middle" font-size="9" fill="#dc2626">Aggressor</text>
+  <rect x="230" y="130" width="44" height="14" rx="2" fill="#0e7490"/>
+  <text x="252" y="122" text-anchor="middle" font-size="9" fill="#0e7490">Victim</text>
+  <path d="M144,134 C185,100 215,100 232,132" fill="none" stroke="#f59e0b" stroke-width="1.6"/>
+  <path d="M144,140 C185,116 213,116 230,138" fill="none" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="188" y="94" text-anchor="middle" font-size="8.5" fill="#b45309">電力線／磁力線直達 → C_M、L_M 全額</text>
+  <!-- right: with guard -->
+  <text x="570" y="52" text-anchor="middle" font-size="11" font-weight="bold" fill="#374151">插入接地 guard：場提前終止、能量先耗在保鑣身上</text>
+  <rect x="440" y="180" width="260" height="10" fill="#94a3b8"/>
+  <text x="570" y="206" text-anchor="middle" font-size="9" fill="#64748b">地平面</text>
+  <rect x="470" y="130" width="44" height="14" rx="2" fill="#dc2626"/>
+  <text x="492" y="122" text-anchor="middle" font-size="9" fill="#dc2626">Aggressor</text>
+  <rect x="548" y="130" width="40" height="14" rx="2" fill="#16a34a"/>
+  <text x="568" y="122" text-anchor="middle" font-size="9" fill="#166534">Guard（接地）</text>
+  <rect x="622" y="130" width="44" height="14" rx="2" fill="#0e7490"/>
+  <text x="644" y="122" text-anchor="middle" font-size="9" fill="#0e7490">Victim</text>
+  <path d="M514,134 C534,108 552,110 562,130" fill="none" stroke="#f59e0b" stroke-width="1.6"/>
+  <text x="536" y="100" text-anchor="middle" font-size="8.5" fill="#b45309">多數場線終止在 guard</text>
+  <path d="M514,140 C570,84 620,90 636,128" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="640" y="86" text-anchor="middle" font-size="8.5" fill="#b45309">漏網的少數 → k 整條下搬</text>
+  <line x1="568" y1="144" x2="568" y2="180" stroke="#16a34a" stroke-width="2"/>
+  <text x="596" y="166" text-anchor="middle" font-size="8" fill="#166534">via 到地（關鍵！）</text>
+  <!-- Fig 6.9 recreation -->
+  <text x="380" y="248" text-anchor="middle" font-size="11" font-weight="bold" fill="#374151">PT2 Fig 6.9「Guard Traces」的結構（依原書圖示重繪）：兩側地線 + 上下平面，把時脈線包成一口井</text>
+  <rect x="180" y="272" width="400" height="10" fill="#94a3b8"/>
+  <text x="600" y="281" font-size="8.5" fill="#64748b">Ground or Power Plane</text>
+  <rect x="180" y="360" width="400" height="10" fill="#94a3b8"/>
+  <text x="600" y="369" font-size="8.5" fill="#64748b">Ground or Power Plane</text>
+  <rect x="255" y="314" width="52" height="14" rx="2" fill="#16a34a"/>
+  <text x="281" y="345" text-anchor="middle" font-size="8.5" fill="#166534">Ground Trace</text>
+  <rect x="354" y="314" width="52" height="14" rx="2" fill="#0f4c5c"/>
+  <text x="380" y="345" text-anchor="middle" font-size="8.5" fill="#0f4c5c">Signal Trace（受保護的時脈）</text>
+  <rect x="453" y="314" width="52" height="14" rx="2" fill="#16a34a"/>
+  <text x="479" y="345" text-anchor="middle" font-size="8.5" fill="#166534">Ground Trace</text>
+  <text x="380" y="302" text-anchor="middle" font-size="8.5" fill="#6b7280">Prepreg（基材介質）——側面 guard 補平面顧不到的方向，四面把場關進井裡</text>
+  <!-- bottom note -->
+  <rect x="90" y="392" width="580" height="64" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="380" y="412" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#166534">PT2 Ch.6 三句忠告：①多數情況拉間距就解決 ②頑固案例／絕對低噪環境才用 guard</text>
+  <text x="380" y="428" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#166534">③ guard 應兩端接地（grounded on both ends）＋ 這類結構在類比敏感訊號防護中用得最多</text>
+  <text x="380" y="446" text-anchor="middle" font-size="9" fill="#dc2626">→ 第③句是 2002 年邊沿下的夠用解；現代邊沿要升級成「兩端＋沿線 stitching via」（第 3 節）</text>
+</svg>
+<figcaption>圖 1：上——同層 guard 的生效機制：接地銅條讓電力線提前終止、磁力線能量先耗在保鑣身上，等效把 k 曲線整條下搬；guard 沒有紮實接地就沒有這一切。下——PT2 Fig 6.9 的結構：訊號線兩側各一條地線、上下再夾平面（Perfect Timing II Ch.6），四面圍井是「絕對最低噪聲」等級的做法。</figcaption>
+</figure>
+
+<h2>2. PT2 的忠告與它的時代註腳：擺幅縮小，噪聲的「百分比」變大</h2>
+
+<p>PT2 對 guard 的定位很克制：<strong>不是常規武器，是頑固案例的特種部隊</strong>。書中還點出這門手藝的淵源——「While not prevalent in digital logic designs, these structures have found much use in the area of guarding sensitive analog signals（這類結構在數位邏輯設計中不常見，但在敏感類比訊號的防護領域用得很多）」（Perfect Timing II Ch.6）。這句話對你有直接意義：<strong>camera 模組上的 VCM 位置回授、影像感測器的類比電源與參考、麥克風線</strong>——這些正是 guard 傳統的主場。</p>
+
+<p>但書裡緊接著給了一個越陳越香的警告。PT2 用當年的數字示範「擺幅縮小、同樣的噪聲殺傷力變大」：<strong>100 mV 的噪聲騎在 3.3 V 時脈上只佔 3%（S/N 33:1）；同樣 100 mV 落在擺幅只有 1.0 V 的差動時脈上就是 10%（S/N 10:1）</strong>，足以造成誤觸發（Perfect Timing II Ch.6）。以現代標準需上修：MIPI D-PHY HS 差動擺幅只有 200 mV 量級——同樣 100 mV 的串擾是<strong>50%</strong>，眼睛直接閉上。擺幅一路縮小的二十年，就是「串擾預算一路變嚴」的二十年——這正是 Day 19 五步流程第①②步要親手算、不能抄舊規則的原因。</p>
+
+<div class="card takeaway">
+  <span class="label">一句話世界觀升級</span>
+  <p>串擾的絕對值由幾何決定，<strong>殺傷力卻由「佔擺幅的百分比」決定</strong>。幾何不變、擺幅逐代砍半，等於噪聲預算逐代砍半——所以昨天沒事的 layout，今天可能需要 guard；今天夠用的 guard 做法（只接兩端），明天可能變成內鬼。下一節就講內鬼。</p>
+</div>
+
+<h2>3. 諧振失效：保鑣什麼時候變內鬼</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：只有兩端釘死的琴弦</span>
+  <p>吉他弦為什麼會響？<strong>兩端固定、中間自由</strong>——能量打進去出不來，只能在弦上來回反彈，在特定音高（諧振頻率）越積越大。只接兩端的 guard trace 就是一條琴弦：攻擊線耦合進來的噪聲能量沿著 guard 跑，跑到兩端碰到「接地」被反彈回來（短路端反射，Day 8 學過反射係數 −1），來來回回，在特定頻率形成<strong>駐波</strong>。這時 guard 上的電壓不是處處為零——<strong>弦的中段在大幅振動</strong>——而一條帶著電壓晃動的銅線緊貼著你的受害線，它自己就成了新的攻擊線。保鑣收了敵人的能量，轉頭對你開槍：<strong>內鬼</strong>。解法也跟琴弦一樣：琴弦上多按幾根手指（stitching via），弦就震不起來了。</p>
+</div>
+
+<p>數學版。一條長 Len、兩端接地（短路）的 guard，是一段<strong>兩端短路的傳輸線諧振腔</strong>，駐波條件是長度等於半波長的整數倍：</p>
+<div class="formula">諧振頻率：f<sub>n</sub> = n · v / (2·Len)，n = 1, 2, 3…　　第一諧振 f₁ = v/(2·Len)</div>
+<p><em>白話翻譯：guard 越長，第一諧振頻率越低、越容易掉進訊號頻寬裡。板內 v ≈ 15 cm/ns：5 cm 的 guard，f₁ = 1.5 GHz。訊號的能量上限用 Day 2 的膝頻率估：f_knee ≈ 0.5/t<sub>r</sub>，t<sub>r</sub> = 200 ps → 2.5 GHz。<strong>1.5 GHz &lt; 2.5 GHz——諧振落在頻寬正中央</strong>，攻擊訊號的諧波剛好餵飽這條琴弦。2002 年的時脈邊沿慢、f_knee 低，多數 guard 的諧振都在頻寬之外，所以「兩端接地」就夠；現代邊沿把 f_knee 推到 GHz 以上，琴弦醒了。</em></p>
+
+<p>更糟的變體，Day 19 預告點過名：<strong>只接一端</strong>的 guard 是「一端短路、一端開路」的四分之一波長諧振腔，f₁ = v/(4·Len)——<strong>諧振頻率再砍半</strong>，更低頻就開始作亂；而<strong>完全沒接地的浮空銅條</strong>連「把場導走」的本職都做不到，只會把攻擊線的場「中繼」給受害線。三種錯法的排序：<strong>浮空 &lt; 只接一端 &lt; 只接兩端 &lt; 兩端＋stitching</strong>，而前三種在特定頻率都可能比「什麼都不加、把空間拿去拉間距」更糟。</p>
+
+<p><strong>Stitching via 的間距規則</strong>：目標是把相鄰兩顆接地 via 之間那一小段 guard 的第一諧振，推到訊號頻寬之上、留足餘裕：</p>
+<div class="formula">相鄰 via 間距 d 的每段第一諧振 = v/(2d)　→　工程規則：d ≤ λ<sub>knee</sub>/10 ～ λ<sub>knee</sub>/20，其中 λ<sub>knee</sub> = v/f<sub>knee</sub></div>
+<p><em>白話翻譯：λ/10～λ/20 是業界常見的量級規則（各家準則略有出入）：意思是「在訊號最高關注頻率的波長尺度上，via 密到讓 guard 的每一小段都短得諧振不起來」。算個手感：t<sub>r</sub> = 200 ps → f_knee = 2.5 GHz → λ = 15/2.5 = 6 cm → <strong>via 間距 3～6 mm</strong>。t<sub>r</sub> = 100 ps 就要 1.5～3 mm。這就是為什麼現代高速板的 guard／屏蔽地帶看起來像縫紉機車過的線——stitching（縫合）這個詞就是這麼來的。</em></p>
+
+<div class="card pitfall">
+  <span class="label">常見誤區：「guard 有接地就好，接哪裡、接幾個都一樣」</span>
+  <p>三個現場檢查點：①<strong>via 打到哪一層的地？</strong>要打到受害線的參考平面（Day 16：回流要走的那層），打到別層的地等於繞遠路，高頻下形同虛設。②<strong>guard 兩端接的地乾不乾淨？</strong>接到一塊被切割孤立的地島上，等於把噪聲導進死巷再滿出來。③<strong>flex 上打得了嗎？</strong>兩層 flex 沒有中間層可躲、via 成本高、hatched ground 本身就疏——flex 上的 guard 常常只能兩端＋少數幾點接地，效果要打折評估（練習 4 會算這一題），<strong>誠實建模，別把 rigid 板的信心搬過去</strong>。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">內鬼的誕生與逮捕：guard 諧振 vs stitching via</text>
+  <!-- top: resonating guard -->
+  <text x="60" y="54" font-size="11" font-weight="bold" fill="#dc2626">✗ 只接兩端（2002 式）：兩端短路的諧振腔</text>
+  <line x1="100" y1="100" x2="620" y2="100" stroke="#16a34a" stroke-width="4"/>
+  <line x1="100" y1="100" x2="100" y2="128" stroke="#16a34a" stroke-width="2.5"/>
+  <line x1="620" y1="100" x2="620" y2="128" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="100" y="142" text-anchor="middle" font-size="8.5" fill="#166534">接地</text>
+  <text x="620" y="142" text-anchor="middle" font-size="8.5" fill="#166534">接地</text>
+  <path d="M100,100 Q360,58 620,100" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <path d="M100,100 Q360,142 620,100" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <text x="360" y="50" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">駐波：中段電壓大幅晃動 → guard 變成新攻擊線</text>
+  <text x="360" y="160" text-anchor="middle" font-size="9" fill="#991b1b">f₁ = v/(2·Len)：5 cm → 1.5 GHz；t_r=200ps 的頻寬 f_knee≈2.5 GHz → 諧振在頻寬內！</text>
+  <text x="360" y="176" text-anchor="middle" font-size="9" fill="#991b1b">更糟：只接一端 → f₁ = v/(4·Len) 再砍半；浮空 → 直接當中繼天線</text>
+  <!-- middle: stitched guard -->
+  <text x="60" y="212" font-size="11" font-weight="bold" fill="#16a34a">✓ 兩端＋沿線 stitching（現代式）：琴弦上按滿手指</text>
+  <line x1="100" y1="252" x2="620" y2="252" stroke="#16a34a" stroke-width="4"/>
+  <line x1="100" y1="252" x2="100" y2="278" stroke="#16a34a" stroke-width="2.5"/>
+  <line x1="620" y1="252" x2="620" y2="278" stroke="#16a34a" stroke-width="2.5"/>
+  <circle cx="165" cy="252" r="5" fill="#0f4c5c"/><circle cx="230" cy="252" r="5" fill="#0f4c5c"/>
+  <circle cx="295" cy="252" r="5" fill="#0f4c5c"/><circle cx="360" cy="252" r="5" fill="#0f4c5c"/>
+  <circle cx="425" cy="252" r="5" fill="#0f4c5c"/><circle cx="490" cy="252" r="5" fill="#0f4c5c"/>
+  <circle cx="555" cy="252" r="5" fill="#0f4c5c"/>
+  <text x="360" y="238" text-anchor="middle" font-size="9" fill="#0f4c5c">stitching via（打到受害線的參考平面）</text>
+  <line x1="165" y1="264" x2="230" y2="264" stroke="#b45309" stroke-width="1"/>
+  <text x="197" y="278" text-anchor="middle" font-size="8.5" fill="#b45309">d ≤ λ_knee/10～/20</text>
+  <text x="360" y="298" text-anchor="middle" font-size="9" fill="#166534">每小段的 f₁ = v/(2d) 被推到頻寬外好幾倍 → 諧振不起來。手感：t_r=200ps → d 取 3～6 mm 量級</text>
+  <!-- decision tree -->
+  <text x="60" y="334" font-size="11" font-weight="bold" fill="#0f4c5c">決策樹：「先拉間距還是先加 guard」</text>
+  <rect x="60" y="348" width="180" height="40" rx="8" fill="#f0f9ff" stroke="#0e7490"/>
+  <text x="150" y="365" text-anchor="middle" font-size="9" font-weight="bold" fill="#0f4c5c">五步流程算出 k 超標</text>
+  <text x="150" y="380" text-anchor="middle" font-size="8.5" fill="#0f4c5c">（Day 19 第 3 節）</text>
+  <polygon points="246,368 262,368 258,362 270,368 258,374 262,368" fill="#0e7490"/>
+  <rect x="274" y="348" width="190" height="40" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="369" y="365" text-anchor="middle" font-size="9" font-weight="bold" fill="#166534">① 空間夠 → 先拉 s（平方衰減）</text>
+  <text x="369" y="380" text-anchor="middle" font-size="8.5" fill="#166534">同時檢查能否壓 h／實心參考</text>
+  <polygon points="470,368 486,368 482,362 494,368 482,374 486,368" fill="#0e7490"/>
+  <rect x="498" y="348" width="212" height="40" rx="8" fill="#fefce8" stroke="#ca8a04"/>
+  <text x="604" y="365" text-anchor="middle" font-size="9" font-weight="bold" fill="#854d0e">② 還不夠／頑固案例 → 換層屏蔽</text>
+  <text x="604" y="380" text-anchor="middle" font-size="8.5" fill="#854d0e">或同層 guard＋stitching（同空間比較）</text>
+  <rect x="274" y="404" width="436" height="76" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="492" y="424" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">選 guard 前的三問（任何一問答不出來就別加）：</text>
+  <text x="492" y="442" text-anchor="middle" font-size="9" fill="#991b1b">1. 同樣空間拿去拉 s，五步流程過不過？（過→guard 是紙糊的牆，省下）</text>
+  <text x="492" y="458" text-anchor="middle" font-size="9" fill="#991b1b">2. stitching via 打得下、打得到對的地層嗎？（打不下→可能養出內鬼）</text>
+  <text x="492" y="474" text-anchor="middle" font-size="9" fill="#991b1b">3. 受害端是類比／超低噪需求嗎？（是→guard 的主場，PT2 淵源）</text>
+</svg>
+<figcaption>圖 2：上——只接兩端的 guard 是兩端短路的半波長諧振腔，現代邊沿的頻寬（f_knee ≈ 0.5/t<sub>r</sub>）足以餵飽它，使 guard 從保鑣變內鬼；中——stitching via 把每段 guard 切短到諧振不起來，間距量級 λ<sub>knee</sub>/10～/20；下——決策樹：guard 是與「拉間距」競爭空間的方案，選它之前先回答三個問題。</figcaption>
+</figure>
+
+<h2>4. 三方案對決：拉間距、同層 guard、換層屏蔽</h2>
+
+<p>PT2 把屏蔽寫成一句話裡的兩個選項：「This can be done by either <strong>routing it on another layer</strong> or placing protective or guard traces between the two（可以把受害線改繞到另一層，或在兩者之間放防護線）」（Perfect Timing II Ch.6）。把三個方案放上同一張秤：</p>
+
+<table>
+  <tr><th></th><th>拉間距（動 s）</th><th>同層 guard＋stitching</th><th>換層屏蔽（遷到內層帶狀線）</th></tr>
+  <tr><td>機制</td><td>同一條 k 曲線上滑動<br>（L<sub>M</sub> 隨 (s/h)² 衰減）</td><td>k 曲線整條下搬<br>（場提前終止＋鏡像電流）</td><td>換一條更低的曲線＋<br><strong>FEXT 結構性歸零</strong>（Day 19：帶狀線減法打平）</td></tr>
+  <tr><td>空間成本</td><td>橫向吃 s</td><td>橫向吃「一線寬＋兩間隙」＋via 位</td><td>橫向零成本，換吃<strong>層資源</strong>與兩顆換層 via</td></tr>
+  <tr><td>訊號品質代價</td><td>無</td><td>無（做對的前提下）</td><td>兩個 via 不連續（Day 12 stub、Day 16 換層回流——記得伴地 via）</td></tr>
+  <tr><td>失效風險</td><td>幾乎無（最穩健）</td><td><strong>做錯反而更糟</strong>（諧振內鬼）</td><td>via 沒處理好變成新病灶</td></tr>
+  <tr><td>適用場景</td><td>永遠的第一選項</td><td>空間卡死、類比敏感線、flex 分區</td><td>長並行 bus、FEXT 主導、層數夠的板</td></tr>
+</table>
+<p><em>白話翻譯：這張表的讀法是由左往右升級——<strong>左邊的便宜藥沒吃完之前，不開右邊的貴藥</strong>。還有一味藥不在表上但永遠優先檢查：治攻擊者（source 端串阻放慢邊沿——只要它沒飽和、以及 FEXT，都吃這味，Day 19 講過哪些病人免疫）。</em></p>
+
+<h2>5. 實務案例：三個現場</h2>
+<ul>
+  <li><strong>NB 主機板——時脈區的縫紉機痕跡：</strong>翻開任何一片量產主機板，RTC 晶振、時脈產生器周圍幾乎都能看到「訊號線兩側伴地線＋整排 stitching via」的縫紉機痕跡——這正是 PT2 的主場：低擺幅、對 jitter 敏感的時脈是典型「頑固案例」。FA 時反過來用：如果你接手的板子在時脈線旁看到<strong>一條孤零零、只在兩端有 via 的銅條</strong>，用今天的公式算一下它的 f₁——它可能就是那個「加了屏蔽反而更容易誤觸發」的靈異事件的兇手。</li>
+  <li><strong>鏡頭模組——flex 上的分區地帶：</strong>Day 19 的 Q2 已經預告：camera flex 上 VCM 驅動線與 MIPI 對之間「布地」是標準結構解。今天補上工程細節：flex 上這條地帶的接地點<strong>稀少而昂貴</strong>（兩層 flex、hatched ground），做不到 rigid 板的 3 mm stitching——所以 flex 的分區地帶要當成「打了折的 guard」建模，並且優先靠<strong>物理分區</strong>（VCM 線與 MIPI 各走 flex 兩側邊緣、距離本身仍是主力）＋<strong>MIPI 下方局部實心地</strong>（壓 h，最強的 guard 是平面）拿主要的衰減，同層地帶只當補刀。把「guard 折扣」講得出數量級的人，在 camera HW 面試裡是稀有動物。</li>
+  <li><strong>面試白板：</strong>「Would you add a guard trace here?」是一道釣魚題——面試官在等你先問回去：「間距還有多少空間？受害端是什麼訊號？stitching 打得下嗎？」直接答 yes 的人掉進「guard 永遠有益」的陷阱；能引用「多數情況拉間距就解決」並講出諧振失效模式的人，才展示了工程判斷。第 8 節 Q1 就是這一題的完整版。</li>
+</ul>
+
+<h2>6. 數學收口：今天的量接回哪裡</h2>
+<table>
+  <tr><th>今天的量</th><th>接回哪一課</th><th>一句話</th></tr>
+  <tr><td>guard 使 C<sub>M</sub>↓、L<sub>M</sub>↓</td><td>Day 18（雙重耦合）、Day 19（k<sub>b</sub> 純幾何）</td><td>guard 動的是 k<sub>b</sub> 本身——結構性手段，跟拉 s 在同一條曲線上滑動不同級</td></tr>
+  <tr><td>f₁ = v/(2·Len)（兩端短路）</td><td>Day 12（stub 諧振 f = v/(4·Len)，一端開路）</td><td>同一家族：一段沒管好的銅就是一個諧振腔，邊界條件（開路/短路）決定是 λ/4 還是 λ/2</td></tr>
+  <tr><td>f_knee ≈ 0.5/t<sub>r</sub></td><td>Day 2（頻寬與上升時間）</td><td>「諧振在不在頻寬內」的裁判——PT2 時代 f_knee 低所以兩端接地夠用，現代不夠</td></tr>
+  <tr><td>via 間距 d ≤ λ<sub>knee</sub>/10～/20</td><td>Day 3/4（t<sub>r</sub> 換算長度再比大小）</td><td>SI 萬用模式第 N 次出場：把時間量換算成空間量，再跟板上尺寸比</td></tr>
+  <tr><td>換層屏蔽的 via 代價</td><td>Day 12（via stub）、Day 16（換層回流、伴地 via）</td><td>沒有免費的午餐：屏蔽收益要扣掉不連續成本才是淨利</td></tr>
+</table>
+<p><em>白話翻譯：注意 guard 諧振與 Day 12 的 stub 諧振是<strong>同一道物理題換了邊界條件</strong>——兩端短路是 λ/2 家族、一端開路是 λ/4 家族。抓住「一段銅＋兩個邊界＝一個諧振腔」這個模式，你已經免費預習了週 9 的 EMI 課（貼片天線也是這一家的）。</em></p>
+
+<h2>7. 動手練習（紙筆題，不需儀器）</h2>
+<p>先自己算完再展開詳解。板內傳播速度一律取 v ≈ 15 cm/ns。</p>
+
+<details>
+<summary>練習 1（琴弦的音高）：一條 6 cm 的 guard trace 兩端接地、中間沒有任何 stitching via。(a) 第一與第二諧振頻率是多少？(b) 攻擊訊號 t<sub>r</sub> = 300 ps，它的 f_knee 是多少？諧振落在頻寬內嗎？(c) 若這條 guard 當年是為 t<sub>r</sub> = 2 ns 的舊平台設計的，當年有問題嗎？(d) 同一條 guard 若誤接成「只接一端」，第一諧振變多少？</summary>
+<p><strong>解：</strong>(a) 兩端短路 → f<sub>n</sub> = n·v/(2·Len)：f₁ = 15/(2×6) = <strong>1.25 GHz</strong>，f₂ = <strong>2.5 GHz</strong>。(b) f_knee ≈ 0.5/0.3 ns ≈ <strong>1.67 GHz</strong> → f₁ = 1.25 GHz <strong>在頻寬內</strong>（f₂ 也貼著邊）——這條 guard 會被餵出駐波，是現役內鬼。(c) 舊平台 f_knee ≈ 0.5/2 = 0.25 GHz，遠低於 f₁ = 1.25 GHz → 諧振腔沒有能量可吃，<strong>當年無害</strong>——「兩端接地就夠」是慢邊沿時代的正確答案（PT2 Ch.6 的建議忠於它的年代）。(d) 一端短路一端開路 → λ/4 家族：f₁ = v/(4·Len) = <strong>0.625 GHz</strong>——更低頻就開始作亂，連舊平台的諧波都可能餵到它。這題的教訓與 Day 13/19 的翻案潮同款：<strong>結構沒變、t<sub>r</sub> 變快，昨天的良民今天變內鬼</strong>。</p>
+</details>
+
+<details>
+<summary>練習 2（縫紉機的針距）：承練習 1 的 6 cm guard，新平台 t<sub>r</sub> = 300 ps。(a) 用 d ≤ λ<sub>knee</sub>/10 規則算 stitching via 間距與整條 guard 至少要幾顆 via（含兩端）。(b) 若 layout 只擠得下每 15 mm 一顆，每段的第一諧振是多少？夠不夠？(c) t<sub>r</sub> 再快一倍（150 ps）時，(a) 的答案怎麼變？</summary>
+<p><strong>解：</strong>(a) λ<sub>knee</sub> = v/f<sub>knee</sub> = 15/1.67 ≈ 9 cm → d ≤ <strong>9 mm</strong>。6 cm / 0.9 cm ≈ 6.7 段 → 取 7 段 → <strong>8 顆 via</strong>（含兩端；工程上常直接取整用 5 mm 網格更保險）。(b) d = 15 mm → 每段 f₁ = 15/(2×1.5) = <strong>5 GHz</strong>，是 f_knee（1.67 GHz）的 3 倍——以 λ/10 的精神略鬆（15 mm &gt; 9 mm），但每段諧振已在頻寬外 3 倍，多數設計準則可接受；預算緊或受害端是類比敏感線時仍建議補到 9 mm 以內。(c) t<sub>r</sub> 減半 → f_knee 加倍（3.33 GHz）→ λ 減半 → <strong>d ≤ 4.5 mm、via 數量約翻倍</strong>。規律：<strong>stitching 密度正比於邊沿速率</strong>——這也是為什麼 via 數量在現代板上爆炸性成長。</p>
+</details>
+
+<details>
+<summary>練習 3（決策樹實戰）：某訊號用 Day 19 五步流程算出單側 k<sub>max</sub> = 2.2%，場解器曲線（假設值，同 Day 19 練習 3）：s = 1W → 6%、2W → 3.5%、3W → 2.2%、4W → 1.5%。現況 s = 1W，橫向總共還擠得出 2W 的空間。方案 A：把 s 拉到 3W。方案 B：維持 s = 1W，在中間塞一條 1W 寬的 guard（前後各留 0.5W 間隙），廠商模擬說做對時 k 降到約 1.2%（假設值）。(a) 兩案都用滿同樣的 2W 空間，各自過不過？(b) 該選哪個？考慮失效風險與後續維護。(c) 什麼條件成立時答案會翻成另一案？</summary>
+<p><strong>解：</strong>(a) A 案：s = 3W → k = 2.2%，<strong>剛好壓線過</strong>。B 案：k ≈ 1.2%，<strong>過且餘裕近一倍</strong>。(b) 數字上 B 贏，但工程上<strong>先選 A</strong>：A 案零失效風險、零 via、零維護；B 案的 1.2% 掛著三個前提——stitching 打得夠密、via 落在對的地層、地本身乾淨——任何一條在改版時被別人默默破壞（例如 via 被挪走讓位給新零件），guard 就朝內鬼滑動，而 DRC 通常抓不到「guard 的 via 變稀了」。<strong>剛好壓線過 vs 餘裕大但帶失效模式</strong>，是真實的取捨：多數準則會選穩健那邊，再用其他手段（治 aggressor、壓 h）補餘裕。(c) 翻案條件：①受害端是類比超低噪需求（2.2% 壓線不安心、且 guard 是該領域正統做法——PT2 Ch.6）；②未來平台 t<sub>r</sub> 確定變快，A 案的壓線會翻船而 B 案餘裕扛得住（且團隊有 DRC 手段守住 stitching 密度）；③空間其實擠不出完整 2W、只擠得出 guard 的碎片空間。</p>
+</details>
+
+<details>
+<summary>練習 4（flex 上打折的 guard）：camera flex 上 VCM 驅動線與 MIPI 對之間布了一條地線，長 4 cm，但 flex 只允許在兩端各接一次地（無中間 stitching），且地是 hatched。(a) 這條地線的第一諧振是多少？MIPI HS 訊號的能量成分容易餵到它嗎（HS 速率 GHz 量級、邊沿 百 ps 量級）？(b) 攻擊者其實是 VCM 的 PWM（載波約幾十至幾百 kHz 量級、但邊沿可能只有 ns 量級），對這條 guard 而言主要威脅頻段在哪？guard 兩端接地在該頻段有沒有基本功能？(c) 綜合 (a)(b)，這條地帶對「VCM→MIPI」方向的防護該怎麼誠實評估？主力該押在哪些手段？</summary>
+<p><strong>解：</strong>(a) f₁ = 15/(2×4) ≈ <strong>1.9 GHz</strong>（flex 介質 v 略不同，量級不變）。MIPI HS 的邊沿 百 ps → f_knee 在 GHz 量級，<strong>餵得到</strong>——對「MIPI 自己的能量打上 guard 再反串回來」要有戒心。(b) VCM PWM 的威脅主要來自<strong>邊沿的諧波</strong>：ns 級邊沿 → f_knee 在 百 MHz 量級，低於 f₁ = 1.9 GHz → 在這個頻段 guard <strong>不諧振</strong>，兩端接地的 guard 仍能提供基本的場終止功能（雖然 hatched 地讓效果打折）。(c) 誠實評估：這條地帶對「VCM 邊沿諧波（百 MHz 級）」有打折但為正的防護；對 GHz 級成分因無 stitching 存在諧振疑慮——所以<strong>主力不押它</strong>：①物理分區拉開距離（間距永遠是第一主力，平方衰減）；②MIPI 對下方做局部實心地壓 h（最強的 guard 是平面）；③要求 VCM 驅動端做 slew 控制（治 aggressor 最便宜——Day 19 的排序）；地帶當補刀並在模擬中按實際接地點建模。一句話：<strong>flex 上的 guard 是折扣品，標價要重貼</strong>。</p>
+</details>
+
+<details>
+<summary>練習 5（FA 偵探題）：一片量產板改版後，時脈偶發性 glitch。比對兩版差異：時脈線旁的 guard trace 沒動，但改版時為了讓位給新增的連接器，把 guard 中段的 4 顆 stitching via 移除了，只剩兩端接地；同期 SoC 也換了新製程（IO 邊沿更快）。(a) 用今天的框架寫出故障假說。(b) 設計三個驗證實驗（不改板就能做的優先）。(c) 若假說成立，短期與長期對策各是什麼？</summary>
+<p><strong>解：</strong>(a) 假說：移除中段 via 後，guard 從「多段短諧振腔（諧振在頻寬外）」退化為「整段長諧振腔」，f₁ 掉進頻寬內；疊加新製程更快的邊沿把 f_knee 推高——兩頭夾擊使 guard 諧振被激發，guard 變成緊貼時脈線的二次輻射源 → pattern／活動相關的偶發 glitch。(b) 驗證：①<strong>近場探棒</strong>沿 guard 掃：若中段量到明顯駐波腹點（電壓峰），假說直接坐實（Day 16 用過同款手法）；②<strong>頻域比對</strong>：量 glitch 發生時受害時脈上的噪聲頻率，對照 f₁ = v/(2·Len) 的計算值是否吻合；③<strong>手術實驗</strong>：在 guard 中段用導電膠帶／飛線臨時接地一兩點（等效補回 stitching），看 glitch 率是否顯著下降——不改板、可逆、直指機制。(c) 短期：補焊飛線接地或（若空間允許）改 BOM 加接地彈片；長期：改版補回 via，並把「guard stitching 間距 ≤ 該網路 λ<sub>knee</sub>/10」寫進 DRC／checklist——<strong>讓規則帶著推導出處</strong>（Day 19 的老話），下次讓位給連接器的人才知道自己在拆什麼。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>guard trace 是面試官最愛的「判斷力探測器」——因為它有一個違反直覺的失效模式，能瞬間分開「背 checklist 的人」與「懂場的人」。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "A junior engineer on your team wants to add guard traces between every aggressive net and every sensitive net on the board. What do you tell them?"</summary>
+<p><strong>參考答案骨架：</strong>First I'd give them credit — the instinct to protect sensitive nets is right — but the blanket policy is wrong on three counts. One: guard traces are not free. Each guard costs a trace width plus two gaps of routing space, and coupling already falls off with the square of separation — the classic guideline is that doubling the spacing cuts coupling by roughly four. In most cases, spending that same width on plain separation solves the problem with zero risk; the old Cypress clock-design guide says explicitly that increasing separation solves most crosstalk issues and guards are for stubborn cases or absolute-lowest-noise environments, and that's still good judgment today. Two: a guard done wrong is worse than no guard. A guard grounded only at its two ends is a transmission-line resonator — shorted at both ends, first resonance at v over two L. A five-centimeter guard resonates around one and a half gigahertz, which is inside the bandwidth of any modern edge, so the guard stores the coupled energy as a standing wave and re-radiates it into the victim — it becomes a second aggressor pressed right up against the net you were protecting. Grounding only one end is worse still, a quarter-wave resonator at half the frequency, and a floating guard is just a relay antenna. So every guard must be stitched to the victim's reference plane along its length — spacing on the order of a tenth to a twentieth of the wavelength at the signal's knee frequency, which works out to a few millimeters for a couple-hundred-picosecond edge. Three: process. I'd ask them to run the noise budget first — margin, allocation, worst-case coupling coefficient, field-solver sweep — and only reach for a guard where separation genuinely can't meet the number, typically analog-sensitive nets or space-constrained zones. And wherever we do add one, the stitching-via pitch goes into the DRC with its derivation attached, so a future revision can't quietly delete the vias and turn our bodyguard into a mole.</p>
+<p><strong>加分點：</strong>先肯定再糾正（管理面）；引用經典指南的「多數情況拉間距就解決」；諧振頻率算得出數字；「guard done wrong is worse than none」講出機制而非口號；收尾落在流程與 DRC——面試官聽到的是一個能帶團隊的人。</p>
+</details>
+
+<details>
+<summary>Q2: "During a board spin, someone removed a few stitching vias from a shield trace next to a clock, and now the board shows intermittent clock glitches. Walk me through your debug."</summary>
+<p><strong>參考答案骨架：</strong>My hypothesis forms immediately from the change list: removing the mid-span vias turned a well-stitched shield — many short segments, each resonant far above the signal bandwidth — into one long resonator shorted only at its ends. Its first resonance is v over two L; for a few centimeters of trace that lands in the low gigahertz, inside the knee frequency of a modern clock edge. The shield now builds a standing wave, and its mid-span — where the voltage antinode sits — couples straight back into the clock. That predicts exactly this signature: intermittent, activity-dependent glitches that appeared only after the spin. To verify without another spin, three steps. First, near-field probe along the shield: if I find a voltage hot spot at mid-span at a frequency matching v over two L, the mechanism is confirmed. Second, capture the glitch on the clock and check its ringing frequency against the same calculation — the resonator signs its name in the frequency domain. Third, the surgical test: temporarily ground the shield's mid-span with copper tape or a soldered strap and watch the glitch rate; if it collapses, case closed — it's reversible, cheap, and directly tests the mechanism rather than a correlation. Short-term containment is a rework wire; the real fix is restoring the vias in the next spin, plus a process fix: the stitching pitch becomes a documented rule tied to the net's rise time, so the next person who needs room for a connector knows they're not deleting 'just a few vias', they're detuning a resonator.</p>
+<p><strong>加分點：</strong>從 change list 直接生成假說（FA 的正確起手式）；預測故障簽名再對照；三個驗證由不改板到可逆手術排序；「the resonator signs its name in the frequency domain」展示頻域思維；結尾落在制度性修正——Apple/Google FA 職缺最想聽的完整弧線。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：guard trace 的生效機制？它動的是串擾公式裡的哪個量？</p>
+  <p class="a">A1：雙管齊下——電場：攻擊線的電力線提前終止在接地的 guard 上、電荷被導走（C<sub>M</sub>↓）；磁場：磁力線在 guard 上感應鏡像電流、能量先耗在保鑣身上（L<sub>M</sub>↓）（PT2 Ch.6 原話：磁力線的一部分能量在防護線上被消耗）。兩者使 k<sub>b</sub> = ¼(C<sub>M</sub>/C + L<sub>M</sub>/L) 整體下降 = <strong>把 k 對 s 的曲線整條下搬</strong>（結構性手段，與拉間距的「曲線上滑動」不同級）。最強的 guard 其實是訊號下方的實心地平面（壓 h、(s/h)² 暴漲）。</p>
+  <p class="q">Q2：PT2 Ch.6 對 guard trace 的三句忠告？哪句需要現代升級？</p>
+  <p class="a">A2：①多數情況拉大間距就能解決串擾（guard 非常規武器）；②頑固案例或必須絕對低噪時才考慮（淵源：類比敏感訊號防護）；③guard 應<strong>兩端接地</strong>。需升級的是③：2002 年邊沿慢、f_knee 低，兩端接地夠用；現代邊沿的 f_knee 在 GHz 量級，只接兩端的 guard 會在頻寬內諧振——要升級成<strong>兩端＋沿線 stitching via</strong>。書中 S/N 例（100 mV 噪聲：3.3 V 時脈=3%、1.0 V 差動=10%）以現代標準需上修——MIPI 200 mV 擺幅下同樣噪聲是 50%。</p>
+  <p class="q">Q3：guard 的諧振失效模式？三種錯法與頻率公式？</p>
+  <p class="a">A3：只接兩端 = 兩端短路的傳輸線諧振腔，f<sub>n</sub> = n·v/(2·Len)（5 cm → f₁ = 1.5 GHz）；諧振落在訊號頻寬（f_knee ≈ 0.5/t<sub>r</sub>）內時，guard 存下耦合能量形成駐波、中段電壓晃動、變成貼著受害線的二次輻射源——<strong>比不加更糟（內鬼）</strong>。錯法排序：浮空（中繼天線）&lt; 只接一端（λ/4 腔，f₁ = v/(4·Len)，更低頻作亂）&lt; 只接兩端（λ/2 腔）&lt; 兩端＋stitching（正解）。與 Day 12 stub 諧振同族：一段銅＋兩個邊界＝一個諧振腔。</p>
+  <p class="q">Q4：stitching via 的間距規則與手感數字？</p>
+  <p class="a">A4：目標：讓相鄰 via 之間每小段的第一諧振 v/(2d) 遠高於訊號頻寬。工程規則：<strong>d ≤ λ<sub>knee</sub>/10～/20</strong>（λ<sub>knee</sub> = v/f<sub>knee</sub>，量級規則、各家準則略異）。手感：t<sub>r</sub> = 200 ps → f_knee = 2.5 GHz → λ = 6 cm → d 取 3～6 mm；t<sub>r</sub> 減半、via 密度加倍。另三個現場檢查點：via 要打到<strong>受害線的參考平面</strong>、guard 接的地要乾淨（別接地島）、flex 上打不密要按折扣建模。</p>
+  <p class="q">Q5：「先拉間距還是先加 guard」決策樹？三方案的取捨？</p>
+  <p class="a">A5：順序：①治 aggressor（slew 控制，最便宜——飽和 NEXT 免疫除外）→②拉間距 s（平方衰減、零風險、永遠第一選項）＋檢查壓 h／實心參考 →③還不夠才屏蔽：換層（帶狀線 FEXT 歸零、橫向零成本，但吃層資源＋兩顆 via 不連續）或同層 guard＋stitching（空間卡死、類比敏感、flex 分區的場合）。選 guard 前三問：同樣空間拉 s 過不過（過→省下）？stitching 打得下嗎（打不下→養內鬼）？受害端是類比低噪需求嗎（是→guard 主場）。核心：<strong>guard 與拉間距搶同一塊地，是競爭方案不是外掛</strong>。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 21（週四）：串擾 IV——差動訊號：為什麼 MIPI 選了它，以及它的免疫力從哪裡來、到哪裡失效</strong></p>
+  <p>三條抗串擾路線的最後一條，也是你天天在量的那條：差動訊號。PT2 說它靠「共模噪聲抑制」對串擾免疫——但緊接著補了一句轉折：「如果串擾只打中差動對的其中一條線，噪聲照樣是個問題」。明天講清楚：差動的免疫力是怎麼來的（減法的魔術）、緊耦合 vs 鬆耦合的百年論戰、為什麼等長（skew）是差動的命門——PT2 Ch.14 的 trace matching 明天首次開箱。把今天的「打折的 guard」帶著：差動就是「把 guard 換成一條會說話的反相線」。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 20 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 4/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

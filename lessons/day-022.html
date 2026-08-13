@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 22｜實作日：把串擾抓到示波器上——NEXT 現形、間距四倍律與差動抗擾對決</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 4 週・第 22 天（週五實作日）</div>
+  <h1>Day 22：把串擾抓到示波器上——NEXT 現形、間距四倍律與差動抗擾對決</h1>
+  <div class="meta">2026-08-14（五）｜預估操作時間：90～100 分鐘｜難度：★★★☆☆（治具是一條排線加幾顆電阻，難的老規矩——波形出現前先把它畫出來）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>串擾理論四部曲（Day 18 雙重耦合、Day 19 飽和與預算、Day 20 guard、Day 21 差動）今天全部進實驗室驗收。全程只用公司標配：訊號產生器、百 MHz 雙通道示波器、一條排線／幾段雙絞線、幾顆電阻。做完你要能夠：</p>
+  <ol>
+    <li>在受害線近端親手量出 <strong>NEXT 的招牌形狀</strong>——一個「矮而寬的矩形」，並驗證它的<strong>寬度 = 2×TD</strong>（耦合段來回一趟），用寬度反推耦合長度</li>
+    <li>把受害線一格一格往外搬，驗證 PT2 Ch.6 的<strong>四倍律</strong>：「doubling the distance will reduce the coupling by a factor of four（間距加倍，耦合降為四分之一）」</li>
+    <li>旋鈕調慢 aggressor 邊沿，親眼看 <strong>NEXT 的飽和與退飽和</strong>：耦合段夠長時幅度與邊沿無關（飽和平台）；邊沿慢到 t<sub>r</sub> &gt; 2TD 後幅度開始 ∝ 1/t<sub>r</sub> 下滑——Day 19 的飽和長度公式活體展示</li>
+    <li>用一對雙絞線當受害者，示波器數學通道做減法，對比<strong>單端 vs 差動</strong>吃到的噪聲——然後親手「弄壞對稱性」，看 Day 21 的兩個命門怎麼讓免疫力漏氣</li>
+    <li>（加碼）驗證 PT2 Fig 6.7 的趨勢：受害線<strong>阻抗越高越容易受害</strong>——同一條線、換個終端，噪聲差一截</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：四堂課的公式，今天全部變成波形</h2>
+<p>Day 18 說串擾是 C<sub>M</sub>＋L<sub>M</sub> 的雙重耦合、NEXT 往回跑 FEXT 往前衝；Day 19 說 NEXT 寬度 = 2TD、耦合段超過飽和長度（v·t<sub>r</sub>/2）後幅度封頂；Day 20 用 PT2 的 L<sub>M</sub> = L/(1+(s/h)²) 算間距的價目表；Day 21 說差動靠減法免疫、靠對稱活命。這些你都算過了，但沒摸過。today 的比例尺魔法沿用 Day 8／Day 15 的老招：<strong>板上 mm 級、ps 級的物理，用桌上 3 m 排線和十幾 ns 的邊沿放大到百 MHz 示波器看得一清二楚</strong>——方程式一字不改，只換單位。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在玩什麼</span>
+  <p>想像兩條並排的水管，其中一條突然沖過一股水鎚（aggressor 的邊沿），隔壁那條明明沒人放水，卻會被「隔牆震動」搖出一小段波（串擾）。今天我們真的鋪兩條並排的管子——一條灰排線裡挑兩對線，一對當攻擊者、一對當受害者——然後做五件事：①在受害者「靠近源頭的那一端」看那段被搖出來的波長什麼樣（劇透：矮矮寬寬的一塊矩形，<strong>寬度就是波在並排段跑一個來回的時間</strong>）；②把受害者搬遠一格、兩格，看噪聲是不是照「距離加倍、噪聲剩四分之一」的規矩縮水；③把水鎚放緩（邊沿調慢），看噪聲什麼時候開始變小——會發現有一段「怎麼放緩都一樣大」的平台，那就是<strong>飽和</strong>；④換一對互相纏繞的線當受害者，用「兩線相減」的差動讀法，看噪聲被減法吃掉多少——再故意把兩線拆開靠向攻擊者一邊，看免疫力當場漏氣；⑤同一條受害線，末端從「接電阻」換成「懸空」，看噪聲差多少。每一步都<strong>先手畫預測、再按 Run 對答案</strong>——猜對了，這四堂課才真正是你的。</p>
+</div>
+
+<h2>1. 器材清單與行前準備</h2>
+<ul>
+  <li><strong>任意函數／訊號產生器</strong>：方波，邊沿約 10～20 ns 量級；若機型支援<strong>可調邊沿時間</strong>（variable edge／leading edge time）今天實驗 3 會直接用旋鈕；不支援也沒關係，備幾顆電阻電容做 RC 減速（劇本裡教）</li>
+  <li><strong>示波器</strong>：100 MHz 以上、雙通道、有數學通道（CH1−CH2）與平均（averaging）功能；10:1 探棒 ×2</li>
+  <li><strong>灰排線（IDC ribbon cable）約 3 m</strong>，10 芯以上——今天的主治具。沒有排線的替代方案：4 條單芯線用膠帶等間距貼在桌上（間距約 2～3 mm），效果相同只是施工麻煩些</li>
+  <li><strong>雙絞線一段約 3 m</strong>（網路線拆一對出來即可）——實驗 4 的差動受害者</li>
+  <li><strong>電阻</strong>：約 100～150 Ω 數顆（排線相鄰線對的特性阻抗在 100～150 Ω 量級，精確值今天會反過來量它）、約 47～68 Ω 一兩顆（源端串接用）；鱷魚夾線數條、烙鐵或麵包板（把電阻掛上線尾用）</li>
+  <li><strong>BNC 轉鱷魚夾線 ×1</strong>（產生器出來接排線用）</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">行前必讀的三個坑</span>
+  <p><strong>坑一：受害線兩端都要端接。</strong>Day 18 教過：NEXT 住近端、FEXT 住遠端——受害線任何一端沒端接，波就在裡面來回反彈，NEXT 和 FEXT 混成一鍋粥，形狀全毀。今天受害線<strong>近端、遠端各掛一顆約 120 Ω 電阻到共同地</strong>，探棒跨在近端那顆電阻上讀電壓（10:1、1 MΩ 檔）。</p>
+  <p><strong>坑二：回流路徑要給足。</strong>排線裡「攻擊對」和「受害對」各自要有自己的回流線（signal＋return 相鄰成對），所有 return 兩端<strong>接成共同地</strong>並接回產生器地。忘了接地，整個實驗變成天線工程，波形沒有一個能看。</p>
+  <p><strong>坑三：探棒地線越短越好。</strong>今天量的是幾十 mV 量級的小訊號，探棒那條長長的鱷魚夾地線是一個大迴圈，會自己拾取噪聲（Day 16 迴路面積的幽靈）。把地夾夾在<strong>離探測點最近的地線上</strong>，或改用探棒附的短地針；打開示波器平均模式（16～64 次）壓底噪。</p>
+</div>
+
+<h3>1.1 撐全場的三個數字</h3>
+<p>①排線的傳播速度：PVC 絕緣排線約 <strong>5～6 ns/m 量級</strong>（速度約 0.55～0.65c，「約」——實驗 1 會親手量出精確值，之後全天用實測值）。②飽和長度（Day 19）：<strong>ℓ<sub>sat</sub> = v·t<sub>r</sub>/2</strong>——邊沿 15 ns、v ≈ 18 cm/ns 時約 1.35 m；我們的耦合段 3 m 超過它，所以 NEXT 一開場就是<strong>飽和的</strong>。③NEXT 寬度 = <strong>2×TD</strong>（TD = 耦合段單程延遲）——3 m × 約 5.5 ns/m ≈ 16.5 ns，來回約 <strong>33 ns</strong>，百 MHz 示波器讀起來輕輕鬆鬆。這三個數字先寫在記錄本第一行。</p>
+
+<h2>2. 實驗 1（約 15 分）：治具搭建與身分證量測——先認識你的排線</h2>
+<p><strong>排線腳色分配（以 10 芯為例，編號 1～10）：</strong>線 1 = 攻擊訊號 A、線 2 = 攻擊回流 G<sub>A</sub>；線 3 = 受害訊號 V1（緊鄰位）、線 4 = 受害回流 G<sub>V</sub>；線 5、6 空著（實驗 2 的「搬家位」）；線 7 = 受害訊號 V2（遠位）、線 8 = 它的回流。所有回流線（2、4、8）兩端用鱷魚夾接成共同地，並接回產生器的地。</p>
+<p><strong>接法：</strong>產生器（方波 100 kHz～500 kHz、幅度 2～3 Vpp、邊沿最快）→ 串一顆約 <strong>47～68 Ω 電阻</strong>（源端端接，Day 7 的招：湊近線對阻抗、壓掉源端反彈）→ 線 1；線 1 遠端掛約 120 Ω 到地。受害線 V1 近端、遠端各掛約 120 Ω 到地，CH1 探棒（10:1）跨在<strong>近端</strong>電阻上。CH2 探棒放在攻擊線源端當觸發與時間基準。</p>
+<ol>
+  <li><strong>先量排線的速度（發身分證）：</strong>暫時把攻擊線遠端的 120 Ω 拔掉（開路），在源端看 Day 8 的老朋友——半壓架子。架子寬度 = 2×TD<sub>線</sub>，量出來除以 2、除以線長，得到 <strong>v 實測值</strong>（例：架子 33 ns → TD 16.5 ns → v = 3 m/16.5 ns ≈ 18 cm/ns）。之後全天用這個數。量完把 120 Ω 接回去。</li>
+  <li><strong>順手記邊沿：</strong>用示波器自動量測讀攻擊訊號的 10–90% 上升時間 t<sub>r</sub>（例如約 15 ns），算出今天的飽和長度 ℓ<sub>sat</sub> = v·t<sub>r</sub>/2 寫進記錄表——它是實驗 3 的劇情分水嶺。</li>
+  <li><strong>Known-good 檢查：</strong>攻擊線不接（產生器輸出關閉）時，CH1 上的受害線應該接近一條平線（只剩底噪）。存一張「安靜照」——之後看到的每一絲波動，都是你親手餵進去的耦合。</li>
+</ol>
+
+<h2>3. 實驗 2（約 20 分）：NEXT 現形——矮而寬的矩形，寬度就是身分證</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：為什麼是「矮而寬」而不是一根刺</span>
+  <p>攻擊邊沿沿著並排段往前跑，<strong>每經過一公分，就往隔壁「漏」一小口噪聲</strong>；漏出來的噪聲一半往回跑（NEXT）、一半跟著往前（FEXT）。往回跑的那些小口，出發地點一路從「並排段開頭」排到「並排段結尾」——最早漏的立刻到近端，最晚漏的要先等邊沿走完全程、再自己走回來，<strong>晚了整整一個來回</strong>。所以近端收到的不是一根刺，是「連續不斷的小口首尾相接」疊成的一塊<strong>平台</strong>：從邊沿出發那一刻開始、到 2×TD 後結束。平台的高度由耦合強度決定（Day 19 的飽和 NEXT 係數）、<strong>寬度只由並排段長度決定</strong>——跟 Day 15 的「凹陷深度報阻抗、寬度報長度」是親戚：又一次，一個波形自帶兩條互相獨立的資訊。</p>
+</div>
+
+<p><strong>動手前先畫預測（CH1，正規化：攻擊擺幅 = A）：</strong></p>
+<ol>
+  <li>t = 0（攻擊邊沿出發）：CH1 立刻跳上一個高度 k<sub>b</sub>·A 的平台——k<sub>b</sub> 是飽和 NEXT 係數，排線緊鄰對的量級約幾 % 到 10% 上下（實測為準，記下來）。</li>
+  <li>平台持續到 t = 2×TD ≈ 33 ns 後收工，回到基線。<strong>寬度與邊沿快慢無關、與耦合強度無關——只認並排段長度。</strong></li>
+  <li>攻擊訊號的<strong>下降沿</strong>會再送一塊極性相反的矩形——一個週期看到一正一負兩塊，對稱。</li>
+</ol>
+<p><strong>步驟：</strong>①打開產生器輸出，CH1 上找那兩塊矮矩形（每 div 調到 20～50 mV，開平均）。②游標量平台寬度，對答案：≈ 2×TD（用實驗 1 的實測 TD）。<strong>反推：寬度 ÷ 2 × v = 耦合長度</strong>——跟捲尺量的 3 m 對到幾個百分點內就算教科書級成功。③游標量平台高度，除以攻擊擺幅得 k<sub>b</sub> 實測值，記錄表伺候。④<strong>加碼看一眼遠端：</strong>把 CH1 探棒改跨到受害線<strong>遠端</strong>的電阻上——形狀完全不同：不是寬平台，而是一根集中在「TD 時刻」附近的<strong>窄脈衝</strong>（FEXT：所有往前跑的小口跟邊沿同進同出、擠在同一時刻到站）。NEXT 寬、FEXT 尖——Day 18 的雙城記親眼收官。排線的絕緣不均勻（PVC＋空氣），FEXT 不會是零；幅度極性和大小記下來就好，今天主角是 NEXT。</p>
+
+<figure>
+<svg viewBox="0 0 760 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 1／2 治具與 CH1 預測：NEXT = 矮而寬的矩形，寬度 = 2×TD</text>
+  <!-- jig sketch -->
+  <rect x="36" y="46" width="96" height="44" rx="8" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="84" y="66" text-anchor="middle" font-size="11" fill="#374151">訊號產生器</text>
+  <text x="84" y="82" text-anchor="middle" font-size="10" fill="#6b7280">方波、邊沿最快</text>
+  <rect x="150" y="58" width="40" height="20" rx="4" fill="#fef3c7" stroke="#b45309"/>
+  <text x="170" y="72" text-anchor="middle" font-size="9" fill="#b45309">≈56Ω</text>
+  <line x1="132" y1="68" x2="150" y2="68" stroke="#374151" stroke-width="2"/>
+  <!-- aggressor line -->
+  <line x1="190" y1="68" x2="640" y2="68" stroke="#dc2626" stroke-width="3.5"/>
+  <text x="410" y="58" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">線1：Aggressor（耦合段 3 m，TD ≈ 16.5 ns）</text>
+  <rect x="640" y="58" width="44" height="20" rx="4" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="662" y="72" text-anchor="middle" font-size="9" fill="#991b1b">≈120Ω</text>
+  <!-- ground line -->
+  <line x1="190" y1="90" x2="640" y2="90" stroke="#64748b" stroke-width="2"/>
+  <text x="220" y="103" font-size="9" fill="#64748b">線2：回流（兩端共地）</text>
+  <!-- victim line -->
+  <line x1="190" y1="122" x2="640" y2="122" stroke="#0e7490" stroke-width="3.5"/>
+  <text x="410" y="115" text-anchor="middle" font-size="10" font-weight="bold" fill="#0e7490">線3：Victim（緊鄰位）</text>
+  <rect x="140" y="112" width="44" height="20" rx="4" fill="#e0f2f7" stroke="#0e7490"/>
+  <text x="162" y="126" text-anchor="middle" font-size="9" fill="#0e7490">≈120Ω</text>
+  <rect x="640" y="112" width="44" height="20" rx="4" fill="#e0f2f7" stroke="#0e7490"/>
+  <text x="662" y="126" text-anchor="middle" font-size="9" fill="#0e7490">≈120Ω</text>
+  <text x="118" y="126" text-anchor="end" font-size="10" font-weight="bold" fill="#0e7490">CH1 跨近端電阻</text>
+  <text x="118" y="140" text-anchor="end" font-size="9" fill="#6b7280">（NEXT 的家）</text>
+  <text x="700" y="140" text-anchor="middle" font-size="9" fill="#6b7280">遠端＝FEXT 的家（步驟④）</text>
+  <line x1="190" y1="144" x2="640" y2="144" stroke="#64748b" stroke-width="2"/>
+  <text x="220" y="157" font-size="9" fill="#64748b">線4：回流（兩端共地）</text>
+  <!-- coupling arrows -->
+  <path d="M300,72 L300,116" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3 2"/>
+  <path d="M380,72 L380,116" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3 2"/>
+  <path d="M460,72 L460,116" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3 2"/>
+  <text x="380" y="176" text-anchor="middle" font-size="9" fill="#b45309">每公分都在漏（C_M＋L_M）——往回跑的小口首尾相接疊成 NEXT 平台</text>
+  <!-- waveform prediction -->
+  <text x="96" y="216" font-size="12.5" font-weight="bold" fill="#0f4c5c">CH1 預測（攻擊擺幅 = A、耦合段來回 = 2TD ≈ 33 ns）</text>
+  <line x1="80" y1="330" x2="700" y2="330" stroke="#374151" stroke-width="1.2"/>
+  <line x1="80" y1="330" x2="80" y2="236" stroke="#374151" stroke-width="1.2"/>
+  <!-- NEXT pulse positive -->
+  <path d="M80,330 L150,330 L154,272 L330,272 L334,330 L440,330 L444,388 L620,388 L624,330 L700,330" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <line x1="80" y1="388" x2="700" y2="388" stroke="none"/>
+  <line x1="154" y1="350" x2="330" y2="350" stroke="#374151" stroke-width="1"/>
+  <line x1="154" y1="346" x2="154" y2="354" stroke="#374151" stroke-width="1"/>
+  <line x1="330" y1="346" x2="330" y2="354" stroke="#374151" stroke-width="1"/>
+  <text x="242" y="366" text-anchor="middle" font-size="10" font-weight="bold" fill="#374151">平台寬 = 2×TD ≈ 33 ns → 反推耦合長度！</text>
+  <text x="242" y="262" text-anchor="middle" font-size="9.5" fill="#0e7490">高度 = k_b·A（飽和 NEXT 係數，量級幾 %～10% 上下，實測為準）</text>
+  <text x="532" y="410" text-anchor="middle" font-size="9.5" fill="#7c3aed">攻擊下降沿 → 一塊極性相反的矩形（一正一負成對）</text>
+  <rect x="80" y="424" width="620" height="30" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="390" y="444" text-anchor="middle" font-size="10" fill="#0e7490" font-weight="bold">口訣：高度報耦合強度、寬度報耦合長度、極性跟著邊沿走——一塊矩形三條資訊</text>
+</svg>
+<figcaption>圖 1：實驗 1／2 的治具接法（排線腳位、兩端端接、共同地）與 CH1 預測波形。NEXT 平台的高度與寬度互相獨立：高度由 k<sub>b</sub>（間距、幾何）決定，寬度只由並排段長度決定——量寬度可以反推「這段耦合發生在多長的並排上」，FA 抓「哪一段 layout 在耦合」時就是用這招。</figcaption>
+</figure>
+
+<h2>4. 實驗 3（約 15 分）：間距搬家——親手驗證 PT2 的四倍律</h2>
+<p>PT2 Ch.6 給了間距的鐵律：「the effect... is directly proportional to the square of the distance... therefore <strong>doubling the distance will reduce the coupling by a factor of four</strong>（效應與距離平方成正比——間距加倍，耦合降為四分之一）」，背後就是 Day 18 用過的 L<sub>M</sub> = L/(1+(s/h)²)（Perfect Timing II Ch.6，公式與四倍律皆出自該章）。今天用排線的等間距腳位當現成的尺：</p>
+<ol>
+  <li><strong>基準：</strong>受害者在線 3（與攻擊線隔 1 個 pitch，中間是回流線 2），k<sub>b</sub> 已在實驗 2 量得。</li>
+  <li><strong>搬到線 5：</strong>把 120 Ω 端接和 CH1 探棒整組搬到線 5（間距約 2 倍），量新的平台高度。<strong>預測：剩約 1/3～1/4</strong>——排線幾何跟 PCB 微帶線不同（h 的定義、介質分布都不一樣），別指望小數點吻合，<strong>量級與趨勢對上就是勝利</strong>；平台<strong>寬度應該完全不變</strong>（長度沒變）——這一格必對，對不上就是端接或接地出了事。</li>
+  <li><strong>搬到線 7：</strong>間距約 3 倍，高度預測剩約 1/9 量級——可能已經貼近底噪，把平均次數開大（64 次以上）再讀。</li>
+  <li>三組 (間距, 高度) 記進表格，畫成小圖：高度 × 間距² 是否大致是常數？是——四倍律到手。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">實驗 3 帶走的話</span>
+  <p>Day 19 的「噪聲預算倒推間距」五步流程，靠的就是這條平方律的可預測性：<strong>間距是所有抗串擾手段裡最便宜、最線性、最不會有副作用的一帖藥</strong>（對比 Day 20 的 guard——接地沒做好反而變內鬼）。今天你親手驗過它，下次在 flex 疊構會議上說「這對線再讓 0.2 mm、串擾就少一半以上」，是有波形背書的。</p>
+</div>
+
+<h2>5. 實驗 4（約 20 分）：邊沿減速——飽和平台與退飽和的分水嶺</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：水桶接雨</span>
+  <p>NEXT 的高度為什麼會「飽和」？想像受害線近端是一個水桶，並排段每一公分都是一個往桶裡滴水的屋簷。邊沿快（雨下得急）時，屋簷夠長，桶口同一時刻能接到「整條屋簷的水」——高度封頂，<strong>屋簷再長也只是接得更久（平台更寬），不會更高</strong>。現在把雨放緩（邊沿調慢）：雨勢一慢，同一時刻落進桶裡的水變少——當「邊沿爬完的時間」比「屋簷來回時間 2TD」還長，桶就再也接不滿了，<strong>高度開始跟邊沿成反比縮水</strong>。分水嶺就是 t<sub>r</sub> = 2TD，也就是 Day 19 飽和長度公式 ℓ<sub>sat</sub> = v·t<sub>r</sub>/2 的另一種讀法。今天的排線 2TD ≈ 33 ns：邊沿 15 ns → 飽和（高度封頂）；邊沿調到 60 ns → 只剩約一半；120 ns → 約四分之一。</p>
+</div>
+
+<p><strong>作法（擇一）：</strong>A. 產生器支援可調邊沿——直接把 leading/trailing edge 從最快一路調到約 150 ns，每步記錄 NEXT 平台高度。B. 不支援——在源端串接電阻後再並一顆電容到地做 RC 減速：例如串 56 Ω 後掛 470 pF ≈ 增加約 26 ns 量級的邊沿（t<sub>r</sub> ≈ 2.2RC，「約」）、1 nF ≈ 55 ns 量級、2.2 nF ≈ 120 ns 量級；每換一顆，先用 CH2 實測攻擊邊沿的 t<sub>r</sub>，再讀 CH1。</p>
+<ol>
+  <li>畫「高度 vs t<sub>r</sub>」曲線：<strong>t<sub>r</sub> &lt; 2TD 的區間是一段平台</strong>（飽和——邊沿加快不會更糟，這是 NEXT 對受害者「仁慈」的一面）；<strong>t<sub>r</sub> &gt; 2TD 後高度 ≈ k<sub>b</sub>·A·(2TD/t<sub>r</sub>) 下滑</strong>。</li>
+  <li>從你的數據找出轉折點的 t<sub>r</sub>，跟 2TD ≈ 33 ns 對答案。</li>
+  <li>順便看平台<strong>形狀</strong>的變化：邊沿慢了，矩形的稜角變成斜坡（上升段 = t<sub>r</sub>），但「開始到結束」的總跨度仍認 2TD＋t<sub>r</sub>——寬度資訊還在，只是模糊了（Day 14 解析度的既視感）。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 3／4 預測：間距的平方律 ＋ 邊沿的飽和分水嶺</text>
+  <!-- left: spacing bars -->
+  <text x="200" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#0e7490">間距搬家（PT2 Ch.6 四倍律）</text>
+  <line x1="80" y1="300" x2="340" y2="300" stroke="#374151" stroke-width="1.2"/>
+  <rect x="110" y="100" width="50" height="200" fill="#0e7490"/>
+  <text x="135" y="92" text-anchor="middle" font-size="10" font-weight="bold" fill="#0e7490">1×間距</text>
+  <text x="135" y="318" text-anchor="middle" font-size="9.5" fill="#374151">線3</text>
+  <rect x="195" y="250" width="50" height="50" fill="#0891b2"/>
+  <text x="220" y="242" text-anchor="middle" font-size="10" font-weight="bold" fill="#0891b2">2× → 約1/4</text>
+  <text x="220" y="318" text-anchor="middle" font-size="9.5" fill="#374151">線5</text>
+  <rect x="280" y="278" width="50" height="22" fill="#67e8f9"/>
+  <text x="305" y="270" text-anchor="middle" font-size="10" font-weight="bold" fill="#0891b2">3× → 約1/9</text>
+  <text x="305" y="318" text-anchor="middle" font-size="9.5" fill="#374151">線7</text>
+  <rect x="80" y="336" width="270" height="52" rx="8" fill="#fffbeb" stroke="#ca8a04"/>
+  <text x="215" y="354" text-anchor="middle" font-size="9" font-weight="bold" fill="#854d0e">PT2 Ch.6：「doubling the distance will reduce</text>
+  <text x="215" y="368" text-anchor="middle" font-size="9" font-weight="bold" fill="#854d0e">the coupling by a factor of four」</text>
+  <text x="215" y="382" text-anchor="middle" font-size="8.5" fill="#854d0e">出處同 L_M = L/(1+(s/h)²)——高度變、寬度不變</text>
+  <!-- right: saturation curve -->
+  <text x="560" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626">NEXT 高度 vs 邊沿 t_r（耦合段固定 3 m）</text>
+  <line x1="420" y1="300" x2="710" y2="300" stroke="#374151" stroke-width="1.2"/>
+  <line x1="420" y1="300" x2="420" y2="80" stroke="#374151" stroke-width="1.2"/>
+  <text x="705" y="318" text-anchor="end" font-size="10" fill="#374151">t_r →</text>
+  <text x="414" y="90" text-anchor="end" font-size="10" fill="#374151">高度</text>
+  <path d="M420,120 L560,120 Q575,120 590,150 Q620,205 650,240 Q680,262 710,272" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+  <line x1="560" y1="300" x2="560" y2="120" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="560" y="318" text-anchor="middle" font-size="10" font-weight="bold" fill="#7c3aed">t_r = 2TD ≈ 33 ns</text>
+  <text x="488" y="108" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">飽和平台：k_b·A（邊沿再快也不更高）</text>
+  <text x="648" y="200" text-anchor="middle" font-size="9.5" fill="#dc2626">退飽和：∝ 2TD/t_r</text>
+  <rect x="420" y="336" width="290" height="52" rx="8" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="565" y="354" text-anchor="middle" font-size="9" font-weight="bold" fill="#7c3aed">板上翻譯：耦合段短於 ℓ_sat = v·t_r/2 時</text>
+  <text x="565" y="368" text-anchor="middle" font-size="9" fill="#7c3aed">NEXT 未飽和——「並排長度減半、噪聲減半」有效；</text>
+  <text x="565" y="382" text-anchor="middle" font-size="9" fill="#7c3aed">一旦飽和，縮短並排段只變窄不變矮（Day 19）</text>
+</svg>
+<figcaption>圖 2：左——間距搬家的預測柱狀圖：高度照平方律縮水、寬度一格不動（形狀是長度的事，高度才是間距的事）。右——NEXT 高度對邊沿時間的曲線：t<sub>r</sub> &lt; 2TD 是飽和平台，之後 ∝ 1/t<sub>r</sub> 下滑；轉折點就是 Day 19 飽和長度公式的時間版。</figcaption>
+</figure>
+
+<h2>6. 實驗 5（約 20 分）：差動 vs 單端——減法魔術的現場直播與破功示範</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：兩個記者上工，然後我們搞砸其中一個</span>
+  <p>Day 21 的兩個記者今天真的來上班：一對雙絞線貼著攻擊線走，兩條線就是兩份筆記。示波器 CH1 讀 P、CH2 讀 N、數學通道算 CH1−CH2——這就是差動接收端的減法。因為雙絞線纏在一起，兩條線離攻擊者的<strong>平均距離幾乎相同</strong>（每絞半圈就互換位置一次——纏繞就是「輪流站哨」，把不對稱平均掉），耦進來的噪聲近乎共模，減法一減就剩渣。然後我們故意使壞兩次：①<strong>拆散對稱</strong>——把最後一段解開纏繞、拉開兩線、讓攻擊線只貼著 P 走：CH1 的噪聲照舊，但 CH1−CH2 的殘渣暴增（Day 21 命門一：不對稱耦合）；②看 <strong>(CH1+CH2)/2</strong>——那些被減法丟掉的噪聲並沒有消失，全堆在共模通道裡（Day 21 練習 3 的「把帳轉給 EMI 部門」，親眼看見那本帳）。</p>
+</div>
+
+<p><strong>接法：</strong>雙絞線一段約 3 m 與攻擊線（沿用線 1）並排貼緊固定（膠帶三四處）。雙絞線遠端：P、N <strong>各掛一顆約 56～68 Ω 到共同地</strong>（合計差動端接約 120 Ω 量級，兼定共模電位）；近端：CH1、CH2 探棒（10:1）分別上 P、N，各自也掛約 56～68 Ω 到地。雙絞線上<strong>不送訊號</strong>——今天量的是「安靜的受害者吃到多少」。</p>
+<ol>
+  <li><strong>單端基準：</strong>先只看 CH1（把 N 暫時直接接地）——這就是「單端受害線」吃到的噪聲，量高度記錄。</li>
+  <li><strong>差動讀法：</strong>恢復 N 的端接，開數學通道 CH1−CH2。<strong>預測：殘渣比單端小一個量級上下</strong>（雙絞的對稱性好，抑制 10 倍量級可期；實測為準）。算「抑制比 = 單端噪聲 ÷ 差動殘渣」，這是你親手量出的第一個 CMRR 類指標。</li>
+  <li><strong>共模帳本：</strong>數學通道改 (CH1+CH2)/2（沒有三通道數學就分兩次看 CH1、CH2 幾乎同形狀）——被減掉的噪聲都在這裡，高度接近單端基準。<strong>減法沒有消滅噪聲，只是把它記到另一本帳。</strong></li>
+  <li><strong>破功示範（今天最有教育意義的一步）：</strong>把靠近端的最後約 0.5 m 解開纏繞，兩線拉開約 3～5 cm，攻擊線改貼著 P 單邊走。再看 CH1−CH2：殘渣明顯長大。對照 Day 21 的差額公式——攻擊者離 P 近、離 N 遠，L<sub>M</sub>(s)−L<sub>M</sub>(s+p) 直接進差模；PT2 的警告句「if the crosstalk affects one trace of the differential pair and not the other, the noise coupling can be a factor（若串擾只打中差動對其中一條線，噪聲照樣是個問題）」（Perfect Timing II Ch.6）在你螢幕上簽名。</li>
+  <li><strong>復原對照：</strong>纏回去、貼回中線——殘渣縮回。對稱性是可以用手指恢復的：這就是為什麼 flex 上差動對的「等距、靠緊、別拆開繞障礙」每一條都是實體幾何規則。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 5：差動抗擾對決——纏好的、拆散的、與那本共模帳</text>
+  <!-- setup -->
+  <line x1="70" y1="60" x2="690" y2="60" stroke="#dc2626" stroke-width="3.5"/>
+  <text x="380" y="52" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">Aggressor（沿用線1，貼緊並排）</text>
+  <!-- twisted pair -->
+  <path d="M70,95 Q110,80 150,95 Q190,110 230,95 Q270,80 310,95 Q350,110 390,95 Q430,80 470,95" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <path d="M70,95 Q110,110 150,95 Q190,80 230,95 Q270,110 310,95 Q350,80 390,95 Q430,110 470,95" fill="none" stroke="#7c3aed" stroke-width="2.5"/>
+  <text x="270" y="132" text-anchor="middle" font-size="9.5" fill="#0e7490">雙絞段：P/N 輪流站哨 → 平均等距 → 噪聲近乎共模</text>
+  <!-- untwisted section -->
+  <path d="M470,95 C520,88 600,72 690,70" fill="none" stroke="#0e7490" stroke-width="2.5"/>
+  <path d="M470,95 C520,104 600,118 690,120" fill="none" stroke="#7c3aed" stroke-width="2.5"/>
+  <text x="585" y="105" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">破功段：拆開＋P 貼攻擊線</text>
+  <text x="712" y="74" font-size="9" fill="#0e7490">P→CH1</text>
+  <text x="712" y="124" font-size="9" fill="#7c3aed">N→CH2</text>
+  <!-- three math traces -->
+  <text x="90" y="182" font-size="11" font-weight="bold" fill="#374151">單端讀法（只看 CH1）</text>
+  <line x1="90" y1="222" x2="700" y2="222" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,222 L200,222 L204,196 L280,196 L284,222 L420,222 L424,248 L500,248 L504,222 L700,222" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="600" y="204" text-anchor="middle" font-size="9" fill="#991b1b">照單全收 k_b·A</text>
+  <text x="90" y="282" font-size="11" font-weight="bold" fill="#374151">差動讀法（CH1−CH2，纏好時）</text>
+  <line x1="90" y1="316" x2="700" y2="316" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,316 L200,316 L204,311 L280,311 L284,316 L420,316 L424,321 L500,321 L504,316 L700,316" fill="none" stroke="#16a34a" stroke-width="2"/>
+  <text x="600" y="306" text-anchor="middle" font-size="9" fill="#166534">剩渣（抑制 10 倍量級可期，實測為準）</text>
+  <text x="90" y="368" font-size="11" font-weight="bold" fill="#374151">差動讀法（拆散＋單邊貼近後）</text>
+  <line x1="90" y1="402" x2="700" y2="402" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,402 L200,402 L204,384 L280,384 L284,402 L420,402 L424,420 L500,420 L504,402 L700,402" fill="none" stroke="#b45309" stroke-width="2"/>
+  <text x="600" y="390" text-anchor="middle" font-size="9" fill="#b45309">殘渣暴增＝差額 L_M(s)−L_M(s+p) 進差模（Day 21 命門一）</text>
+</svg>
+<figcaption>圖 3：實驗 5 的三種讀法。單端照單全收；纏好的差動用減法把近乎共模的噪聲銷掉、只剩差額渣；拆散對稱後差額暴增——免疫力是幾何對稱換來的，不是差動兩個字送的。被減掉的部分都在 (CH1+CH2)/2 那本共模帳上，沒有消失（週 9 EMI 課會回來討債）。</figcaption>
+</figure>
+
+<h2>7. 實驗 6（加碼，約 10 分）：受害者的體質——阻抗越高越容易受害</h2>
+<p>PT2 Ch.6 的 Figure 6.7 給了一條常被忽略的趨勢：「The higher the impedance of the victim trace, the more susceptible it is to noise from crosstalk（受害線阻抗越高，越容易被串擾噪聲影響）」，同章 Figure 6.8 補上「Wider traces produce less crosstalk coupling（較寬的線耦合較少）」，結論原話：「minimum coupling is created with <strong>maximum spacing, maximum trace widths, and minimum impedance</strong>（最大間距＋最大線寬＋最小阻抗 = 最小耦合）」（Perfect Timing II Ch.6）。驗證最快的一招：回到實驗 2 的接法，把受害線<strong>遠端的 120 Ω 拔掉（開路 = 阻抗拉高）</strong>——近端 NEXT 平台之後會多出一坨「遠端反彈回來的加菜」，整體噪聲能量明顯變大、形狀變髒。這就是為什麼 Day 19 說「受害線好好端接」本身就是抗串擾手段的一環：<strong>沒端接的受害線，吃到一口噪聲還會自己回鍋加熱</strong>。量完把電阻接回去，把「開路 vs 端接」兩張截圖並排存檔。</p>
+
+<h2>8. 量測記錄表（拍照存檔，週日測驗會用到）</h2>
+<table>
+  <tr><th>#</th><th>項目</th><th>理論預測</th><th>實測值</th><th>偏差原因猜測</th></tr>
+  <tr><td>1</td><td>排線速度 v（半壓架子法）</td><td>約 5～6 ns/m</td><td></td><td>絕緣材質「約」</td></tr>
+  <tr><td>2</td><td>攻擊邊沿 t<sub>r</sub>／飽和長度 ℓ<sub>sat</sub></td><td>ℓ<sub>sat</sub> = v·t<sub>r</sub>/2</td><td></td><td></td></tr>
+  <tr><td>3</td><td>NEXT 平台寬度</td><td>≈ 2×TD ≈ 33 ns</td><td></td><td>邊沿糊化 ＋t<sub>r</sub></td></tr>
+  <tr><td>4</td><td>k<sub>b</sub>（平台高度 ÷ 攻擊擺幅）</td><td>幾 %～10% 量級</td><td></td><td>排線幾何</td></tr>
+  <tr><td>5</td><td>間距 2×／3× 的高度比</td><td>約 1/4／約 1/9（趨勢）</td><td></td><td>幾何非微帶線</td></tr>
+  <tr><td>6</td><td>間距搬家後的平台寬度</td><td>不變（必對）</td><td></td><td>對不上→查端接</td></tr>
+  <tr><td>7</td><td>飽和轉折點 t<sub>r</sub></td><td>≈ 2TD ≈ 33 ns</td><td></td><td>RC 減速讀值</td></tr>
+  <tr><td>8</td><td>差動抑制比（單端÷差動殘渣）</td><td>10 倍量級可期</td><td></td><td>纏繞均勻度</td></tr>
+  <tr><td>9</td><td>破功後殘渣放大倍數</td><td>明顯（量級變化）</td><td></td><td>拆開長度/距離</td></tr>
+  <tr><td>10</td><td>（加碼）受害線開路 vs 端接</td><td>開路更髒、多反彈</td><td></td><td></td></tr>
+</table>
+<p>第 3、7 列若都對上（寬度 = 2TD、轉折 = 2TD）——同一個 2TD 在兩個不同實驗裡現身，在備註欄寫「NEXT 的時空身分證 ✓」：這一格是今天的靈魂。</p>
+
+<h2>9. 實務案例：今天的手感值多少錢</h2>
+<ul>
+  <li><strong>NB 主機板：</strong>SI 報告寫「aggressor 對 victim 的 NEXT 為 x mV」，你現在能追問兩個關鍵：①這是飽和值嗎（並排長度 vs v·t<sub>r</sub>/2）？沒飽和的話，下一代平台邊沿變快、同一塊 layout 噪聲還會長大——今天實驗 4 那條曲線就是「昨天的良民今天犯案」的定量版。②量到的平台寬度對應多長的並排段？跟 layout 上實際的並排長度對帳，就能鎖定「耦合發生在哪一段」——這是把串擾 FA 從「猜」變「量」的一步。</li>
+  <li><strong>鏡頭模組：</strong>flex 上 MIPI lane 與 VCM 驅動線的並排段，就是今天的排線；模組廠治具排線一拉兩公尺，跟今天桌上是同一個物理。差動抑制比實測 10 倍量級這件事，翻譯成 flex 語言：<strong>同樣的 aggressor，差動 lane 的有效噪聲預算多出一個量級——前提是對稱性沒被螺絲孔、補強板開口、單邊測試點吃掉</strong>（實驗 5 破功段的板上化身）。</li>
+  <li><strong>面試：</strong>「Have you ever measured crosstalk directly?」多數人答模擬報告。你可以講今天的完整故事：怎麼用一條排線量出 NEXT 的矩形、寬度怎麼反推耦合長度、邊沿掃出飽和轉折、雙絞線的減法直播——親手量過的物理，追問三層都不會露餡。</li>
+</ul>
+
+<h2>10. 動手練習（實驗數據分析）</h2>
+<p>用今天的實測值（沒做完就用理論值）作答，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（NEXT 身分證判讀）：你量到 NEXT 平台寬 35 ns、高 95 mV，攻擊擺幅 2.4 V，排線實測 v = 18 cm/ns。(a) 耦合長度多少？跟捲尺 3 m 對得上嗎？(b) k<sub>b</sub> 是多少？(c) 攻擊邊沿從 15 ns 加快到 5 ns，平台高度變多少？寬度變多少？(d) 反過來，把並排段從 3 m 剪到 1 m（其他不變、邊沿 15 ns），高度和寬度各怎麼變？</summary>
+<p><strong>解：</strong>(a) TD = 35/2 = 17.5 ns → ℓ = 17.5 × 18 cm/ns ≈ <strong>3.15 m</strong>——與捲尺 3 m 差約 5%（邊沿糊化會讓讀寬略胖，屬正常）。(b) k<sub>b</sub> = 95 mV / 2.4 V ≈ <strong>4%</strong>。(c) 已在飽和區（t<sub>r</sub> = 15 ns &lt; 2TD = 35 ns），<strong>高度不變、寬度不變</strong>——只有矩形的稜角變利。這是 NEXT 的特性：飽和後對邊沿免疫（FEXT 就沒這麼客氣，它 ∝ 1/t<sub>r</sub>）。(d) 1 m → TD ≈ 5.6 ns → 2TD ≈ 11 ns &lt; t<sub>r</sub> = 15 ns，<strong>退出飽和</strong>：寬度縮到約 t<sub>r</sub>＋2TD 量級且高度掉到約 k<sub>b</sub>·A·(2TD/t<sub>r</sub>) ≈ 4%×2.4 V×(11/15) ≈ <strong>70 mV 量級</strong>。縮短並排段在「未飽和區」才有幅度紅利——Day 19 的結論用數字再走一遍。</p>
+</details>
+
+<details>
+<summary>練習 2（四倍律對帳）：間距搬家實測：1× 間距 95 mV、2× 間距 28 mV、3× 間距 12 mV。(a) 跟平方律（1/4、1/9）對得如何？(b) 用 L<sub>M</sub> = L/(1+(s/h)²) 說明為什麼實測比「純平方律」略高是合理的。(c) 板上翻譯：某 flex 上 aggressor 與 victim 間距 0.15 mm、NEXT 超預算 2.5 倍，只靠拉間距要拉到多少？(d) 若空間只夠拉到 0.2 mm，剩下的缺口按這四天的課還有哪三帖藥？</summary>
+<p><strong>解：</strong>(a) 28/95 ≈ 0.29（理論 0.25）、12/95 ≈ 0.126（理論 0.111）——<strong>趨勢與量級吻合</strong>，略高屬正常。(b) 平方律是 s ≫ h 的漸近式；L<sub>M</sub> = L/(1+(s/h)²) 在 s 不夠大時分母的「1+」讓衰減比純 s² 慢，而且排線的回流線不是連續平面（h 等效偏大）——所以近距離段實測偏高是公式本身預告過的。(c) 需要耦合降到 1/2.5 → 間距比 = √2.5 ≈ 1.58 → 0.15 × 1.58 ≈ <strong>0.24 mm</strong>（用平方律粗估，「量級」）。(d) 0.2 mm 只降到 (0.15/0.2)² ≈ 0.56，缺口約 1.4 倍，剩下的藥：①縮短並排長度（未飽和時有效——先算 ℓ<sub>sat</sub>）；②接地良好的 guard／參考平面調整（Day 20，記得 via 縫合否則變內鬼）；③改差動或利用既有差動的對稱紅利（Day 21）；另有系統解——調 aggressor 的 slew/驅動強度（源頭減害）。開藥前先報預算與代價，這是 Day 19 的五步流程。</p>
+</details>
+
+<details>
+<summary>練習 3（飽和分水嶺設計題）：板上兩條微帶線並排 40 mm，FR4 表層 v ≈ 17 cm/ns，訊號邊沿 100 ps。(a) 這段並排的 NEXT 飽和了嗎？(b) NEXT 平台寬度多少？(c) 有人提議「把並排段砍半到 20 mm 就能把 NEXT 減半」——對嗎？(d) 什麼條件下砍並排長度才真的減幅度？</summary>
+<p><strong>解：</strong>(a) TD = 4 cm ÷ 17 cm/ns ≈ 235 ps → 2TD ≈ 470 ps ≫ t<sub>r</sub> = 100 ps → <strong>飽和</strong>。（等價說法：ℓ<sub>sat</sub> = v·t<sub>r</sub>/2 = 17 cm/ns × 0.1 ns / 2 ≈ 8.5 mm，40 mm 遠超過。）(b) 寬度 ≈ 2TD ≈ <strong>470 ps</strong>（外加約一個 t<sub>r</sub> 的糊邊）。(c) <strong>錯</strong>——20 mm 仍 &gt; 8.5 mm，還在飽和區：砍半只讓平台變窄（470 ps → 235 ps），<strong>高度一 mV 都不少</strong>。對眼圖的傷害主要看高度，這刀白挨。(d) 並排長度砍到 <strong>ℓ<sub>sat</sub> ≈ 8.5 mm 以下</strong>幅度才開始線性下降；或者換方向——高度的藥是間距（練習 2）、間距的效果是平方的，通常更划算。「先判飽和、再選藥」是今天實驗 4 那條曲線的設計版用法。</p>
+</details>
+
+<details>
+<summary>練習 4（差動帳本三行式）：實驗 5 實測：單端噪聲 90 mV、纏好差動殘渣 8 mV、拆散後殘渣 40 mV、(CH1+CH2)/2 約 85 mV。(a) 纏好時的抑制比？(b) 拆散後免疫力剩幾成？用 Day 21 的差額公式解釋殘渣為什麼長大。(c) 共模帳上那 85 mV「無害」嗎？兩條下場各是什麼？(d) 把這組數字翻譯成 camera flex 的一句設計規則。</summary>
+<p><strong>解：</strong>(a) 90/8 ≈ <strong>11 倍</strong>（10 倍量級，與預期相符）。(b) 90/40 ≈ 2.3 倍——免疫力從 11 倍掉到 2 倍量級，<strong>剩不到兩成</strong>。機制：拆散後 P 離攻擊者 s、N 離 s+p 且 p 拉大到公分級 → L<sub>M</sub>(s)−L<sub>M</sub>(s+p) 差額暴增；纏繞的本質是讓 p 的「有效值」隨纏距週期性歸零（輪流站哨），把差額平均掉。(c) 不無害，兩條下場（Day 21 練習 3）：①接收端 CMRR 有限且隨頻率變差，共模會漏一部分回差模；②共模電流沿線對旅行 = EMI 天線電流——85 mV 的共模在輻射帳本上原封不動（週 9 開庭）。(d) 一句規則：「差動 lane 的抗擾預算按『對稱維持良好』計——任何拆對繞行、單邊測試點、單邊開窗都要重新審核串擾與共模預算」；量化版：對稱破壞段的殘渣可回退到單端量級的一半以上，等於該段差動白給。</p>
+</details>
+
+<details>
+<summary>練習 5（PT2 對照題）：PT2 Ch.6 說最小耦合 = 最大間距＋最大線寬＋最小阻抗。(a) 三帖藥各自的物理機制是什麼（用 Day 18 的 C<sub>M</sub>/L<sub>M</sub> 語言）？(b) 在寬度受限的 camera flex 上，三帖藥各自的代價是什麼？(c) 今天哪三個實驗分別驗了這三帖藥（或其趨勢）？(d) 2002 年的這段話放到現代 GHz 級 MIPI 上，哪裡要補充？</summary>
+<p><strong>解：</strong>(a) <strong>間距</strong>：s↑ → L<sub>M</sub> = L/(1+(s/h)²) 與 C<sub>M</sub> 同步下降（平方律）——直接砍耦合源。<strong>線寬</strong>：W↑ → 受害線對地電容大、對地耦合更緊，鄰居分到的場比例變小（同時 Z₀ 降，見第三帖）。<strong>低阻抗</strong>：同一股耦合電流 I<sub>M</sub> = C<sub>M</sub>·dV/dt 打進低阻抗線，換出的電壓 V = I·Z 較小——受害的是「電壓」，阻抗是匯率。(b) flex 上：間距吃寬度（最貴的資源）；線寬也吃寬度且改 Z₀ 要重新配疊構；降阻抗要動疊構（介質變薄）或線寬，牽動整條 flex 的阻抗規劃——三帖藥在 flex 上全都動到寸土寸金的橫向空間，所以 flex 實務常優先用第四帖：差動＋對稱（今天實驗 5 的紅利）。(c) 間距 = 實驗 3；阻抗 = 實驗 6（開路 = 阻抗拉高 → 更髒，Fig 6.7 趨勢）；線寬今天沒直接做（排線線徑固定），由 PT2 Fig 6.8 的曲線補位——誠實標註「此帖未親測」。(d) 補充三點：①2002 年例子以時脈 false trigger 為害，現代 MIPI 的害是眼圖劣化與 BER，預算單位從「絕對 mV」變「佔擺幅百分比＋UI 百分比」（擺幅 200 mV 量級，同樣 mV 噪聲殺傷力上修一個量級）；②現代邊沿 ps 級，幾 mm 並排就飽和（ℓ<sub>sat</sub> 縮到 mm 級）——「縮短並排」這帖藥的有效區間大幅縮小；③現代 flex/封裝密度下，差動＋對稱管理實質上取代「加大間距」成為第一線手段。</p>
+</details>
+
+<h2>11. 面試怎麼考</h2>
+<p>串擾量測是 camera HW 面試「動手照妖鏡」的常客——理論人人會背，量過的人講出來的細節不一樣。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Describe how you would demonstrate near-end crosstalk on a bench with basic instruments — and what the waveform's amplitude and width each tell you."</summary>
+<p><strong>參考答案骨架：</strong>I'd build a coupled-line jig from a few meters of ribbon cable: one pair as the aggressor, an adjacent pair as the victim, all returns commoned to the generator ground. The key discipline is termination — the victim gets a resistor to ground at both ends, roughly matching the pair's characteristic impedance, otherwise NEXT and FEXT reflections mix and the shape is meaningless. I drive the aggressor with a fast-edged square wave and probe across the victim's near-end termination. What appears is the signature of near-end crosstalk: a low, wide rectangular pulse. The two dimensions carry independent information. The width equals twice the coupled-section delay — coupling leaks continuously along the overlap, and the last contribution has to travel the full length and back, so the platform lasts one round trip. Measure the width, multiply by the propagation velocity over two, and you get the physical length of the coupled section — on a real failure, that lets me point at which segment of the layout is doing the coupling. The amplitude is the saturated backward-crosstalk coefficient times the aggressor swing, set by geometry — spacing and height over the return path. And there's a third check: sweep the aggressor's edge rate. As long as the rise time is shorter than the round trip, the amplitude sits on a saturation plateau — faster edges don't make NEXT worse. Once the rise time exceeds two TD, the amplitude falls off roughly as the inverse of rise time. Finding that corner experimentally and matching it to the round-trip time is the cleanest confirmation that what I'm looking at really is NEXT and not a reflection artifact.</p>
+<p><strong>加分點：</strong>termination discipline 先講（顯示你被咬過）；「width = one round trip, amplitude = geometry」兩維獨立資訊；用 edge-rate sweep 的飽和轉折做<strong>自我驗證</strong>——量測不只讀數字還互相對帳，這是資深與新手的分野。</p>
+</details>
+
+<details>
+<summary>Q2: "A camera module's MIPI lane throws CRC errors, but only while the VCM is actively driving. With just an oscilloscope and a signal generator, how do you prove it's crosstalk and localize it?"</summary>
+<p><strong>參考答案骨架：</strong>The correlation with VCM activity already smells like coupling, but correlation isn't mechanism — I want to see the noise, time-align it to the aggressor, and reproduce it on demand. Step one, characterize the victim: probe the MIPI pair at the receiver end, P and N single-ended with matched probes, and build two math traces — the difference, which is what the receiver sees, and the average, which is the common mode. If VCM coupling is hitting the pair symmetrically, it shows up in the common-mode trace and the errors would point to limited receiver CMRR or a common-mode spec violation; if it's asymmetric — say the VCM trace runs along one side of the pair on the flex — the noise lands directly in the differential trace, and that's what kills CRC. Step two, time-align: trigger the scope on the VCM drive edges and look for noise bursts on the victim locked to those edges — coupled noise is deterministic, it rides at a fixed delay. The shape is diagnostic too: a flat-topped burst suggests a long parallel run, and its width times velocity over two estimates the coupled length, which I can match against the flex layout to localize the segment. Step three, substitute the aggressor: disconnect the VCM driver and inject a comparable edge from the signal generator into the VCM trace — if the same noise appears with my synthetic aggressor, I've isolated the path from the source's own behavior, and I can sweep amplitude and edge rate to map the sensitivity. For the fix, the diagnosis dictates the medicine: asymmetric coupling calls for rerouting or restoring pair symmetry, symmetric coupling calls for spacing or a properly stitched shield — and slowing the VCM driver's slew rate, if the actuator control loop tolerates it, attacks the dV/dt at the source.</p>
+<p><strong>加分點：</strong>差模/共模兩本帳先分開（Day 21 的語言）；trigger-on-aggressor 的確定性判據（deterministic, fixed delay）；用波形寬度<strong>定位耦合段</strong>；訊號產生器替身 aggressor = 可重現、可掃參——把 FA 從觀察變成受控實驗。</p>
+</details>
+
+<h2>12. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：受害線近端量到的 NEXT 長什麼形狀？高度和寬度各由什麼決定？</p>
+  <p class="a">A1：矮而寬的<strong>矩形平台</strong>（攻擊上升沿一塊正的、下降沿一塊反極性的）。<strong>高度</strong> = k<sub>b</sub>·A（飽和 NEXT 係數 × 攻擊擺幅），由幾何（間距 s、對地高度 h）決定；<strong>寬度</strong> = 2×TD（耦合段來回一趟），只由並排長度決定——耦合沿途連續發生，最後一口要多走一個來回才到近端。口訣：高度報耦合強度、寬度報耦合長度。FA 用法：寬度 × v ÷ 2 = 並排段實際長度 → 對 layout 鎖定耦合發生在哪一段。</p>
+  <p class="q">Q2：NEXT 的飽和條件？邊沿加快／並排縮短各在什麼區間有效？</p>
+  <p class="a">A2：飽和條件 t<sub>r</sub> &lt; 2TD（等價：並排長度 &gt; ℓ<sub>sat</sub> = v·t<sub>r</sub>/2）。<strong>飽和區</strong>：高度封頂 k<sub>b</sub>·A，邊沿再快不更高、並排再長只變寬——縮短並排段「只變窄不變矮」，砍長度無效。<strong>未飽和區</strong>（t<sub>r</sub> &gt; 2TD）：高度 ≈ k<sub>b</sub>·A·(2TD/t<sub>r</sub>)，砍長度、放慢邊沿都線性有效。設計順序：先判飽和、再選藥。現代 ps 級邊沿下 ℓ<sub>sat</sub> 只有 mm 級——絕大多數板上並排段都是飽和的。</p>
+  <p class="q">Q3：PT2 Ch.6 的間距四倍律與「最小耦合三要素」？</p>
+  <p class="a">A3：四倍律：「doubling the distance will reduce the coupling by a factor of four」——出自 L<sub>M</sub> = L/(1+(s/h)²) 的平方衰減（Perfect Timing II Ch.6）。最小耦合三要素（同章原話）：<strong>最大間距＋最大線寬＋最小阻抗</strong>——間距砍耦合源（平方律，最划算）；寬線把場抓向地、分給鄰居的比例小；低阻抗讓同一股耦合電流換出的電壓小（V = I·Z，阻抗是匯率；Fig 6.7：受害線阻抗越高越易受害——受害線端接不良 = 自己拉高阻抗還回鍋反彈）。</p>
+  <p class="q">Q4：桌上怎麼用排線＋示波器完整驗證串擾四堂課？</p>
+  <p class="a">A4：3 m 排線挑攻擊對＋受害對，受害線<strong>兩端各端接約 120 Ω</strong>、所有回流共地。①近端量 NEXT 矩形，寬度 ≈ 2TD 反推長度（Day 18/19）；②受害對搬 2×、3× 間距 → 高度約 1/4、1/9、寬度不變（Day 19/PT2 四倍律）；③掃邊沿找飽和轉折 t<sub>r</sub> = 2TD（Day 19）；④雙絞線當受害者，CH1−CH2 看差動殘渣（抑制 10 倍量級）、(CH1+CH2)/2 看共模帳、拆散單邊貼近看破功（Day 21 兩命門）；⑤受害線遠端開路 → 噪聲變大變髒（PT2 Fig 6.7）。三個坑：兩端端接、回流共地、探棒短地線＋平均模式。</p>
+  <p class="q">Q5：雙絞線為什麼天生抗串擾？拆開一段會發生什麼？</p>
+  <p class="a">A5：纏繞 = P/N <strong>輪流站哨</strong>——每絞半圈兩線互換與攻擊者的相對位置，不對稱差額 L<sub>M</sub>(s)−L<sub>M</sub>(s+p) 被週期性平均掉，噪聲近乎純共模、被接收端減法銷帳（實測抑制 10 倍量級）。拆開一段＋攻擊者單邊貼近 → 差額直接進差模，殘渣可暴增回單端量級的一半（PT2 Ch.6：「if the crosstalk affects one trace and not the other, the noise coupling can be a factor」）。被減掉的共模<strong>沒有消失</strong>：CMRR 有限會漏回差模、共模電流沿線輻射 = EMI（週 9）。flex 版教訓：拆對繞障礙、單邊測試點 = 親手製造破功段。</p>
+</div>
+
+<h2>13. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 23（週六新觀念課）：串擾收官——串擾偷走的不只電壓，還有時間</strong></p>
+  <p>四天來我們都在算串擾「多高」（電壓帳），但它還有第二本帳：<strong>時間</strong>。Day 21 埋的 odd/even mode 有一個沒講完的秘密——兩種模式在非均勻介質裡<strong>跑的速度不一樣</strong>，於是鄰居送什麼資料、你的訊號就到得早一點或晚一點：延遲成了「別人資料的函數」。這就是 pattern-dependent timing——它把串擾和下週的主角（jitter、ISI、眼圖）接在同一條故事線上。純閱讀課，不需儀器；今天的記錄表拍照存檔，週日測驗見。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 22 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 4/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

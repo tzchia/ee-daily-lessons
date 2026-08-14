@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 23｜串擾 V（收官）——串擾偷走的不只電壓，還有時間：odd/even 速度差與 pattern-dependent timing</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 4 週・第 23 天（週六新觀念課）</div>
+  <h1>Day 23：串擾 V（收官）——串擾偷走的不只電壓，還有時間</h1>
+  <div class="meta">2026-08-15（六）｜預估學習時間：90 分鐘｜難度：★★★★☆（觀念不難，但它把四天的串擾和下週的 jitter 縫在一起——縫線本身就是考點）｜純閱讀課，不需儀器</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>串擾週的最後一塊拼圖。前四課算的都是「串擾多高」（電壓帳）；今天開第二本帳：<strong>時間帳</strong>。讀完你要能夠：</p>
+  <ol>
+    <li>說出 Day 21 沒講完的秘密：odd/even 兩種模式在<strong>非均勻介質</strong>（微帶線）裡<strong>速度不一樣</strong>——為什麼、差多少量級、帶狀線為什麼沒這個問題</li>
+    <li>解釋 <strong>pattern-dependent timing</strong>：同一條線、同一個邊沿，鄰居送不同資料，你的訊號就<strong>到站時間不同</strong>——延遲成了「別人資料的函數」，並會算這個時間差 ΔT</li>
+    <li>看穿「統一場論」：<strong>FEXT 和 pattern-dependent timing 是同一枚硬幣的兩面</strong>——都源自模式速度差，所以帶狀線一次治好兩種病</li>
+    <li>掌握第二條偷時間的管道：噪聲騎在邊沿上，<strong>Δt = ΔV ÷ 邊沿斜率</strong>——電壓噪聲換算成時間噪聲的萬用匯率</li>
+    <li>開箱下週主角：用 Perfect Timing II Ch.4 的分類法把 jitter 拆成 <strong>RJ（隨機）與 DJ（確定性）</strong>，並知道串擾偷走的時間在這棵家族樹上掛在哪根樹枝</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：四天的電壓帳，和一句沒講完的話</h2>
+<p>Day 18 講了 C<sub>M</sub>＋L<sub>M</sub> 雙重耦合、NEXT 往回跑 FEXT 往前衝；Day 19 算了 NEXT 飽和與噪聲預算；Day 20 分辨了 guard 的保鑣與內鬼；Day 21 講了差動的減法免疫，並且引入 odd/even mode——當時只用它們算了<strong>阻抗</strong>（Z<sub>diff</sub> = 2·Z<sub>odd</sub>、Z<sub>cm</sub> = Z<sub>even</sub>/2），留了一句「odd/even 還有一個秘密」。Day 22 你在實驗室親手量完 NEXT 的矩形之後，預告也埋了：<strong>串擾偷走的不只電壓，還有時間</strong>。今天把這兩個伏筆一起收掉——而收掉的方式，剛好就是下週 jitter／ISI／眼圖的開場白。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天整堂課一句話</span>
+  <p>想像一支隊伍行軍，路面一半是<strong>柏油路</strong>（跑得快）、一半是<strong>沙灘</strong>（跑得慢）。隊伍怎麼「排隊形」決定大家踩到多少柏油、多少沙——排法 A 多踩柏油就早到，排法 B 多踩沙就晚到。微帶線上的一對訊號線就是這支隊伍：電磁場一半住在<strong>空氣</strong>裡（快）、一半住在 <strong>FR4 板材</strong>裡（慢），而「隊形」就是你和鄰居的資料組合——鄰居跟你<strong>反向切換</strong>是一種隊形（odd mode）、<strong>同向切換</strong>是另一種（even mode）。兩種隊形踩到的空氣/板材比例不同，所以<strong>速度不同、到站時間不同</strong>。結論：你的訊號幾點到，竟然要看<strong>鄰居今天送什麼資料</strong>——這就是 pattern-dependent timing，串擾的第二本帳。它不再是「波形上多一坨噪聲」，而是「邊沿整個往前或往後滑」——偷的是時序餘裕（timing margin），下週的眼圖會直接看到眼睛被左右啃窄。公式看不懂沒關係，記住這個行軍比喻，今天就及格了。</p>
+</div>
+
+<h2>1. odd/even 的速度差從哪來——場住在哪裡，速度就聽誰的</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：訊號的速度由「場住的材質」決定</span>
+  <p>Day 4 講過：訊號的速度不是電子跑多快，是<strong>電磁場在介質裡建立的速度</strong>，v = c/√ε<sub>eff</sub>——介質「越黏」（介電常數越高）跑越慢。微帶線的尷尬在於它是<strong>三明治的外層</strong>：線的下面是 FR4（ε<sub>r</sub> 約 4.3 量級），上面是空氣（ε = 1）。場一部分走下面、一部分翹到上面，實際速度由「空氣派」和「板材派」的比例混出一個 ε<sub>eff</sub>（單線約 3 上下量級）。關鍵來了：<strong>odd mode 和 even mode 的場，住的地方不一樣</strong>——所以兩種模式各自混出<strong>不同的 ε<sub>eff</sub>、不同的速度</strong>。</p>
+</div>
+
+<p>回憶 Day 21 的圖：<strong>odd mode</strong>（兩線反相）的電力線密集地「橫跨」在兩條線之間——而兩線之間的縫隙上方是<strong>空氣</strong>，這些橫跨的邊緣場（fringing field）有相當一部分住在空氣裡 → ε<sub>eff,odd</sub> 較<strong>低</strong> → <strong>跑得快</strong>。<strong>even mode</strong>（兩線同相）的電力線全部「奔向下方的地平面」——路徑幾乎全程泡在 <strong>FR4</strong> 裡 → ε<sub>eff,even</sub> 較<strong>高</strong> → <strong>跑得慢</strong>。</p>
+
+<div class="formula">v<sub>odd</sub> = c/√ε<sub>eff,odd</sub> ＞ v<sub>even</sub> = c/√ε<sub>eff,even</sub>　（微帶線；緊耦合時速度差約幾 % 量級，實際值靠場解器）<br>帶狀線：場全程住均勻介質 → ε<sub>eff,odd</sub> = ε<sub>eff,even</sub> → <strong>v<sub>odd</sub> = v<sub>even</sub></strong></div>
+<p><em>白話翻譯：微帶線上「唱反調」的訊號多踩空氣所以快、「齊聲唱」的多踩板材所以慢，差距約幾 % 量級（耦合越緊差越多）。帶狀線把線埋進板子裡、上下都是同一種材質——兩種隊形踩的路完全一樣，速度差歸零。這一句就是今天一半的藥方。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">場住在哪裡，速度就聽誰的：微帶線的 odd/even 速度差 vs 帶狀線的均勻天下</text>
+  <!-- left: microstrip odd mode -->
+  <text x="200" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#0e7490">微帶線・odd mode（反相）</text>
+  <rect x="60" y="150" width="280" height="60" fill="#d9f99d" stroke="#65a30d"/>
+  <text x="200" y="185" text-anchor="middle" font-size="10" fill="#3f6212">FR4（ε_r 約 4.3 量級）</text>
+  <rect x="60" y="210" width="280" height="12" fill="#64748b"/>
+  <text x="200" y="238" text-anchor="middle" font-size="9" fill="#64748b">地平面</text>
+  <rect x="130" y="138" width="42" height="12" fill="#0e7490"/>
+  <rect x="228" y="138" width="42" height="12" fill="#7c3aed"/>
+  <text x="151" y="132" text-anchor="middle" font-size="10" font-weight="bold" fill="#0e7490">P（+）</text>
+  <text x="249" y="132" text-anchor="middle" font-size="10" font-weight="bold" fill="#7c3aed">N（−）</text>
+  <!-- field lines arcing through AIR between traces -->
+  <path d="M172,140 Q200,110 228,140" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M172,144 Q200,124 228,144" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M175,150 Q200,162 225,150" fill="none" stroke="#dc2626" stroke-width="1.4" stroke-dasharray="3 2"/>
+  <text x="200" y="98" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">大量邊緣場橫跨兩線之間——住「空氣」（ε=1）</text>
+  <rect x="60" y="252" width="280" height="44" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="200" y="270" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0e7490">ε_eff,odd 低 → v_odd 快</text>
+  <text x="200" y="286" text-anchor="middle" font-size="9" fill="#0e7490">（空氣派佔比高，隊伍多踩柏油路）</text>
+  <!-- right: microstrip even mode -->
+  <text x="560" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626">微帶線・even mode（同相）</text>
+  <rect x="420" y="150" width="280" height="60" fill="#d9f99d" stroke="#65a30d"/>
+  <text x="560" y="185" text-anchor="middle" font-size="10" fill="#3f6212">FR4（ε_r 約 4.3 量級）</text>
+  <rect x="420" y="210" width="280" height="12" fill="#64748b"/>
+  <text x="560" y="238" text-anchor="middle" font-size="9" fill="#64748b">地平面</text>
+  <rect x="490" y="138" width="42" height="12" fill="#0e7490"/>
+  <rect x="588" y="138" width="42" height="12" fill="#0e7490"/>
+  <text x="511" y="132" text-anchor="middle" font-size="10" font-weight="bold" fill="#0e7490">P（+）</text>
+  <text x="609" y="132" text-anchor="middle" font-size="10" font-weight="bold" fill="#0e7490">N（+）</text>
+  <!-- field lines going DOWN into FR4 to plane -->
+  <path d="M511,150 Q505,185 500,208" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M511,150 Q517,185 522,208" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M609,150 Q603,185 598,208" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M609,150 Q615,185 620,208" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <text x="560" y="105" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">兩線之間場稀薄；電力線全體</text>
+  <text x="560" y="118" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">向下奔地平面——泡在「FR4」裡</text>
+  <rect x="420" y="252" width="280" height="44" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="560" y="270" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">ε_eff,even 高 → v_even 慢</text>
+  <text x="560" y="286" text-anchor="middle" font-size="9" fill="#dc2626">（板材派佔比高，隊伍多踩沙灘）</text>
+  <!-- bottom: stripline -->
+  <text x="380" y="330" text-anchor="middle" font-size="12" font-weight="bold" fill="#16a34a">帶狀線：把線埋進均勻介質——兩種隊形踩同一種路</text>
+  <rect x="180" y="344" width="400" height="10" fill="#64748b"/>
+  <rect x="180" y="354" width="400" height="52" fill="#d9f99d" stroke="#65a30d"/>
+  <rect x="180" y="406" width="400" height="10" fill="#64748b"/>
+  <rect x="300" y="374" width="42" height="10" fill="#0e7490"/>
+  <rect x="420" y="374" width="42" height="10" fill="#0e7490"/>
+  <text x="620" y="382" font-size="9" fill="#3f6212">上下全是 FR4</text>
+  <rect x="180" y="424" width="400" height="34" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="380" y="438" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#166534">ε_eff,odd = ε_eff,even → v_odd = v_even</text>
+  <text x="380" y="452" text-anchor="middle" font-size="9" fill="#166534">FEXT ≈ 0（Day 19 的謎底）＋ pattern-dependent timing ≈ 0——一帖藥治兩種病</text>
+</svg>
+<figcaption>圖 1：微帶線的 odd mode 場大量住在兩線之間的空氣裡（ε 低 → 快），even mode 場全程泡在 FR4 裡奔向地平面（ε 高 → 慢）——同一對銅線兩張「速度表」。帶狀線把場整個關進均勻介質，兩張表合而為一：這就是為什麼 Day 19 說帶狀線 FEXT 極小，今天再加一條——它的 pattern-dependent timing 也極小。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤解先拆彈</span>
+  <p><strong>「速度差幾 % 而已，很重要嗎？」</strong>——重要，因為它跟「絕對時間」無關、跟「不確定性」有關。時鐘樹整體慢 100 ps 沒人在乎（大家一起慢），但<strong>同一個邊沿有時早 15 ps、有時晚 15 ps、而且由別人的資料決定</strong>——這 30 ps 是直接從 setup/hold 或眼寬預算裡扣的，而且你無法用「校一次」補償（資料隨時在變）。Day 21 量的 Z<sub>odd</sub>/Z<sub>even</sub> 差異是「阻抗兩張價目表」，今天是「速度兩張時刻表」——<strong>同一個耦合，開了兩本帳</strong>。</p>
+</div>
+
+<h2>2. Pattern-dependent timing：鄰居送什麼，你就幾點到</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：三種鄰居，三個到站時間</span>
+  <p>你（victim）每個週期都發車，鄰居（aggressor）的行為有三種：①<strong>跟你反向切換</strong>——你們合體成 odd mode，全程搭快車，<strong>早到</strong>；②<strong>跟你同向切換</strong>——合體成 even mode，全程搭慢車，<strong>晚到</strong>；③<strong>鄰居安靜不動</strong>——你的訊號其實是「半份 odd＋半份 even」的疊加，一半搭快車一半搭慢車，到站時間在中間，而且邊沿會被<strong>拉糊成兩階</strong>（快的那半先到、慢的那半補上）。於是同一條線的到站時間不是一個數字，是一個<strong>視鄰居資料而定的區間</strong>——寬度就是快慢車的時刻差。這件事的官方名字叫 pattern-dependent timing（或 crosstalk-induced skew／data-dependent delay），它是「確定性」的：pattern 一樣，偷走的時間就一樣——這個「確定性」三個字，下週 jitter 分類時是關鍵證詞。</p>
+</div>
+
+<p>定量化非常直白。耦合段長 ℓ，兩種模式的單程延遲分別是 TD<sub>odd</sub> = ℓ/v<sub>odd</sub>、TD<sub>even</sub> = ℓ/v<sub>even</sub>，則資料造成的到站時間散布（最早與最晚之差）為：</p>
+
+<div class="formula">ΔT = TD<sub>even</sub> − TD<sub>odd</sub> = ℓ·(1/v<sub>even</sub> − 1/v<sub>odd</sub>) = ℓ·(√ε<sub>eff,even</sub> − √ε<sub>eff,odd</sub>)/c</div>
+<p><em>白話翻譯：時間差 = 並排長度 ×（慢車每公尺多花的時間）。它跟並排長度<strong>成正比、不飽和</strong>——這點跟 NEXT（會飽和）完全不同，跟 FEXT（線性成長）是親戚，等一下你會知道為什麼是親戚。數字感：微帶線上緊耦合對，速度差取約 3% 估算，v 約 17 cm/ns → 每 10 cm 並排約偷 18 ps 量級（示意估算，實際值靠場解器與實測）。單看很小，但現代介面的 UI（一個位元的時間）已經縮到幾百 ps 甚至更短——幾十 ps 是眼寬預算裡「看得見的一口」。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 450" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">同一個邊沿、三種鄰居、三個到站時間——時序成了鄰居資料的函數</text>
+  <!-- three waveforms -->
+  <text x="90" y="60" font-size="11" font-weight="bold" fill="#0e7490">① 鄰居反向切換（odd mode・快車）</text>
+  <line x1="90" y1="102" x2="700" y2="102" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,102 L330,102 L346,66 L700,66" fill="none" stroke="#0e7490" stroke-width="2.4"/>
+  <text x="338" y="118" text-anchor="middle" font-size="9" font-weight="bold" fill="#0e7490">t_odd（早到）</text>
+  <text x="90" y="156" font-size="11" font-weight="bold" fill="#374151">② 鄰居安靜（半 odd＋半 even・兩階糊邊）</text>
+  <line x1="90" y1="198" x2="700" y2="198" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,198 L330,198 L346,181 L410,180 L426,162 L700,162" fill="none" stroke="#374151" stroke-width="2.4"/>
+  <text x="386" y="214" text-anchor="middle" font-size="9" font-weight="bold" fill="#374151">t_nom（中間、邊沿分兩階——快的半份先到）</text>
+  <text x="90" y="252" font-size="11" font-weight="bold" fill="#dc2626">③ 鄰居同向切換（even mode・慢車）</text>
+  <line x1="90" y1="294" x2="700" y2="294" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,294 L410,294 L426,258 L700,258" fill="none" stroke="#dc2626" stroke-width="2.4"/>
+  <text x="418" y="310" text-anchor="middle" font-size="9" font-weight="bold" fill="#dc2626">t_even（晚到）</text>
+  <!-- delta T window -->
+  <line x1="338" y1="56" x2="338" y2="316" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <line x1="418" y1="56" x2="418" y2="316" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <line x1="338" y1="326" x2="418" y2="326" stroke="#7c3aed" stroke-width="1.6"/>
+  <line x1="338" y1="321" x2="338" y2="331" stroke="#7c3aed" stroke-width="1.6"/>
+  <line x1="418" y1="321" x2="418" y2="331" stroke="#7c3aed" stroke-width="1.6"/>
+  <text x="378" y="344" text-anchor="middle" font-size="10" font-weight="bold" fill="#7c3aed">ΔT = ℓ·(1/v_even − 1/v_odd)：到站時間隨資料在此區間內滑動</text>
+  <!-- eye diagram -->
+  <text x="230" y="380" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">下週的眼圖會這樣看到它：</text>
+  <path d="M400,430 Q470,378 540,430 Q470,430 400,430" fill="none" stroke="#94a3b8" stroke-width="1.4"/>
+  <path d="M400,382 Q470,434 540,382" fill="none" stroke="#94a3b8" stroke-width="1.4"/>
+  <path d="M424,430 Q482,386 540,428" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <path d="M424,384 Q482,428 540,384" fill="none" stroke="#dc2626" stroke-width="1.6"/>
+  <text x="640" y="400" text-anchor="middle" font-size="9.5" fill="#dc2626" font-weight="bold">交叉點左右抖動 ΔT</text>
+  <text x="640" y="414" text-anchor="middle" font-size="9.5" fill="#dc2626">→ 眼睛被「左右啃窄」</text>
+  <text x="640" y="428" text-anchor="middle" font-size="9" fill="#6b7280">（電壓噪聲啃上下、時間噪聲啃左右）</text>
+</svg>
+<figcaption>圖 2：victim 自己的驅動完全相同，僅鄰居資料不同，到站時間就在 t<sub>odd</sub>～t<sub>even</sub> 間滑動；鄰居安靜時邊沿還會分裂成兩階（半份搭快車先到）。這個 ΔT 與並排長度成正比、不飽和。疊上千百個位元後，眼圖交叉點左右抖動——串擾用「時間」這本帳啃掉眼寬。</figcaption>
+</figure>
+
+<h2>3. 統一場論：FEXT 和 pattern timing 是同一枚硬幣</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：快慢車沒對齊，「差額」就是 FEXT</span>
+  <p>還記得 Day 19 的懸案嗎——「帶狀線的 FEXT 為什麼趨近零」？今天破案。攻擊者發一個邊沿、受害者安靜：這個狀態可以拆成「半份 odd＋半份 even」（兩種隊形各出一半，疊起來剛好等於「只有攻擊者在動」）。兩份在起點對受害線的貢獻<strong>一正一負、完全抵消</strong>——所以受害線起點乾乾淨淨。但接下來兩份各搭各的車：快車先到遠端、慢車晚到，<strong>在遠端不再同時抵消</strong>——沒對齊的那一小段差額，就在受害線遠端露出來，這就是 <strong>FEXT 脈衝</strong>。帶狀線快慢車同速、永遠對齊 → FEXT ≈ 0。同一時間，攻擊線自己的邊沿也因為兩份沒對齊而<strong>糊成兩階</strong>——就是圖 2 的②。所以：<strong>FEXT（受害者收到的窄脈衝）、pattern-dependent timing（到站時間看資料）、邊沿兩階糊化——三個現象共用同一個根因：v<sub>odd</sub> ≠ v<sub>even</sub></strong>。一帖藥（換均勻介質）三個病一起好，這種「多病一因」是 FA 思維最愛的結構。</p>
+</div>
+
+<p>把 Day 18/19 的 FEXT 公式接上今天的語言：FEXT 幅度 ∝ (C<sub>M</sub>/C − L<sub>M</sub>/L)——容性耦合佔比與感性耦合佔比之<strong>差</strong>。均勻介質裡這兩個佔比恰好相等（電場與磁場「看到」同一種材質，耦合比例同步），差額為零；微帶線的空氣讓電場與磁場的分布比例脫鉤，差額非零、FEXT 現身，且通常 L<sub>M</sub>/L 佔上風 → 上升沿在遠端打出一個<strong>負向</strong>窄脈衝（Day 19 教過的極性，今天你知道它的深層原因了）。「C/L 佔比差」與「odd/even 速度差」是同一件事的兩種數學寫法——面試時能把這兩套語言互translate，是「背公式」與「懂物理」的分水嶺。</p>
+
+<div class="card takeaway">
+  <span class="label">串擾五課收官——把五天縮成一張處方籤</span>
+  <p><strong>電壓帳</strong>：NEXT（矮寬矩形、會飽和、住近端）＋ FEXT（窄脈衝、∝ 長度與邊沿速率、住遠端）——藥：間距（平方律）、縮短並排（未飽和才有效）、接地良好的 guard、受害線好好端接。<strong>時間帳</strong>：pattern-dependent timing（∝ 長度、不飽和）＋噪聲騎邊沿（下一節）——藥：<strong>換帶狀線／內層</strong>（治本：速度差歸零）、拉間距（治標：耦合變小差額變小）、差動＋對稱（P/N 一起早一起晚，差動眼幾乎不動——差動的第三個紅利，Day 21 沒來得及講的）。注意兩本帳的藥不完全重疊：縮短並排對飽和的 NEXT 無效（只變窄），對 ΔT 卻<strong>永遠線性有效</strong>——開藥前先問「病人是電壓還是時間」。</p>
+</div>
+
+<h2>4. 第二條偷時間的管道：噪聲騎在邊沿上</h2>
+<p>就算速度差為零（帶狀線），串擾還有一招偷時間：<strong>電壓噪聲直接騎在受害者自己的邊沿上</strong>。接收器認的是「訊號穿越門檻電壓的那一刻」——邊沿爬坡爬到一半，一坨 NEXT 噪聲疊上來，把波形往上或往下推一把，穿越門檻的時刻就提前或延後：</p>
+
+<div class="formula">Δt ≈ ΔV ÷ (dV/dt)　　（ΔV：騎在邊沿上的噪聲；dV/dt：邊沿在門檻附近的斜率）</div>
+<p><em>白話翻譯：這是「電壓噪聲換時間噪聲」的萬用匯率，匯率就是邊沿斜率。數字感：20 mV 噪聲騎在一個 0.4 V 擺幅、200 ps 上升時間的邊沿上（斜率 2 mV/ps）→ 偷走約 10 ps。兩個推論立刻可用：①<strong>邊沿越慢越容易被偷時間</strong>——同樣的噪聲，斜率減半、偷走的時間加倍（Day 2 的「慢邊沿不是免費午餐」再+1）；②這個機制<strong>不挑介質</strong>——帶狀線治得了速度差，治不了這一條，所以電壓帳（Day 18–22 的所有降噪手段）永遠是時間帳的地基。這條公式下週會反覆出場：電源噪聲、殘餘反射、ISI 全部經由同一個匯率變成 jitter。</em></p>
+
+<h2>5. Jitter 開箱：串擾偷走的時間，掛在家族樹哪一枝？</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：公車誤點的兩種原因</span>
+  <p>下週的主角 jitter，定義一句話：<strong>邊沿沒有出現在它理想的時刻</strong>（公車誤點）。誤點原因分兩大族：①<strong>隨機的</strong>（RJ）——風、路況、無數小干擾疊加，誤點量呈鐘形分布、理論上沒有上限，只能用統計講話（「95% 的班次誤點在 3 分鐘內」）；②<strong>確定性的</strong>（DJ）——有具體兇手、有固定上限：例如「每次經過學校門口都固定多堵 2 分鐘」。今天學的兩條偷時間管道——pattern-dependent timing 和噪聲騎邊沿——<strong>全部屬於 DJ</strong>：pattern 一樣、偷的時間就一樣，有上限（ΔT 封頂）、可以抓到兇手（隔壁那條線）。這個分類不是學術潔癖：<strong>RJ 只能統計上共存，DJ 可以工程上消滅</strong>——FA 的第一刀永遠是先把兩族拆開，因為藥完全不同。</p>
+</div>
+
+<p>《Perfect Timing II》Ch.4 給了這棵家族樹的權威版本（本書首次進入 jitter 章，之後兩週會一直用它）：</p>
+<ul>
+  <li><strong>總帳：</strong>「Total jitter is equal to the sum of deterministic jitter and random jitter（總 jitter = 確定性 jitter＋隨機 jitter）」（Perfect Timing II Ch.4）。</li>
+  <li><strong>DJ 的定義與兇手名單：</strong>「Deterministic jitter is non-random and bounded. This type of jitter can be traced to a specific source. DJ is due to <strong>signal noise, crosstalk, power supplies</strong>, and other similar sources（確定性 jitter 非隨機且有界，可以追溯到具體來源——訊號噪聲、串擾、電源等）」（Perfect Timing II Ch.4）——<strong>crosstalk 被書點名列在 DJ 兇手名單上</strong>，今天整堂課就是這一句的機制展開。</li>
+  <li><strong>DJ 的四個子分類：</strong>duty cycle distortion（高低半週期不等寬——Day 21 面試題剛考過它的差動版）、<strong>data dependent</strong>（資料相關）、sinusoidal（弦波式，常源自展頻或電源漣波調變）、<strong>uncorrelated bounded</strong>（不相關但有界——書中明點「Power supply noise and crosstalk are contributors of this type」）。今天的兩條管道怎麼掛：aggressor 跟 victim <strong>同一條匯流排</strong>（資料相關）→ 掛 data-dependent；aggressor 是<strong>不相干的線</strong>（如 VCM 驅動打 MIPI）→ 掛 uncorrelated bounded。</li>
+  <li><strong>接下週的金句：</strong>「Data Dependent Jitter and Inter-Symbol Interference describe the same condition but viewed from different perspectives. Data dependent jitter is measured in the time domain while inter-symbol interference is analyzed in the frequency domain（DDJ 與 ISI 是同一件事的兩種視角——時域叫 DDJ、頻域叫 ISI）」（Perfect Timing II Ch.4）。下週講損耗造成的 ISI 時，你會發現它和今天的 pattern timing 掛在<strong>同一根樹枝</strong>上——只是兇手從「鄰居」換成「自己的過去」（頻寬不足讓前一個位元的殘影拖累下一個）。</li>
+  <li><strong>RJ 與統計：</strong>RJ 源自熱噪聲等自然隨機因素，「follows Gaussian probability densities and its limits are unbounded（服從高斯分布、無界）」——所以只能用 σ（RMS）講話；書給的工程慣例：「plus or minus six sigma... is the maximum deviation from the mean to use for calculating peak-to-peak jitter（一般以 ±6σ 作為換算峰對峰值的最大偏移）」（Perfect Timing II Ch.4）。<strong>2002 年數據需上修</strong>：現代高速串列鏈路以 BER 定義 TJ（例如 BER 10⁻¹² 對應約 ±7σ、即約 14σ 的峰對峰換算，量級），且量測主力已從書中的 TIA 專用機轉為帶 jitter 分解軟體的高頻寬即時示波器＋BERT；書中「用示波器 persistence 目測 jitter 不準（trigger 不穩）」的警告本身仍然成立，解法升級了而已。</li>
+  <li><strong>應用三型（datasheet 讀表必備）：</strong>cycle-to-cycle（相鄰兩週期之差，PLL 追不上的高頻抖動看它）、period（每個週期對理想值之差，吃 setup/hold 預算看它）、long-term（N 個週期後的累積偏移，書中例子是顯示卡像素「畫面跑位」）。同一顆料三個數字可以差很多——<strong>對規格時先確認是哪一型、是 RMS 還是 p-p</strong>，PT2 特別警告不同 datasheet 對 cycle-to-cycle 的定義都不統一。單位方面書也給了資料通訊慣用的正規化：Jitter<sub>UI</sub> = Jitter(sec)/1 UI(sec)——把時間除以一個位元的寬度，跨速率可比。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Jitter 家族樹（Perfect Timing II Ch.4）——串擾的兩條管道掛在哪裡</text>
+  <rect x="290" y="42" width="180" height="40" rx="8" fill="#0f4c5c"/>
+  <text x="380" y="66" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">Total Jitter = DJ ＋ RJ</text>
+  <line x1="380" y1="82" x2="200" y2="118" stroke="#374151" stroke-width="1.4"/>
+  <line x1="380" y1="82" x2="580" y2="118" stroke="#374151" stroke-width="1.4"/>
+  <!-- RJ -->
+  <rect x="470" y="118" width="220" height="88" rx="8" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="580" y="138" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#0e7490">RJ 隨機 jitter</text>
+  <text x="580" y="154" text-anchor="middle" font-size="9" fill="#374151">高斯分布・無界・熱噪聲等自然來源</text>
+  <text x="580" y="168" text-anchor="middle" font-size="9" fill="#374151">只能用 σ（RMS）描述；p-p 需訂 σ 窗</text>
+  <path d="M510,198 Q535,158 552,192 Q560,176 568,192 Q585,158 610,198" fill="none" stroke="#0e7490" stroke-width="1.6"/>
+  <text x="646" y="196" font-size="8.5" fill="#0e7490">鐘形＋長尾</text>
+  <!-- DJ -->
+  <rect x="80" y="118" width="240" height="88" rx="8" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="200" y="138" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#dc2626">DJ 確定性 jitter</text>
+  <text x="200" y="154" text-anchor="middle" font-size="9" fill="#374151">非隨機・有界・可追溯到具體兇手</text>
+  <text x="200" y="168" text-anchor="middle" font-size="9" fill="#374151">「signal noise, crosstalk, power supplies」</text>
+  <text x="200" y="182" text-anchor="middle" font-size="9" fill="#991b1b" font-weight="bold">—— 書中原話點名 crosstalk（Ch.4）</text>
+  <!-- DJ children -->
+  <line x1="200" y1="206" x2="110" y2="244" stroke="#374151" stroke-width="1.2"/>
+  <line x1="200" y1="206" x2="278" y2="244" stroke="#374151" stroke-width="1.2"/>
+  <line x1="200" y1="206" x2="450" y2="244" stroke="#374151" stroke-width="1.2"/>
+  <line x1="200" y1="206" x2="620" y2="244" stroke="#374151" stroke-width="1.2"/>
+  <rect x="40" y="244" width="140" height="74" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="110" y="262" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#991b1b">DCD 佔空比失真</text>
+  <text x="110" y="277" text-anchor="middle" font-size="8.5" fill="#374151">高/低半週期不等寬</text>
+  <text x="110" y="291" text-anchor="middle" font-size="8.5" fill="#374151">（上升/下降沿不對稱、</text>
+  <text x="110" y="304" text-anchor="middle" font-size="8.5" fill="#374151">差動對內 skew）</text>
+  <rect x="208" y="244" width="140" height="74" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="278" y="262" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#991b1b">DDJ 資料相關（=ISI）</text>
+  <text x="278" y="277" text-anchor="middle" font-size="8.5" fill="#374151">時域叫 DDJ、頻域叫 ISI</text>
+  <text x="278" y="291" text-anchor="middle" font-size="8.5" fill="#7c3aed" font-weight="bold">★ 同匯流排的 pattern-</text>
+  <text x="278" y="304" text-anchor="middle" font-size="8.5" fill="#7c3aed" font-weight="bold">dependent timing 掛這裡</text>
+  <rect x="380" y="244" width="140" height="74" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="450" y="262" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#991b1b">SJ 弦波式</text>
+  <text x="450" y="277" text-anchor="middle" font-size="8.5" fill="#374151">邊沿位置被週期性調變</text>
+  <text x="450" y="291" text-anchor="middle" font-size="8.5" fill="#374151">（展頻時脈、電源漣波</text>
+  <text x="450" y="304" text-anchor="middle" font-size="8.5" fill="#374151">調變是常客）</text>
+  <rect x="550" y="244" width="150" height="74" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="625" y="262" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#991b1b">不相關有界</text>
+  <text x="625" y="277" text-anchor="middle" font-size="8.5" fill="#374151">與資料無關但有上限</text>
+  <text x="625" y="291" text-anchor="middle" font-size="8.5" fill="#7c3aed" font-weight="bold">★ 不相干 aggressor 的串擾</text>
+  <text x="625" y="304" text-anchor="middle" font-size="8.5" fill="#7c3aed" font-weight="bold">（如 VCM 打 MIPI）掛這裡</text>
+  <!-- application three types -->
+  <rect x="80" y="340" width="600" height="84" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="360" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">應用三型（讀 datasheet 必備・PT2 Ch.4）——同一顆料三個數字，先問是哪一型、RMS 還是 p-p</text>
+  <text x="380" y="380" text-anchor="middle" font-size="9.5" fill="#374151">cycle-to-cycle：相鄰兩週期之差（PLL 追不上的高頻抖動）｜period：每週期 vs 理想（吃 setup/hold）｜long-term：N 週期累積（畫面跑位）</text>
+  <text x="380" y="398" text-anchor="middle" font-size="9.5" fill="#374151">單位正規化：Jitter_UI = Jitter(sec) ÷ 1 UI(sec)——除以一個位元的寬度，跨速率可比</text>
+  <text x="380" y="414" text-anchor="middle" font-size="9" fill="#6b7280">2002 需上修：±6σ p-p 慣例 → 現代以 BER 定義 TJ（10⁻¹² 約對應 ±7σ 量級）；TIA → 即時示波器 jitter 分解＋BERT</text>
+</svg>
+<figcaption>圖 3：PT2 Ch.4 的 jitter 家族樹。今天學的兩條偷時間管道都掛在 DJ 之下：同匯流排的 pattern-dependent timing 是 DDJ（＝頻域視角的 ISI——下週的損耗課會從另一邊走到同一根樹枝）；不相干 aggressor 的串擾與電源噪聲掛「不相關有界」。RJ 是另一族：高斯、無界、只能統計共存。FA 第一刀：先拆 RJ/DJ，因為藥完全不同。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">PT2 Ch.4 的診斷清單裡藏著一句熟人</span>
+  <p>書在章末的 jitter 診斷技巧裡寫道：「The output trace has crosstalk to other switching signals on the board layout... It is preferable to have <strong>a ground trace next to the clock lines or extra spacing</strong> between the other signals（時脈輸出線與其他切換訊號有串擾……建議在時脈線旁放接地線、或與其他訊號加大間距）」（Perfect Timing II Ch.4）——這正是 Day 20 的 guard trace 與 Day 19 的間距藥方，出現在「jitter 診斷」章而不是「串擾」章：<strong>2002 年的作者已經把串擾當成 jitter 問題在醫了</strong>。當然，Day 20 的警告仍然有效：guard 沒有良好接地（via 縫合）反而變內鬼——書中這句藥方要配著 Day 20 的服藥須知一起吃。</p>
+</div>
+
+<h2>6. 實務案例：兩本帳在你的老本行長什麼樣</h2>
+<ul>
+  <li><strong>NB 主機板（記憶體匯流排）：</strong>DDR 資料線成群並排跑，同 byte lane 內的線彼此就是 aggressor——pattern-dependent timing 讓每根 DQ 的到站時間隨「這個 byte 當下送什麼」滑動。訓練（write leveling / read training）校掉的是<strong>靜態</strong> skew；pattern 造成的部分是<strong>動態</strong>的、校不掉，直接以 DJ 之姿進 timing budget。這就是為什麼 DDR layout 規則不只要求等長（治靜態），還要求組內間距與參考平面完整（治動態）——兩本帳各有各的規則在管。</li>
+  <li><strong>鏡頭模組（flex 上的 MIPI）：</strong>MIPI lane 是差動——今天的第三個紅利登場：共模的到站滑動 P/N 一起滑，差動眼交叉點幾乎不動，<strong>前提又是對稱</strong>（Day 21/22 的命門重演：拆對、單邊繞行會把「一起滑」變成「一先一後」＝直接製造對內 skew，眼圖交叉點左右開花）。而 VCM/OIS 驅動線對 MIPI 的串擾屬「不相關有界 DJ」——它不挑資料、挑<strong>VCM 動作時機</strong>，這就是 Day 22 面試題那個「只在對焦時 CRC 錯」的病例在 jitter 語言裡的檔案名。debug 時把眼圖量測 gate 在 VCM 驅動邊沿附近 vs 遠離處各做一次，DJ 差值就是 VCM 的貢獻——下週教眼圖後這招會正式入庫。</li>
+  <li><strong>時脈線（PT2 的主場）：</strong>時脈沒有「資料」，pattern 帳幾乎記不到它頭上（每個週期都一樣）——但鄰居的資料線對它的串擾是不折不扣的「不相關有界 DJ」，直接變成 cycle-to-cycle jitter 打進下游 PLL 追不上的頻段。PT2 整本書把時脈線的間距/guard 規則訂得比資料線嚴，根子就在這裡：<strong>時脈的時間帳沒有重傳可以救</strong>。</li>
+</ul>
+
+<h2>7. 動手練習（紙上推演）</h2>
+<p>今天不需儀器，但每一題都請先寫下自己的答案再展開詳解。</p>
+
+<details>
+<summary>練習 1（ΔT 基本功）：某微帶線耦合段長 60 mm，場解器給出 v<sub>odd</sub> = 17.2 cm/ns、v<sub>even</sub> = 16.0 cm/ns（假設值）。(a) 兩種模式的單程延遲各多少？pattern 造成的到站散布 ΔT 多少？(b) 這條線跑 1 Gbps（UI = 1 ns），ΔT 佔眼寬預算幾 %？跑 4 Gbps 呢？(c) 鄰居「反向切換」和「同向切換」哪個讓你早到？(d) 把這段換到帶狀線內層，ΔT 變多少？代價是什麼？</summary>
+<p><strong>解：</strong>(a) TD<sub>odd</sub> = 6 cm ÷ 17.2 cm/ns ≈ <strong>349 ps</strong>；TD<sub>even</sub> = 6 ÷ 16.0 ≈ <strong>375 ps</strong>；ΔT ≈ <strong>26 ps</strong>。(b) 1 Gbps：26 ps/1000 ps ≈ <strong>2.6% UI</strong>——還過得去；4 Gbps（UI = 250 ps）：26/250 ≈ <strong>10.4% UI</strong>——單這一項就吃掉一成眼寬，未上桌先輸。注意 ΔT 是「長度 × 速度差」的物理量，<strong>不隨資料速率變小</strong>——速率翻倍、UI 減半，同一段銅線的傷害佔比自動翻倍，這就是「昨天的良民今天犯案」的時間帳版本。(c) 反向切換 = odd mode = 快車 → <strong>早到</strong>；同向 = even = 慢車 → 晚到。(d) 帶狀線 v<sub>odd</sub> = v<sub>even</sub> → ΔT ≈ <strong>0</strong>（一併治好 FEXT）；代價：內層走線要換層 via（Day 16 的回流過橋要伺候好）、佈線資源與疊構成本、且帶狀線同幾何下損耗略高（介質全包）——下週損耗課會補這筆帳。</p>
+</details>
+
+<details>
+<summary>練習 2（匯率換算）：受害線邊沿擺幅 0.4 V、上升時間 200 ps（10–90%），門檻在中點。(a) 門檻附近斜率約多少？一坨 24 mV 的 NEXT 疊在爬坡途中，偷走約幾 ps？(b) 下一代平台邊沿加快到 100 ps、噪聲不變，偷走的時間變多還是變少？(c) 但 Day 22 說「NEXT 飽和後邊沿加快高度不變」——結合 (b)，「加快邊沿」對時間帳到底是好是壞？(d) 這條 Δt 公式為什麼說「電壓帳是時間帳的地基」？</summary>
+<p><strong>解：</strong>(a) 斜率 ≈ 0.8×0.4 V ÷ 200 ps = 1.6 mV/ps（用 10–90% 擺幅近似門檻區斜率，「約」）→ Δt ≈ 24/1.6 = <strong>15 ps</strong>。(b) 斜率加倍（約 3.2 mV/ps）→ Δt ≈ <strong>7.5 ps，變少</strong>——快邊沿對「被偷時間」反而有免疫力。(c) 兩本帳走向相反：電壓帳——飽和 NEXT 高度不變（不變差）、FEXT 卻 ∝ 1/t<sub>r</sub> 變大（變差）；時間帳——同樣的 ΔV 換到的 Δt 變小（變好）。所以「加快邊沿」不是單方向的好壞，<strong>要看這條鏈路當前卡在哪本帳</strong>——這正是面試「edge rate 快好還是慢好」陷阱題的標準拆法：先問哪個預算在超支。(d) 因為 Δt = ΔV/斜率——<strong>ΔV 每降一分，Δt 同比例降一分</strong>：Day 18–22 所有降電壓噪聲的手段（間距、guard、端接、對稱）自動同額回饋到時間帳。反之不成立：治速度差的藥（帶狀線）治不了噪聲騎邊沿。地基與樓層的關係。</p>
+</details>
+
+<details>
+<summary>練習 3（家族樹掛號）：把下列五個觀察掛到圖 3 家族樹的正確樹枝，並各說一句「為什麼」：(a) 時脈的高/低半週期寬度固定差 80 ps；(b) 眼圖交叉點的時間直方圖呈雙峰，切換 PRBS pattern 後雙峰間距改變；(c) 直方圖呈單峰鐘形、加長量測時間 p-p 持續緩慢變大；(d) jitter 頻譜上有一根固定在約 33 kHz 的尖峰，幅度與展頻時脈設定連動；(e) MIPI lane 的 DJ 只在 OIS 防手震啟動時多出來，與影像資料內容無關。</summary>
+<p><strong>解：</strong>(a) <strong>DCD</strong>——半週期不等寬的定義本身；兇手常是驅動器上升/下降不對稱或差動對內 skew（Day 21 面試題）。(b) <strong>DDJ/ISI</strong>——與資料 pattern 連動是 DDJ 的指紋；雙峰是「快車 pattern」與「慢車 pattern」各聚一堆（PT2 Ch.4 說 DJ 與 RJ 疊加會形成 bimodal/multi-modal 分布，每個峰各自是一個高斯）。(c) <strong>RJ</strong>——單峰高斯＋「p-p 隨樣本數緩慢長大」正是無界分布的行為（尾巴伸向無窮，量越久撈到越遠的尾巴），所以 RJ 必須用 σ 報、p-p 要訂 σ 窗或 BER 才有意義。(d) <strong>SJ</strong>——固定頻率的週期性調變；展頻時脈（SSC）的調變頻率就在數十 kHz 量級，幅度隨 SSC 設定連動是鐵證（週 9 EMI 課會正式講 SSC）。(e) <strong>不相關有界 DJ</strong>——與資料無關（排除 DDJ）、與具體事件（OIS 動作）強相關、有上限：書中點名的 crosstalk 類。處置：Day 22 面試題 Q2 的流程——trigger 對齊 aggressor、差模/共模分帳、產生器替身掃參。</p>
+</details>
+
+<details>
+<summary>練習 4（統一場論驗收）：用「半份 odd＋半份 even」的分解，(a) 解釋為什麼受害線的 FEXT 幅度隨並排長度線性成長、且邊沿越快越高（Day 19 的兩條規律）；(b) 解釋攻擊線自己的邊沿為什麼在遠端糊成兩階、階距多大；(c) 帶狀線上這兩個現象都消失，但 NEXT 還在——為什麼 NEXT 不靠速度差活著？(d) 一句話總結三個現象與一個根因。</summary>
+<p><strong>解：</strong>(a) 快慢兩份在遠端的<strong>錯位量 = ΔT = ℓ·(1/v_even − 1/v_odd)，隨 ℓ 線性長大</strong>——錯位越多、抵消得越不乾淨，露出的差額（FEXT）越大 → 線性成長。邊沿越快，同樣的錯位時間內波形變化越陡，錯位露出的差額越高 → FEXT ∝ 1/t<sub>r</sub>。兩條規律一次到位，而且解釋了 FEXT 為什麼是「窄脈衝」：寬度就是錯位量 ΔT 與邊沿時間的量級（未錯開的部分仍然抵消）。(b) 攻擊線自己的訊號 = 半份 odd＋半份 even 的和：快的半份先到、慢的半份後到 → 兩階；<strong>階距（時間）= ΔT</strong>、每階高度約半個擺幅——這就是圖 2 情境②受害者視角的攻擊者版。(c) NEXT 的機制是耦合能量「往回流」的累積（Day 18/22：每公分漏一小口、首尾相接成平台），它只需要 C<sub>M</sub>/L<sub>M</sub> 存在、不需要兩種模式速度不同——所以均勻介質治不了它，NEXT 在帶狀線上照樣活得好好的（幅度由耦合強度決定）。(d) 一句話：<strong>v<sub>odd</sub> ≠ v<sub>even</sub> 這一個根因，同時生出 FEXT 脈衝、攻擊者邊沿兩階化、與 pattern-dependent timing 三個症狀——帶狀線一帖藥三症全消，NEXT 是另一種病，要用另一本帳的藥。</strong></p>
+</details>
+
+<details>
+<summary>練習 5（datasheet 讀表題）：某時脈緩衝器 datasheet 標示：cycle-to-cycle jitter 50 ps (max)、period jitter 3 ps (RMS)、long-term jitter ±150 ps (10 µs)。(a) 為什麼 period 的 3 ps 看起來遠小於 cycle-to-cycle 的 50 ps——這兩個數字可以直接比大小嗎？(b) 用 PT2 的 ±6σ 慣例把 period jitter 換成 p-p 估計值；用現代 BER 10⁻¹² 慣例（約 ±7σ 量級）再換一次。(c) 下游是一顆自帶 PLL 的 SoC，三個數字裡哪個最該盯？(d) 你的產品是 camera 模組的外部參考時脈，換哪個數字上場？為什麼？</summary>
+<p><strong>解：</strong>(a) <strong>不能直接比</strong>——一個是 max（p-p 類、整個樣本集的最壞值）、一個是 RMS（1σ）：量綱同是 ps，統計語言不同。PT2 Ch.4 特別警告不同 datasheet 對同名參數定義不一（cycle-to-cycle 有「相鄰差最大值」與「最長週期減最短週期」兩種流派，後者天生偏大）——<strong>對規格第一步永遠是問清楚定義與統計窗</strong>。(b) ±6σ 慣例：p-p ≈ 12σ = 12×3 = <strong>36 ps 量級</strong>；BER 10⁻¹² 慣例：約 ±7σ → p-p ≈ 14σ ≈ <strong>42 ps 量級</strong>。同一顆料、同一份數據，換個慣例差 6 ps——報告裡不寫換算慣例的 p-p 數字都是耍流氓。(c) <strong>cycle-to-cycle</strong>——PT2 原話：下游有 PLL 時「PLLs may not be able to track this high frequency jitter（PLL 追不上這種高頻抖動）」，相鄰週期的突變會直接穿透成輸出 skew；long-term 的慢漂移反而會被 PLL 環路吸收。(d) 參考時脈進 sensor 的 PLL 倍頻後供像素時脈與 MIPI，重點同 (c) 是 PLL 追不上的頻段（cycle-to-cycle／高頻 period jitter）；此外 jitter 會被倍頻器<strong>按倍率放大相位誤差的絕對時間佔比</strong>（頻率升 N 倍、同樣的 ps 佔週期比例升 N 倍），輸入端的 ps 級抖動在高倍頻輸出上寸土寸金——這也是 camera 板上參考時脈線常獨享 guard＋大間距的原因（PT2 Ch.4 診斷清單那句熟人）。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>「crosstalk 影響 timing」是 camera/serdes 面試分層題的經典——答得出電壓帳的是及格線，答得出兩條時間管道＋分類學的才進第二輪。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Everyone knows crosstalk adds voltage noise. Explain how it also corrupts timing — what are the mechanisms, and what would you do about each?"</summary>
+<p><strong>參考答案骨架：</strong>There are two distinct mechanisms, and they need different medicine. The first is mode-velocity mismatch. A coupled pair supports odd and even modes, and on an inhomogeneous structure like a microstrip they travel at different speeds — the odd mode's fringing fields live partly in air, so it's faster; the even mode's fields are buried in the dielectric, so it's slower. Any combination of my signal and my neighbor's data decomposes into those two modes, which means my edge's arrival time becomes a function of the neighbor's pattern: switching opposite to me, I arrive early; switching with me, I arrive late. The spread is the coupled length times the difference of the inverse velocities — it grows linearly with coupled length and never saturates, and as data rates climb, the same picoseconds become a bigger fraction of the UI. The fix at the root is a homogeneous dielectric: route the aggressive parallel runs as striplines, where the two mode velocities converge — which, not coincidentally, is also why far-end crosstalk nearly vanishes on striplines; FEXT and pattern-dependent delay are two faces of the same velocity mismatch. The second mechanism works even in homogeneous media: coupled voltage noise riding on the victim's own transition shifts the threshold-crossing instant by delta-V over the slew rate. That one you attack by reducing the coupled voltage — spacing, stitched guards, proper victim termination — and by keeping edges reasonably fast at the receiver, since a steeper slope converts the same millivolts into fewer picoseconds. Classification matters for debug: both mechanisms are deterministic jitter — bounded, traceable — data-dependent if the aggressor shares my bus, uncorrelated-bounded if it's an unrelated net. So in a jitter budget I'd hunt them with pattern-controlled tests and aggressor-triggered acquisition rather than treating them as Gaussian.</p>
+<p><strong>加分點：</strong>兩機制分開講、各配各的藥；FEXT 與 pattern timing 同根（velocity mismatch）的統一觀點；ΔT 線性不飽和＋UI 佔比隨速率上升的趨勢感；最後掛回 RJ/DJ 分類與 debug 方法——完整走完「物理 → 設計 → 量測」三層。</p>
+</details>
+
+<details>
+<summary>Q2: "A camera's MIPI link passes with a clock-pattern test but throws errors with PRBS data, marginally and repeatably. Walk me through your debug plan."</summary>
+<p><strong>參考答案骨架：</strong>Clock pattern clean but PRBS failing, and repeatably so, points away from random jitter and toward data-dependent effects — the failure is a function of bit history or of neighboring data, both deterministic. First I'd get the eye at the receiver end and decompose jitter: if the scope's jitter analysis shows a bounded, bimodal or multi-modal time histogram at the crossing, that's the signature of DDJ rather than Gaussian RJ. Then I separate the two classic DDJ sources. Source one is ISI from channel loss — the link's own past bits smearing forward; its fingerprint is that errors correlate with specific run lengths, and it reproduces even with neighboring lanes forced idle. Source two is crosstalk-induced, pattern-dependent timing from adjacent lanes — odd and even mode velocities differing on the flex; its fingerprint is that the failing lane's margin changes when I control what the neighbor lanes transmit: I'd run the victim with neighbors idle, then with neighbors sending aligned aggressive patterns, and compare eye width and DJ numbers. If neighbor activity moves the eye crossing, it's coupling; I'd then check the flex layout for long tightly-spaced parallel runs and for any asymmetry — a split pair or single-sided reroute converts common-mode timing shift into intra-pair skew, which is far more damaging. Remedies in order of cost: restore pair symmetry and spacing on the flex, shorten the parallel run, reassign lane ordering so the noisiest aggressor isn't adjacent to the weakest victim, and if the stackup allows, move the coupled section to a buried, homogeneous layer. If instead the errors track run length with neighbors idle, it's loss-driven ISI, and that's next week's toolbox — equalization and loss budgeting rather than spacing.</p>
+<p><strong>加分點：</strong>「clock pattern 過、PRBS 掛」直接推 DDJ 的推理鏈；ISI vs 鄰道串擾的<strong>分離實驗設計</strong>（控制鄰道資料）；bimodal 直方圖當指紋（PT2 Ch.4）；對稱破壞 → 對內 skew 的升級傷害；藥方按成本排序——展示的是 FA 的實驗設計能力，不是名詞背誦。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：微帶線上 odd/even mode 為什麼速度不同？帶狀線為什麼沒這個問題？</p>
+  <p class="a">A1：速度由「場住的材質」決定（v = c/√ε<sub>eff</sub>）。odd mode 的邊緣場大量橫跨兩線之間、住在<strong>空氣</strong>（ε=1）→ ε<sub>eff</sub> 低 → <strong>快</strong>；even mode 的場全體奔向地平面、泡在 <strong>FR4</strong> → ε<sub>eff</sub> 高 → <strong>慢</strong>。緊耦合時速度差約幾 % 量級（實際靠場解器）。帶狀線把場關進均勻介質，兩種模式踩同一種路 → v<sub>odd</sub> = v<sub>even</sub>，速度差歸零。行軍比喻：odd 多踩柏油、even 多踩沙灘。</p>
+  <p class="q">Q2：什麼是 pattern-dependent timing？公式與三種情境？</p>
+  <p class="a">A2：受害者邊沿的到站時間隨<strong>鄰居的資料</strong>滑動：鄰居反向切換 = odd mode = 早到；同向 = even = 晚到；鄰居安靜 = 半 odd＋半 even = 中間到且邊沿糊成兩階。散布 <strong>ΔT = ℓ·(1/v<sub>even</sub> − 1/v<sub>odd</sub>)</strong>——與並排長度成正比、<strong>不飽和</strong>、不隨資料速率變小（速率翻倍則 UI 佔比翻倍）。它是確定性 jitter（pattern 同則偷的時間同），眼圖上表現為交叉點左右抖動、眼被左右啃窄。</p>
+  <p class="q">Q3：FEXT、攻擊者邊沿兩階化、pattern-dependent timing 的共同根因？NEXT 為什麼不算？</p>
+  <p class="a">A3：三者同根：<strong>v<sub>odd</sub> ≠ v<sub>even</sub></strong>。「攻擊者切換＋受害者安靜」= 半 odd＋半 even，兩份起點抵消、沿途以 ΔT 逐漸錯位——錯位差額在受害線遠端露出 = FEXT（∝ 長度、∝ 1/t<sub>r</sub> 皆由錯位量解釋）；在攻擊線自己身上 = 邊沿兩階（階距 ΔT）。等價說法：FEXT ∝ (C<sub>M</sub>/C − L<sub>M</sub>/L)，均勻介質兩佔比相等 → 歸零。帶狀線一帖藥三症全消。<strong>NEXT 是耦合能量往回累積</strong>，只需 C<sub>M</sub>/L<sub>M</sub> 存在、不靠速度差——帶狀線上照樣在，要用電壓帳的藥（間距/guard/端接）。</p>
+  <p class="q">Q4：電壓噪聲換時間噪聲的匯率公式？兩個設計推論？</p>
+  <p class="a">A4：<strong>Δt ≈ ΔV ÷ (dV/dt)</strong>——噪聲騎在邊沿上，把門檻穿越時刻推前/推後，匯率是邊沿斜率。推論①：邊沿越慢越容易被偷時間（斜率減半、Δt 加倍）——「放慢邊沿」在電壓帳是藥（FEXT↓）、在時間帳是毒，先問哪本帳超支。推論②：此機制不挑介質（帶狀線治不了），唯一解是降 ΔV——所以電壓帳（間距/guard/端接/對稱）是時間帳的<strong>地基</strong>，每降一分電壓噪聲同額回饋時間帳。例：20 mV 騎在 2 mV/ps 的邊沿上 ≈ 偷 10 ps。</p>
+  <p class="q">Q5：PT2 Ch.4 的 jitter 家族樹？串擾掛哪枝？RJ 與 DJ 的統計差異？</p>
+  <p class="a">A5：<strong>TJ = DJ＋RJ</strong>。DJ：非隨機、有界、可追兇（書中原話點名 signal noise、<strong>crosstalk</strong>、power supplies），四子類 = DCD／DDJ（=ISI，時域與頻域同一件事的兩個名字）／SJ／不相關有界。串擾掛法：同匯流排 → DDJ；不相干 aggressor（如 VCM 打 MIPI）→ 不相關有界。RJ：高斯、<strong>無界</strong>、熱噪聲等來源，只能報 σ（RMS）；p-p 需訂換算窗——PT2 慣例 ±6σ（2002 年，現代以 BER 定義 TJ，10⁻¹² 約 ±7σ 量級）。應用三型：cycle-to-cycle（PLL 追不上的看它）／period（吃 setup/hold）／long-term（累積漂移）——對規格先問哪一型、RMS 還是 p-p。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 24（週日複習日）：第 4 週總複習＋20 題自我測驗</strong></p>
+  <p>串擾週全部到齊：雙重耦合、NEXT/FEXT、飽和長度、guard trace、差動與對稱、實驗手感、以及今天的時間帳與 jitter 開箱。明天 20 題測驗（附詳解）一次驗收——記得把 Day 22 的實驗記錄表找出來，有幾題會直接用你自己量的數字出題。考完這份，週 5 我們正式開進損耗與眼圖的世界：skin effect、介質損、ISI——你會發現它們早就在今天的家族樹上掛好位子等你了。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 23 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 4/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

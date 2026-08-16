@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 25｜損耗 I——skin effect 集膚效應：高頻電流只肯走銅的「皮」</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 25 天（週一新觀念課）</div>
+  <h1>Day 25：損耗 I——skin effect 集膚效應：高頻電流只肯走銅的「皮」</h1>
+  <div class="meta">2026-08-17（一）｜預估學習時間：90 分鐘｜難度：★★★☆☆（物理直覺一旦抓到，數學只剩一條 √f）｜第 5 週開張：損耗與眼圖</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>前四週的敵人（反射、串擾）都是「訊號能量跑錯地方」；本週的敵人不一樣——<strong>能量直接被吃掉</strong>。損耗兩大兇手：導體損（銅吃的）與介質損（板材吃的）。今天先辦第一個兇手。讀完你要能夠：</p>
+  <ol>
+    <li>用「電流選路」的物理直覺解釋 skin effect：為什麼高頻電流放著整塊銅不用、硬要擠在表面薄薄一層</li>
+    <li>背下手感公式：<strong>skin depth δ ≈ 66 µm ÷ √f(MHz)</strong>（銅）——1 GHz 時約 2 µm，比最薄的常用銅箔（½ oz ≈ 17 µm）薄<strong>一個量級</strong>（Day 24 預告寫死的數字，今天兌現）</li>
+    <li>推出兩條設計級結論：<strong>R<sub>AC</sub> ∝ √f</strong>（電阻隨頻率的平方根爬升）、<strong>加厚銅救不了高頻損耗</strong>（δ 用不到那麼深）</li>
+    <li>看懂損耗最陰險的一招：它不是把訊號「等比例縮小」，而是<strong>專挑高頻成分下手</strong>——邊沿被磨圓拖糊、位元的尾巴拖進下一個位元 → <strong>ISI 正式開演</strong>，掛上 Day 23 家族樹的 DDJ 樹枝（兌現第二個鉤子）</li>
+    <li>會算一條完整的損耗鏈：幾何 → R<sub>AC</sub> → 衰減 dB → 對眼圖的傷害預感</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：從「能量跑錯地方」到「能量被吃掉」</h2>
+<p>Phase 1 走到現在：週 1 訊號本質與頻寬（f<sub>knee</sub> ≈ 0.35/t<sub>r</sub>）、週 2–3 反射（能量被彈回來）、週 4 串擾（能量漏到鄰居家）。這兩類病有個共同點：能量沒有消失，只是去了不該去的地方——所以藥方都是「把路修好」（匹配、間距、對稱）。本週的損耗是另一種病：能量<strong>變成熱、真的沒了</strong>，修路救不回來，只能「少走路、走好路、或在終點補償」。而 Day 23/24 埋的鉤子今天收第一個：損耗把邊沿拖糊 → 前一個位元的殘影疊到下一個位元 → <strong>ISI（inter-symbol interference，符號間干擾）</strong>——它和串擾的 pattern-dependent timing 掛在家族樹的<strong>同一根 DDJ 樹枝</strong>上，只是兇手從「鄰居」換成「自己的過去」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天整堂課一句話</span>
+  <p>把一條銅走線想成一條多線道的高速公路。<strong>低頻（慢車）時代</strong>：大家只在乎過路費（電阻），所有車道均勻用好用滿——整個銅截面都在導電。<strong>高頻（趕時間）時代</strong>：大家在乎的變成「塞不塞」（電感）——走銅的內部會被自己產生的磁場「絆住」（電感大），走表面最不絆——於是<strong>全部的車擠到最外側那一條窄窄的路肩</strong>。路肩多窄？頻率越高越窄：1 GHz 時只剩約 2 µm——整塊 17 µm 厚的銅箔，九成的肉是白買的。車全擠在窄路肩 → 等效電阻暴增 → 訊號能量沿路變成熱。更陰險的是：頻率越高擠得越兇、吃得越多——所以一個方波裡「跑得快的高頻成分」被吃得最慘，到站的邊沿又鈍又拖尾巴，尾巴掃到下一個位元——這就是 ISI。公式看不懂沒關係，記住「高頻電流只走皮、頻率越高皮越薄、電阻跟著 √f 漲」這三句，今天就及格了。</p>
+</div>
+
+<h2>1. 為什麼電流要擠到表面——「選路」的物理</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：電流不走「電阻最小」的路，走「阻抗最小」的路</span>
+  <p>先拆一個常見誤解：「電流走電阻最小的路」——不完整。交流電流走的是<strong>阻抗</strong>最小的路，而阻抗 = 電阻 + 電感的貢獻（jωL）。頻率一高，電感那一項（乘著 ω 長大）就從配角變主角。關鍵在：<strong>走銅的中心 vs 走銅的表面，電感不一樣</strong>。走中心的電流被「自己家所有的磁力線」層層包住（磁通鏈最多 → 電感最大）；走表面的電流只被一部分磁力線包住（電感較小）。低頻時 ωL 小到可以忽略，電流按電阻均勻分佈；高頻時 ωL 主導，電流集體搬家到表面——<strong>用「擠一點、電阻高一點」換「電感低很多」</strong>，總阻抗反而最小。這不是誰下的命令，是大自然自動解出的最佳化。</p>
+</div>
+
+<p>再給一個等價的說法（面試講這個版本更帥）：導體內部的交變磁場會感應出<strong>渦流（eddy current）</strong>，方向由楞次定律決定——在導體中心與主電流<strong>相消</strong>、在表面與主電流<strong>相加</strong>。淨效果：中心的電流被抵消掉、表面的被加強——電流密度從表面往內呈<strong>指數衰減</strong>，衰減的特徵深度就叫 <strong>skin depth（集膚深度）δ</strong>：深入一個 δ，電流密度剩 1/e ≈ 37%；深入 3δ 只剩約 5%。工程上乾脆近似成「電流只在表面 δ 厚的一層裡均勻流動，更深處沒電流」——這個近似讓後面所有計算變成小學算術。</p>
+
+<div class="formula">δ = √( ρ / (π·f·µ) )　　（ρ：電阻率；µ：磁導率；f：頻率）<br>銅的手感版：<strong>δ ≈ 66 µm ÷ √f(MHz)</strong>　（ρ<sub>Cu</sub> ≈ 1.7×10⁻⁸ Ω·m 代入化簡）</div>
+<p><em>白話翻譯：皮的厚度跟頻率的平方根成反比——頻率漲 100 倍，皮薄 10 倍。銅的速查：1 MHz → 66 µm；100 MHz → 6.6 µm；<strong>1 GHz → 約 2.1 µm</strong>；10 GHz → 約 0.66 µm。對照銅箔厚度：1 oz ≈ 35 µm、½ oz ≈ 17 µm——1 GHz 的皮（2 µm）比最薄常用銅箔（17 µm）薄一個量級：高頻訊號眼裡，你的銅箔 90% 是裝飾品。這條公式看不懂推導完全沒關係，「66 除以根號 MHz」背起來，現場心算可以唬住整間會議室。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">電流的搬家史：低頻用滿整塊銅，高頻只肯走「皮」</text>
+  <!-- Low freq -->
+  <text x="190" y="56" text-anchor="middle" font-size="12" font-weight="bold" fill="#16a34a">低頻（電阻主導）：均勻分佈</text>
+  <rect x="80" y="70" width="220" height="70" rx="6" fill="#fde68a" stroke="#b45309" stroke-width="1.5"/>
+  <g fill="#b45309">
+    <circle cx="105" cy="88" r="4"/><circle cx="140" cy="88" r="4"/><circle cx="175" cy="88" r="4"/><circle cx="210" cy="88" r="4"/><circle cx="245" cy="88" r="4"/><circle cx="278" cy="88" r="4"/>
+    <circle cx="105" cy="105" r="4"/><circle cx="140" cy="105" r="4"/><circle cx="175" cy="105" r="4"/><circle cx="210" cy="105" r="4"/><circle cx="245" cy="105" r="4"/><circle cx="278" cy="105" r="4"/>
+    <circle cx="105" cy="122" r="4"/><circle cx="140" cy="122" r="4"/><circle cx="175" cy="122" r="4"/><circle cx="210" cy="122" r="4"/><circle cx="245" cy="122" r="4"/><circle cx="278" cy="122" r="4"/>
+  </g>
+  <text x="190" y="158" text-anchor="middle" font-size="9.5" fill="#374151">整個截面都在導電 → R = R_DC（最小值）</text>
+  <!-- High freq -->
+  <text x="570" y="56" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626">高頻（電感主導）：擠到表面 δ 薄層</text>
+  <rect x="460" y="70" width="220" height="70" rx="6" fill="#f1f5f9" stroke="#b45309" stroke-width="1.5"/>
+  <g fill="#dc2626">
+    <circle cx="485" cy="79" r="4"/><circle cx="513" cy="79" r="4"/><circle cx="541" cy="79" r="4"/><circle cx="569" cy="79" r="4"/><circle cx="597" cy="79" r="4"/><circle cx="625" cy="79" r="4"/><circle cx="653" cy="79" r="4"/>
+    <circle cx="485" cy="131" r="4"/><circle cx="513" cy="131" r="4"/><circle cx="541" cy="131" r="4"/><circle cx="569" cy="131" r="4"/><circle cx="597" cy="131" r="4"/><circle cx="625" cy="131" r="4"/><circle cx="653" cy="131" r="4"/>
+  </g>
+  <g fill="#fca5a5">
+    <circle cx="470" cy="92" r="3"/><circle cx="470" cy="105" r="3"/><circle cx="470" cy="118" r="3"/>
+    <circle cx="670" cy="92" r="3"/><circle cx="670" cy="105" r="3"/><circle cx="670" cy="118" r="3"/>
+  </g>
+  <text x="570" y="112" text-anchor="middle" font-size="9.5" fill="#94a3b8">中心：渦流把電流抵消掉——空城</text>
+  <line x1="460" y1="79" x2="446" y2="79" stroke="#dc2626" stroke-width="1.2"/>
+  <line x1="460" y1="86" x2="446" y2="86" stroke="#dc2626" stroke-width="1.2"/>
+  <text x="440" y="86" text-anchor="end" font-size="9" fill="#dc2626">δ</text>
+  <text x="570" y="158" text-anchor="middle" font-size="9.5" fill="#374151">有效截面只剩表面薄層 → R_AC ≫ R_DC，且隨 √f 爬升</text>
+  <!-- exponential decay curve -->
+  <text x="190" y="200" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#0f4c5c">電流密度由表面往內指數衰減</text>
+  <line x1="90" y1="330" x2="300" y2="330" stroke="#374151" stroke-width="1.4"/>
+  <line x1="90" y1="330" x2="90" y2="214" stroke="#374151" stroke-width="1.4"/>
+  <text x="300" y="346" text-anchor="end" font-size="9" fill="#374151">深入導體的距離</text>
+  <text x="84" y="214" text-anchor="end" font-size="9" fill="#374151">J</text>
+  <path d="M90,220 Q130,254 160,290 Q200,320 296,328" fill="none" stroke="#dc2626" stroke-width="2.2"/>
+  <line x1="142" y1="214" x2="142" y2="330" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="142" y="344" text-anchor="middle" font-size="9" font-weight="bold" fill="#7c3aed">1δ：剩 37%</text>
+  <line x1="246" y1="214" x2="246" y2="330" stroke="#7c3aed" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="246" y="344" text-anchor="middle" font-size="9" fill="#7c3aed">3δ：剩約 5%</text>
+  <text x="195" y="238" font-size="9" fill="#6b7280">工程近似：當成「表面 δ 厚</text>
+  <text x="195" y="251" font-size="9" fill="#6b7280">均勻導電、以下全空」</text>
+  <!-- microstrip reality -->
+  <text x="555" y="200" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#0f4c5c">微帶線的現實版：電流還會「挑面」＋回流也集膚</text>
+  <rect x="420" y="252" width="270" height="52" fill="#d9f99d" stroke="#65a30d"/>
+  <text x="555" y="282" text-anchor="middle" font-size="9" fill="#3f6212">FR4</text>
+  <rect x="420" y="304" width="270" height="12" fill="#64748b"/>
+  <rect x="520" y="238" width="70" height="14" fill="#fde68a" stroke="#b45309"/>
+  <rect x="520" y="246" width="70" height="6" fill="#dc2626"/>
+  <text x="555" y="232" text-anchor="middle" font-size="9" font-weight="bold" fill="#dc2626">訊號電流擠在「面向地平面的下表面」</text>
+  <rect x="500" y="304" width="110" height="5" fill="#dc2626"/>
+  <text x="555" y="330" text-anchor="middle" font-size="9" font-weight="bold" fill="#dc2626">回流電流擠在平面「正下方最上層」（Day 16 的老朋友）</text>
+  <text x="555" y="348" text-anchor="middle" font-size="9" fill="#374151">兩邊都集膚、都貢獻電阻 → 實際 R_AC 比單算走線再高一截（量級：數十 %）</text>
+  <!-- takeaway strip -->
+  <rect x="80" y="376" width="600" height="66" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="398" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">銅的 δ 速查（δ ≈ 66 µm/√f(MHz)）：1 MHz→66 µm｜100 MHz→6.6 µm｜1 GHz→約 2.1 µm｜10 GHz→約 0.66 µm</text>
+  <text x="380" y="418" text-anchor="middle" font-size="10" fill="#374151">對照銅箔：1 oz ≈ 35 µm、½ oz ≈ 17 µm → 1 GHz 的電流只用得到最薄銅箔的約一成厚度</text>
+  <text x="380" y="434" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">推論：高頻損耗「加厚銅」無效——皮就那麼深，下面鋪金條也沒用</text>
+</svg>
+<figcaption>圖 1：skin effect 全景。左上：低頻電流均勻用滿截面；右上：高頻電流被自感/渦流擠到表面 δ 薄層，中心空城。左下：電流密度指數衰減，1δ 剩 37%。右下：微帶線的現實——訊號電流不只集膚還「挑面」（擠向面對地平面的那一面，場在哪電流就在哪），回流電流在平面上也集膚並聚在走線正下方（Day 16 的回流集中再現）——兩邊的電阻都要記帳。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤解先拆彈</span>
+  <p><strong>誤解一：「那我用 2 oz 厚銅，損耗減半！」</strong>——低頻（δ 還比銅厚）有效；高頻無效——1 GHz 電流只用表面 2 µm，35 µm 換 70 µm 是把裝飾品加倍。高頻降導體損的正解是<strong>加寬</strong>（皮的「面積」= 寬 × δ，寬度才是你能控制的那一維）——但加寬會拉低 Z₀，所以必須連疊構一起改（介質加厚），這是週 2 幾何學的回馬槍。<strong>誤解二：「skin effect 是高速板才有的事」</strong>——δ = 銅厚的交叉點低得嚇人：1 oz 銅約在 4 MHz 量級、½ oz 約 15 MHz 量級就開始「用不滿」——連 NB 上一條普通的 100 MHz 時脈線都早已活在集膚世界裡；只是損耗要「線夠長＋頻率夠高」才痛，所以你到 GHz 級才感覺到它。</p>
+</div>
+
+<h2>2. 從 δ 到電阻：R<sub>AC</sub> ∝ √f 的一條龍推導</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：路肩越窄，塞車費越貴——而且是「平方根漲價法」</span>
+  <p>電阻 = 電阻率 × 長度 ÷ 截面積。低頻的截面積是「寬 × 銅厚」；高頻的有效截面積縮成「寬 × δ」。δ 隨 1/√f 縮 → 截面積隨 1/√f 縮 → <strong>電阻隨 √f 漲</strong>。頻率翻 4 倍、電阻翻 2 倍；翻 100 倍、電阻翻 10 倍。這個「平方根漲價法」就是損耗世界的第一條稅率表——下一課的介質損是第二條稅率表（∝ f，更兇），兩條疊起來決定你的眼圖還剩幾隻眼。</p>
+</div>
+
+<div class="formula">R<sub>DC</sub> = ρ·ℓ/(w·t)　（t：銅厚）<br>R<sub>AC</sub> ≈ ρ·ℓ/(w·δ) = (ℓ/w)·√(π·f·µ·ρ)　（δ ≪ t 時；微帶線電流主要走面向平面的單面）<br>導體損衰減：α<sub>cond</sub> ≈ R<sub>AC</sub>/(2·Z₀)　Np/m　（×8.686 換 dB/m）→ <strong>α<sub>cond</sub> ∝ √f</strong></div>
+<p><em>白話翻譯：三行分別是「低頻價目表」「高頻價目表」「電阻換算成訊號衰減幾 dB」。第三行的直覺：訊號沿線走，每公尺被串聯電阻分掉一點壓——電阻越大、Z₀ 越低（分壓比越吃虧），衰減越多。數字感（等一下練習 2 會親手算）：一條 0.15 mm 寬、10 cm 長的微帶線，DC 電阻約 0.3 Ω，1 GHz 時 R<sub>AC</sub> 跳到約 5 Ω 量級——在 50 Ω 系統裡造成約 0.5 dB 的衰減（量級）。0.5 dB 聽起來無害？它只是 1 GHz 這一根頻率的帳——方波的高次諧波在更高頻，被咬得更痛，這就是下一節的重點。</em></p>
+
+<div class="card pitfall">
+  <span class="label">2026 年的補充稅：表面粗糙度（roughness）</span>
+  <p>皮只有 2 µm 深，於是「表面平不平」突然變成大事：FR4 銅箔為了咬住板材，貼介質那一面故意做得粗糙（齒狀結構，粗糙度 µm 級——跟 δ 同量級！）。電流被迫沿著鋸齒上上下下爬山，路徑變長＋局部集膚，實際導體損比光滑銅的理論值再高——量級可達數十 %，頻率越高越誇張。所以高速板料要指定低粗糙度銅箔（如 RTF/HVLP 等級），而鏡頭模組 flex 常用的<strong>壓延銅（rolled annealed）</strong>天生比電解銅光滑——flex 在這件事上反而佔便宜。詳細建模（Hammerstad/Huray）不展開，記住「粗糙度是導體損的隱藏加稅，δ 越薄稅越重」即可。</p>
+</div>
+
+<h2>3. 損耗最陰險的一招：不是縮小，是「磨糊」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：均勻打折 vs 專宰快車</span>
+  <p>如果損耗對所有頻率<strong>均勻打折</strong>（每個成分都衰減 20%），那波形只是「等比例縮小」——形狀不變、邊沿照樣陡，接收端把增益調大一點就完事，根本不算病。但 √f 稅率表是<strong>累進稅</strong>：低頻成分幾乎免稅、高次諧波課重稅。回想 Day 1：方波 = 基頻 + 一堆高次諧波，<strong>邊沿的「陡」全靠高頻諧波撐著</strong>。高頻被宰 → 邊沿垮掉變緩坡，而且拖出一條慢吞吞的長尾巴（低頻成分最後才爬到位）。波形不是變小，是<strong>變糊</strong>——這就是「頻率相關損耗」和「單純衰減」的本質差別，也是等化器（EQ）存在的理由：把被多收的稅按頻率退回去。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">√f 累進稅怎麼把邊沿磨糊、再把尾巴拖進下一個位元（ISI 開演）</text>
+  <!-- input -->
+  <text x="90" y="58" font-size="11" font-weight="bold" fill="#16a34a">發送端：乾淨的位元 1 0 1 1 0</text>
+  <line x1="90" y1="130" x2="700" y2="130" stroke="#cbd5e1" stroke-width="1"/>
+  <path d="M90,130 L110,130 L114,80 L220,80 L224,130 L330,130 L334,80 L550,80 L554,130 L700,130" fill="none" stroke="#16a34a" stroke-width="2.2"/>
+  <text x="167" y="72" text-anchor="middle" font-size="9" fill="#16a34a">1</text>
+  <text x="277" y="122" text-anchor="middle" font-size="9" fill="#16a34a">0</text>
+  <text x="442" y="72" text-anchor="middle" font-size="9" fill="#16a34a">1 1</text>
+  <text x="627" y="122" text-anchor="middle" font-size="9" fill="#16a34a">0</text>
+  <!-- after channel -->
+  <text x="90" y="176" font-size="11" font-weight="bold" fill="#dc2626">長走線之後：邊沿變緩坡＋長尾巴——每個位元都踩到前一個的尾巴</text>
+  <line x1="90" y1="256" x2="700" y2="256" stroke="#cbd5e1" stroke-width="1"/>
+  <line x1="90" y1="206" x2="700" y2="206" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3 3"/>
+  <path d="M90,256 L110,256 Q135,252 150,230 Q170,212 220,208 Q245,210 260,232 Q276,250 330,254 Q350,252 365,232 Q385,214 430,208 Q490,204 550,206 Q575,210 590,232 Q610,250 700,254" fill="none" stroke="#dc2626" stroke-width="2.2"/>
+  <text x="220" y="198" text-anchor="middle" font-size="8.5" fill="#dc2626">單個 1：只爬到八成就得下山</text>
+  <text x="490" y="196" text-anchor="middle" font-size="8.5" fill="#dc2626">連續 1 1：有時間爬滿——高度比單個 1 高</text>
+  <text x="330" y="272" text-anchor="middle" font-size="8.5" fill="#7c3aed" font-weight="bold">0 沒回到底：前面 1 的尾巴墊高了它</text>
+  <text x="640" y="240" text-anchor="middle" font-size="8.5" fill="#7c3aed">同一個「0」的深度</text>
+  <text x="640" y="252" text-anchor="middle" font-size="8.5" fill="#7c3aed">取決於前面的歷史</text>
+  <!-- why: spectrum -->
+  <text x="200" y="308" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">頻域看：累進稅單</text>
+  <line x1="100" y1="420" x2="330" y2="420" stroke="#374151" stroke-width="1.3"/>
+  <line x1="100" y1="420" x2="100" y2="320" stroke="#374151" stroke-width="1.3"/>
+  <text x="330" y="434" text-anchor="end" font-size="8.5" fill="#374151">f</text>
+  <text x="96" y="322" text-anchor="end" font-size="8.5" fill="#374151">衰減</text>
+  <path d="M100,418 Q160,410 220,384 Q280,352 326,326" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="238" y="352" font-size="8.5" fill="#dc2626">α ∝ √f：越高頻課越重</text>
+  <text x="150" y="408" font-size="8.5" fill="#16a34a">基頻：幾乎免稅</text>
+  <text x="248" y="400" font-size="8.5" fill="#6b7280">邊沿靠的高次諧波：重稅區</text>
+  <!-- consequence: family tree -->
+  <rect x="380" y="304" width="310" height="130" rx="10" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="535" y="326" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#991b1b">掛號：Day 23 家族樹・DDJ/ISI 樹枝</text>
+  <text x="535" y="348" text-anchor="middle" font-size="9" fill="#374151">「這個位元長什麼樣」取決於前面的位元序列</text>
+  <text x="535" y="364" text-anchor="middle" font-size="9" fill="#374151">→ 資料相關、有界、pattern 重播就重現 = DDJ</text>
+  <text x="535" y="386" text-anchor="middle" font-size="9" font-weight="bold" fill="#7c3aed">串擾版 DDJ：兇手是「鄰居的資料」</text>
+  <text x="535" y="402" text-anchor="middle" font-size="9" font-weight="bold" fill="#7c3aed">損耗版 DDJ（ISI）：兇手是「自己的過去」</text>
+  <text x="535" y="422" text-anchor="middle" font-size="8.5" fill="#6b7280">分離實驗：鄰道全 idle 還在 → ISI；隨鄰道 pattern 動 → 串擾</text>
+  <!-- timing hit -->
+  <text x="380" y="456" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">邊沿變糊還有第二重罪：斜率變小 → Day 23 匯率 Δt = ΔV/(dV/dt) 變差——同樣的噪聲偷走更多時間</text>
+</svg>
+<figcaption>圖 2：上半：乾淨位元流過完長走線後，單一個 1 爬不滿、連續 1 爬得滿——同一種位元長出不同高度；0 也回不到底，被前面 1 的尾巴墊高。「這個位元的模樣由前面的歷史決定」= ISI = 家族樹上的 DDJ。左下：根因是 √f 累進稅專宰邊沿賴以為生的高次諧波。右下：與串擾版 DDJ 同枝不同兇手，分離實驗一招見真章（鄰道 idle 控制變因——Day 23 面試 Q2 用過的刀）。</figcaption>
+</figure>
+
+<p>再補一刀時間帳：邊沿被磨緩之後，<strong>斜率 dV/dt 變小</strong>——回想 Day 23 的萬用匯率 Δt = ΔV ÷ (dV/dt)：同樣 20 mV 的串擾或電源噪聲，騎在糊掉的邊沿上偷走的時間<strong>加倍再加倍</strong>。損耗自己偷時間（ISI）之外，還幫所有其他噪聲「調高匯率」——這就是為什麼長通道的 jitter 預算崩起來是連鎖的，也是為什麼週 4 的電壓帳被我們稱作時間帳的地基。</p>
+
+<div class="card takeaway">
+  <span class="label">差動在損耗世界的待遇——PT2 的一句話</span>
+  <p>損耗磨掉擺幅與邊沿，但差動接收器看的是 P−N 的<strong>相對交叉</strong>，對絕對擺幅的縮水寬容得多。《Perfect Timing II》Ch.2 在講差動訊號優勢時寫道：「Logic levels are less critical in differential signaling as the threshold can tolerate significant signal attenuation（差動訊號對邏輯準位的要求較不嚴苛，其門檻能容忍可觀的訊號衰減）」（Perfect Timing II Ch.2）——這是差動的<strong>第四個紅利</strong>（前三個在 Day 21/23：抗共模、低 EMI、共模時間滑動免疫）。這也是 MIPI 敢用 200 mV 量級小擺幅跑長 flex 的底氣之一。當然 2002 年語境需上修：該書面對的是數百 MHz 時脈、損耗尚未主宰；現代 Gbps 串列鏈路光靠「門檻寬容」不夠，還要靠等化——但「差動比單端耐衰減」的方向至今成立。</p>
+</div>
+
+<h2>4. 實務案例：兩個老本行的損耗帳</h2>
+<ul>
+  <li><strong>NB 主機板（長距離高速線）：</strong>NB 板上最典型的損耗受害者是跨越整塊板的高速串列線（如 PCIe/USB 高速通道，走線 20–30 cm 量級）。損耗預算的算法就是今天的鏈條：每公分的 α（導體＋介質）× 長度，對照接收端規格允許的總衰減。設計上你會看到這些今天講過的物理長出來的規則：長通道指定低損板材與低粗糙度銅箔、線寬放寬（犧牲繞線密度換 R<sub>AC</sub>）、真不夠就上 redriver/retimer（在半路把稅金補回來）。FA 視角：同一條鏈路「短板 OK、長板掛」「常溫 OK、高溫掛」（銅電阻率隨溫度升約 0.4%/°C，量級）都是損耗嫌疑的指紋。</li>
+  <li><strong>鏡頭模組（flex 上的 MIPI）：</strong>flex 的損耗處境很微妙：①線寬窄（空間擠，常見 0.1 mm 量級）→ R<sub>AC</sub> 天生偏高；②但 flex 常用壓延銅，表面比電解銅光滑 → 粗糙度稅便宜；③介質是 PI（聚醯亞胺），損耗特性與 FR4 不同（下一課的主角）。長 flex（如潛望式鏡頭或摺疊機的跨鉸鏈 flex，10 cm 量級以上）跑 2.5 Gbps 級 D-PHY 時，損耗開始與串擾平起平坐——Day 23 面試 Q2 那個「鄰道 idle 還掛」的分支，兇手就是今天這位。眼圖上損耗的指紋：眼高塌陷＋交叉點糊成一團（DDJ），而且<strong>換 pattern 眼形會變</strong>（長連 0/1 的 pattern 最傷——低頻成分讓基線漂移最大）。</li>
+  <li><strong>時脈線（PT2 的主場，順便交代它為什麼不講 skin effect）：</strong>PT2 全書幾乎不談損耗——因為 2002 年的時脈在 100–400 MHz、走線幾十 cm 內，δ 雖已比銅薄，但總衰減量還傷不到準位（δ@200 MHz ≈ 4.7 µm，R<sub>AC</sub> 每 10 cm 也才 Ω 級）。損耗是「頻率 × 長度」的乘法罪：兩個因子都翻了量級之後（現代 Gbps × 長 flex/長板），它才從免費附註升格成預算科目。讀老書要會補這種時代帳——這也是 curriculum 一直要求「2002 數據上修」的原因。</li>
+</ul>
+
+<h2>5. 動手練習（紙上推演，今天不需儀器）</h2>
+<p>每題先寫下自己的答案再展開詳解——δ 速查：66 µm/√f(MHz)。</p>
+
+<details>
+<summary>練習 1（δ 手感速成）：(a) 算出 10 MHz、100 MHz、2.5 GHz、10 GHz 的銅 skin depth。(b) 1 oz（35 µm）與 ½ oz（17 µm）銅箔各在多高頻率開始「用不滿」（δ = 銅厚）？(c) MIPI D-PHY 跑 2.5 Gbps（基頻 1.25 GHz），電流用得到 ½ oz 銅箔的幾分之幾？(d) 為什麼說「連 100 MHz 時脈線都活在集膚世界，卻不太痛」？</summary>
+<p><strong>解：</strong>(a) 10 MHz：66/√10 ≈ <strong>21 µm</strong>；100 MHz：66/10 = <strong>6.6 µm</strong>；2.5 GHz：66/√2500 = 66/50 = <strong>1.3 µm</strong>；10 GHz：66/100 = <strong>0.66 µm</strong>。(b) δ = 35 µm → f = (66/35)² ≈ <strong>3.6 MHz 量級</strong>；δ = 17 µm → (66/17)² ≈ <strong>15 MHz 量級</strong>——比多數人直覺低兩個量級。(c) 基頻 1.25 GHz 的 δ ≈ 66/√1250 ≈ 1.9 µm → 1.9/17 ≈ <strong>約 1/9</strong>——九成的銅是裝飾品；諧波用得更少。(d) 集膚「發生」與「造成傷害」是兩件事：100 MHz 的 R<sub>AC</sub> 雖已高於 R<sub>DC</sub>，但衰減 = α × 長度，α 還小、時脈擺幅又大（數百 mV~V 級門檻餘裕），總稅金遠不足以咬穿準位——損耗是「頻率 × 長度 × 擺幅餘裕」三個因子的乘法罪，單一因子超標不一定發病。</p>
+</details>
+
+<details>
+<summary>練習 2（一條龍損耗鏈）：微帶線 w = 0.15 mm、ℓ = 10 cm、1 oz 銅（35 µm）、Z₀ = 50 Ω、ρ<sub>Cu</sub> = 1.7×10⁻⁸ Ω·m。(a) 算 R<sub>DC</sub>。(b) 算 1 GHz 的 R<sub>AC</sub>（用單面 δ 近似）。(c) 換算成衰減 dB（α ≈ R/(2Z₀)，1 Np = 8.686 dB）。(d) 頻率升到 4 GHz，衰減變幾 dB？這對 5 Gbps 訊號的邊沿意味著什麼？</summary>
+<p><strong>解：</strong>(a) R<sub>DC</sub> = 1.7×10⁻⁸ × 0.1 ÷ (0.15×10⁻³ × 35×10⁻⁶) ≈ 1.7×10⁻⁹ ÷ 5.25×10⁻⁹ ≈ <strong>0.32 Ω</strong>。(b) δ@1 GHz ≈ 2.1 µm：R<sub>AC</sub> ≈ 1.7×10⁻⁸ × 0.1 ÷ (0.15×10⁻³ × 2.1×10⁻⁶) ≈ <strong>5.4 Ω</strong>——是 DC 的約 17 倍（= 35/2.1，恰為厚度比，這是自我檢查的好路標）。(c) α = 5.4/(2×50) = 0.054 Np ≈ <strong>0.47 dB / 10 cm</strong>（量級；實際還要加回流路徑電阻與粗糙度，會再高數十 %）。(d) √f 稅率：4 GHz → 0.47 × √4 ≈ <strong>0.94 dB</strong>。對 5 Gbps 訊號：基頻 2.5 GHz 被咬約 0.7 dB，撐邊沿的三次諧波 7.5 GHz 被咬約 1.3 dB（再加介質損更多）——高低頻成分的「稅差」就是邊沿糊化的直接原因；這條 10 cm 線單看無害，兩條串接＋connector＋介質損之後，眼圖就開始說話了。</p>
+</details>
+
+<details>
+<summary>練習 3（設計決策陷阱題）：長通道導體損超標，會議上四個提案：①銅厚 1 oz 換 2 oz；②線寬 0.1 mm 加寬到 0.2 mm；③換低粗糙度銅箔；④把該段從表層微帶線改到內層帶狀線「順便治 FEXT」。逐一評分，並指出②和④各自的隱藏帳單。</summary>
+<p><strong>解：</strong>① <strong>無效</strong>（高頻 δ ≪ 銅厚，加厚是買裝飾品）——這是今天的招牌陷阱，面試最愛。② <strong>有效</strong>：R<sub>AC</sub> ∝ 1/w，加寬一倍導體損約砍半；<strong>隱藏帳單</strong>：w 加倍會拉低 Z₀（Day 5），要維持 50 Ω 就得加厚介質 h——而 h 一變，Day 19 的串擾 s/h 比跟著變，鄰線間距規則要重查；繞線密度也直接砍半。③ <strong>有效且無電氣副作用</strong>（成本上升）：δ 級的皮對 µm 級粗糙度極敏感，換 HVLP 級銅箔可省下數十 % 量級的隱藏稅。④ <strong>方向對但要記帳</strong>：帶狀線治 FEXT/pattern timing（Day 23）是真，但同幾何下帶狀線介質全包、ε<sub>eff</sub> 較高，且為維持 Z₀ 線通常更窄——<strong>導體損與介質損往往不降反升</strong>（下一課補介質帳）；加上換層 via 的回流過橋（Day 16）。結論：②＋③打損耗、④打串擾——先確診主病再開藥，這正是 Day 23「先問哪本帳超支」的損耗版。</p>
+</details>
+
+<details>
+<summary>練習 4（ISI 指紋辨認）：長 flex 上的 MIPI lane 眼圖很糟。你做了三個實驗：(A) 鄰道全部 idle，眼形不變；(B) 把 pattern 從 PRBS 換成 1010 固定翻轉，眼睛明顯變乾淨；(C) 把資料率砍半，眼高恢復大半。(a) 三個證據各排除/指認了誰？(b) 為什麼 1010 pattern 對損耗通道特別「仁慈」？(c) 這病掛家族樹哪一枝？(d) 不能換板材、不能縮 flex 的前提下，講出兩個系統級藥方的方向。</summary>
+<p><strong>解：</strong>(a) A：鄰道 idle 眼形不變 → <strong>排除串擾</strong>（Day 23 Q2 的控制變因刀）；B：pattern 相關 → <strong>確定性、資料相關</strong> → DDJ 家族；C：降速有效 → 傷害與「UI 相對於通道記憶長度」有關 → <strong>指認 ISI/損耗</strong>（若是固定幅度的串擾，降速改善有限）。(b) 1010 只含單一主頻成分（頻譜最窄、能量集中在基頻附近）——沒有長連 0/1，就沒有「低頻爬坡 vs 高頻爬坡」的高度差，每個位元的起點都一樣 → 通道再糊、糊法也一致，眼睛自然乾淨。PRBS 才會逼出各種 run length、把通道記憶全翻出來——這也是為什麼合規測試指定 PRBS 而不是 1010。(c) DDJ/ISI 枝（兇手：自己的過去）。(d) 方向一：<strong>等化</strong>——發送端 pre-emphasis/de-emphasis（先把高頻多發一點、把稅預繳）或接收端 EQ（把 √f 稅單倒過來補）；方向二：<strong>降基頻</strong>——加 lane 數攤頻寬（4 lane 換 2 倍 lane 數、每 lane 速率減半）或換編碼效率更高的 PHY（如 C-PHY，專題 2 講過每 symbol 帶 2.28 bit）。兩個方向都是「打不過稅制就改稅基」。</p>
+</details>
+
+<details>
+<summary>練習 5（把三週的刀合成一把）：某 15 cm 高速線，接收端眼圖同時看到：眼高不足、交叉點時間直方圖雙峰、且雙峰間距隨鄰道 pattern 改變；把鄰道 idle 後雙峰縮成單峰但眼高仍差、邊沿仍糊。用 Day 19/23/25 的語言寫出「病歷摘要」：哪些症狀屬於誰、修復優先序怎麼排。</summary>
+<p><strong>解：</strong>病歷摘要：①「雙峰間距隨鄰道 pattern 動」→ <strong>串擾造成的 pattern-dependent timing</strong>（Day 23：v<sub>odd</sub> ≠ v<sub>even</sub>，DDJ 中掛串擾兇手）；②鄰道 idle 後「單峰但眼高仍差、邊沿糊」→ 剩下的是<strong>損耗/ISI</strong>（Day 25：√f 累進稅磨邊沿＋長尾墊高基線）；③眼高不足是兩者共犯：串擾直接疊噪聲（Day 19 電壓帳）＋損耗吃擺幅。優先序：先治損耗（它是「地基下陷」——邊沿糊會放大所有噪聲的時間匯率 Δt = ΔV/斜率，先把斜率救回來，串擾偷走的 ps 自動縮水），再治串擾殘餘（間距/對稱/帶狀線）。若損耗治不動（幾何鎖死），改用等化把斜率贖回來。一句話：<strong>先把匯率修好，再去追每一筆小偷。</strong></p>
+</details>
+
+<h2>6. 面試怎麼考</h2>
+<p>skin effect 是 SI 面試的「白板起手式」——考的不是公式，是你能不能從物理講到設計決策。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Explain skin effect from first principles — why does current crowd to the surface, why does resistance go as the square root of frequency, and what design levers actually help?"</summary>
+<p><strong>參考答案骨架：</strong>At DC, current distributes to minimize resistance, so it fills the whole cross-section. At AC, current distributes to minimize total impedance, and the inductive term grows with frequency. A filament of current at the conductor's center is enclosed by all of the flux the conductor generates, so it sees the highest inductance; a filament at the surface links the least flux. Equivalently, the changing internal magnetic field drives eddy currents that cancel the current in the core and reinforce it at the surface. The result is an exponential current profile with a characteristic depth — the skin depth — that scales as one over root frequency; for copper it's roughly 66 microns at 1 MHz and about 2 microns at 1 GHz, which is an order of magnitude thinner than even half-ounce foil. Since the effective cross-section is width times skin depth, AC resistance rises as root f, and so does the conductor attenuation per unit length. That frequency tilt is the real damage: it hits the high harmonics that hold up the edges, so a long channel doesn't just shrink the signal, it smears the edges and creates ISI. As for levers: making the copper thicker does nothing at high frequency — the current can't reach it. What works is making the trace wider, since width is the dimension the skin actually uses — at the cost of re-tuning the stackup to hold Z0; specifying smoother, low-profile copper, because with a 2-micron skin, micron-scale tooth structure adds tens of percent of extra loss; keeping the run short; and when geometry is exhausted, equalization to pay the frequency tax back electronically.</p>
+<p><strong>加分點：</strong>「minimize impedance, not resistance」的一句話物理；66/√f 手感數字與銅箔厚度對比；「加厚銅無效」主動點破（面試官等的就是這句）；把 √f 接到「edge harmonics → ISI」的系統後果；levers 附代價（Z₀ 重調、粗糙度、EQ）。</p>
+</details>
+
+<details>
+<summary>Q2: "Your camera module's MIPI link is clean on the short flex but marginal on the long flex variant, even with all other lanes idle. The team wants to double the copper thickness on the flex. Your call?"</summary>
+<p><strong>參考答案骨架：</strong>I'd push back on thicker copper, and here's the reasoning. Neighbors idle but still marginal rules out crosstalk and points at the channel itself; failing only on the long variant is the signature of accumulated loss — attenuation is per-unit-length, so length is the multiplier. At D-PHY rates the fundamental sits around a gigahertz, where the skin depth in copper is about two microns. The current only uses the top couple of microns of the foil, so doubling copper thickness adds metal the signal physically cannot use — it changes nothing at the frequencies that matter, and it makes the flex stiffer, which mechanics will hate. What actually moves the needle, in rough order of cost: first, verify it's ISI — compare the eye with a 1010 clock-like pattern versus PRBS; if PRBS is much worse, it's data-dependent, consistent with loss. Then widen the differential pair if routing allows, re-targeting the differential impedance; flex already uses rolled-annealed copper which is smooth, so the roughness lever is mostly spent. If geometry is locked, look at the link configuration: more lanes at lower per-lane rate, or check whether the transmitter offers de-emphasis and the receiver offers equalization settings we haven't enabled. And I'd quantify before choosing — an insertion-loss measurement or simulation of both flex variants tells us exactly how many dB we need to find, so we pick the cheapest lever that covers the gap instead of stacking guesses.</p>
+<p><strong>加分點：</strong>先用「idle 鄰道＋長度相關」完成鑑別診斷再談藥；「加厚銅無效」給出 δ 量級論證而非口號；pattern A/B 實驗設計（1010 vs PRBS）；壓延銅粗糙度紅利這種 flex 領域知識；最後回到「量化缺口再選最便宜的槓桿」——Apple/Google FA 面試最吃這種決策紀律。</p>
+</details>
+
+<h2>7. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：skin effect 的物理成因一句話？電流密度往內怎麼變？</p>
+  <p class="a">A1：交流電流按「總阻抗最小」分佈——高頻時電感項主導，走導體中心磁通鏈最多（電感最大）、走表面最少 → 電流擠到表面。等價說法：內部交變磁場感應渦流，在中心抵消主電流、在表面加強。電流密度由表面往內<strong>指數衰減</strong>：深入 1δ 剩 37%、3δ 剩約 5%；工程近似「表面 δ 厚均勻導電、以下沒電流」。微帶線還會「挑面」：訊號電流擠向面對地平面那一面，回流電流在平面上也集膚並聚在走線正下方。</p>
+  <p class="q">Q2：銅的 skin depth 手感公式與五個速查數字？與銅箔厚度的關鍵對比？</p>
+  <p class="a">A2：<strong>δ ≈ 66 µm ÷ √f(MHz)</strong>。速查：1 MHz→66 µm、10 MHz→21 µm、100 MHz→6.6 µm、<strong>1 GHz→約 2.1 µm</strong>、10 GHz→約 0.66 µm。銅箔：1 oz ≈ 35 µm（約 4 MHz 量級開始用不滿）、½ oz ≈ 17 µm（約 15 MHz 量級）。1 GHz 的皮比最薄常用銅箔<strong>薄一個量級</strong>——高頻電流只用得到銅箔約一成厚度。</p>
+  <p class="q">Q3：R<sub>AC</sub> 公式與 √f 稅率？「加厚銅」為什麼無效、正解是什麼？</p>
+  <p class="a">A3：δ ≪ 銅厚時 R<sub>AC</sub> ≈ ρℓ/(w·δ) ∝ <strong>√f</strong>（頻率翻 4 倍電阻翻 2 倍）；衰減 α<sub>cond</sub> ≈ R<sub>AC</sub>/(2Z₀) 也 ∝ √f。加厚銅無效：電流只住表面 δ，下面鋪再厚也用不到。正解：<strong>加寬</strong>（皮的面積 = w×δ，w 才是可控維度；代價是 Z₀ 掉、疊構要重調）＋<strong>低粗糙度銅箔</strong>（µm 級鋸齒與 δ 同量級，隱藏加稅可達數十 %；flex 的壓延銅天生光滑佔便宜）＋縮短長度＋等化。</p>
+  <p class="q">Q4：為什麼損耗「磨糊」訊號而不是等比例縮小？後果掛家族樹哪一枝？</p>
+  <p class="a">A4：因為 √f 是<strong>累進稅</strong>：基頻幾乎免稅、撐邊沿的高次諧波課重稅 → 邊沿垮成緩坡＋低頻長尾。單一個 1 爬不滿、連續 1 爬得滿、0 被前面的尾巴墊高——<strong>位元的模樣由自己的歷史決定 = ISI</strong>，掛 DDJ 枝（與串擾版 pattern timing 同枝：串擾兇手是鄰居、ISI 兇手是自己的過去；分離實驗＝鄰道 idle）。二重罪：邊沿斜率變小 → Δt = ΔV/(dV/dt) 匯率變差，所有其他噪聲偷走的時間跟著放大。若損耗對全頻率均勻，只是縮小、調增益即可——「頻率相關」才是病，也是等化器存在的理由。</p>
+  <p class="q">Q5：損耗發病的條件？NB/flex/時脈三場景各一句話？</p>
+  <p class="a">A5：損耗是「<strong>頻率 × 長度 × 擺幅餘裕</strong>」的乘法罪——單因子超標不一定發病。NB 主機板：跨板 20–30 cm 高速串列線是主要受害者，藥：低損板材、低粗糙度銅、加寬、redriver/retimer；FA 指紋「短板 OK 長板掛、高溫更糟（銅 ρ 約 +0.4%/°C 量級）」。鏡頭模組長 flex：線窄（R<sub>AC</sub> 高）但壓延銅光滑（粗糙度稅低）；眼圖指紋＝眼高塌＋交叉糊＋<strong>換 pattern 眼形變</strong>。時脈（PT2 時代）：數百 MHz × 短線 × 大擺幅 → 稅金傷不到準位，所以 2002 年的書幾乎不談損耗——差動耐衰減 PT2 Ch.2 有原話（門檻能容忍可觀衰減），現代 Gbps 還要加等化。</p>
+</div>
+
+<h2>8. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 26：損耗 II——介質損 tan δ：板材是一塊會吸能量的海綿</strong></p>
+  <p>今天銅吃掉的是 √f 稅；明天登場的第二個兇手更兇：FR4 板材裡的分子被電場來回拉扯、摩擦生熱，稅率 <strong>∝ f</strong>（一次方，比 √f 陡）——頻率夠高之後它一定反超導體損成為主犯。明天你會學到 loss tangent（tan δ）這個板材身分證數字、算出「導體損 vs 介質損誰主導」的交叉頻率、看懂為什麼高速板料表（FR4 → 中損 → 低損）是一張價目表，以及鏡頭模組 flex 的 PI 介質在這張表上站哪裡。兩個兇手到齊之後，本週後半正式開眼——眼圖判讀登場。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 25 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

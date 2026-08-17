@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 26｜損耗 II——介質損 tan δ：板材是一塊會吸能量的海綿</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 26 天（週二新觀念課）</div>
+  <h1>Day 26：損耗 II——介質損 tan δ：板材是一塊會吸能量的海綿</h1>
+  <div class="meta">2026-08-18（二）｜預估學習時間：90 分鐘｜難度：★★★☆☆（物理是「微波爐加熱」的親戚，數學只有一條 ∝ f）｜損耗雙兇手今天到齊</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 25 辦了第一個兇手（銅，√f 稅）；今天辦第二個——<strong>板材本身</strong>。它不搶訊號的路，它直接把電場的能量「吸走變成熱」，而且稅率 <strong>∝ f</strong>（一次方），比銅的 √f 更陡——頻率夠高之後<strong>一定反超</strong>成為主犯。讀完你要能夠：</p>
+  <ol>
+    <li>用「微波爐」的直覺解釋介質損：板材裡的極性分子被電場來回拉扯、摩擦生熱——每個週期抽固定比例的稅，所以每秒的稅金 ∝ 頻率</li>
+    <li>看懂 <strong>loss tangent（tan δ，損耗正切）</strong>這張板材身分證：FR4 約 0.02、中損約 0.01、低損約 0.002–0.004 的價目表怎麼讀</li>
+    <li>背下手感公式：<strong>α<sub>diel</sub> ≈ 91 × f(GHz) × tan δ × √ε<sub>eff</sub>　dB/m</strong>——FR4 微帶線約 0.32 dB / 10 cm / GHz（量級）</li>
+    <li>親手算出「導體損 vs 介質損」的<strong>交叉頻率</strong>：用 Day 25 那條 0.15 mm 微帶線接著算，答案約 2 GHz——正好是現代高速介面的家門口</li>
+    <li>抓住兩個兇手最關鍵的體質差異：<strong>導體損看幾何（加寬有救）、介質損看材料（只有換板材或縮短有救）</strong>——藥方完全不通用</li>
+    <li>定位鏡頭模組 flex 的 PI 介質在價目表上的位置，以及 LCP 是什麼時候才值得掏錢的升級</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：稅務機關第二科開張</h2>
+<p>Day 25 的結論：高頻電流只走銅的皮（δ ≈ 66 µm/√f(MHz)），有效截面縮水 → R<sub>AC</sub> ∝ √f → 導體損是一張「平方根累進稅」稅表，專宰撐邊沿的高次諧波 → 邊沿磨糊 → ISI 掛上 DDJ 樹枝。我們也算過一筆帳：0.15 mm 寬、10 cm 長的微帶線在 1 GHz 約被抽 <strong>0.47 dB</strong>（量級）。今天把第二張稅表疊上去——你會發現在 GHz 世界，這第二張才是大魔王，而且它<strong>連你的走線長什麼樣都懶得看</strong>：它只看你用了哪塊板材。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天整堂課一句話</span>
+  <p>你家的微波爐就是一台「介質損示範機」：2.45 GHz 的電磁波對著食物裡的水分子猛搖，水分子是小磁鐵（其實是小電偶極），被電場拉著轉來轉去、跟鄰居摩擦——摩擦生熱，飯就熱了。<strong>你的 PCB 板材就是一盤放在微波爐裡的飯</strong>：FR4 的樹脂分子也是小電偶極，訊號的電場每秒來回搖它幾十億次，它每被搖一次就摩擦掉一點點訊號能量。關鍵在「<strong>每搖一次抽固定比例</strong>」——所以頻率翻倍（每秒搖的次數翻倍）、每秒被吃掉的能量就翻倍：稅率 ∝ f，一次方，比銅的 √f 陡。板材有多會吸？看一個數字就好：<strong>tan δ</strong>——把它想成「這塊海綿的吸水力」。FR4 是 0.02 的粗海綿，低損板材是 0.002 的細瓷盤——差 10 倍，價錢也差好幾倍。公式看不懂沒關係，記住「板材是海綿、每個週期抽固定比例、頻率越高每秒抽越多、海綿粗細看 tan δ」這四句，今天就及格了。</p>
+</div>
+
+<h2>1. 介質為什麼會吃能量——極化跟不上的摩擦熱</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：一群被鬧鐘搖醒又搖睡的懶人</span>
+  <p>介質（絕緣體）裡沒有自由電子，但有很多「頭尾帶不同電」的分子——<strong>電偶極（dipole）</strong>，像一根根小指南針（只是它們感應的是電場不是磁場）。電場一來，它們就想轉過去對齊電場；電場反向，它們又得轉回來。如果它們轉得<strong>無限快、毫無阻力</strong>，那能量只是被暫時借走又全額奉還（這就是電容儲能，無損）。但現實是：分子卡在材料裡，轉動有「黏性」——<strong>永遠慢半拍、而且轉的過程跟周圍摩擦</strong>。慢半拍 ＋ 有摩擦 ＝ 每個週期都有一小口能量變成熱、要不回來。這就是介質損的全部物理：<strong>極化跟不上電場，跟不上的部分變成熱</strong>。</p>
+</div>
+
+<p>把這件事寫成工程語言：介質的介電常數其實是<strong>複數</strong>——實部 ε′ 是「乖乖儲能奉還」的部分（決定電容、決定 Z₀ 與傳播速度，就是你熟的 Dk/ε<sub>r</sub>）；虛部 ε″ 是「摩擦變熱」的部分。兩者的比值就是今天的主角：</p>
+
+<div class="formula">tan δ = ε″ / ε′　（loss tangent，損耗正切；也寫作 Df，dissipation factor）<br>白話：<strong>每儲存 1 份能量，順手摩擦掉 tan δ 份</strong>——它是「每個週期的抽稅比例」，一個無因次的小數字。</div>
+<p><em>白話翻譯：tan δ = 0.02 的意思是「電場每來回搖一次，大約 2% 量級的相關能量變成熱」。這個「每週期固定比例」正是稅率 ∝ f 的根源：1 GHz 每秒搖 10 億次、2 GHz 搖 20 億次——每次抽的比例一樣，每秒抽的總量就翻倍。對照 Day 25：銅的稅是「路肩隨 √f 變窄」的幾何效應，所以只有 √f；介質的稅是「按次數計費」，所以是 f 的一次方。名詞小注：δ 這個希臘字母今天「撞名」了——Day 25 的 δ 是 skin depth（一個長度），今天 tan δ 裡的 δ 是「電流與電壓的相位差角」（一個角度），兩者毫無關係，純屬字母不夠用，面試時別講混。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">介質損的物理：被電場來回搖的分子，每搖一次摩擦掉一口能量</text>
+  <!-- left: dipoles under E field -->
+  <text x="190" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">板材裡的電偶極：跟著電場轉，但慢半拍＋有摩擦</text>
+  <rect x="60" y="66" width="260" height="150" rx="8" fill="#d9f99d" stroke="#65a30d" stroke-width="1.5"/>
+  <text x="190" y="84" text-anchor="middle" font-size="9.5" fill="#3f6212">FR4 樹脂（放大一億倍）</text>
+  <!-- dipoles: little bars with +/- -->
+  <g stroke="#374151" stroke-width="2.4">
+    <line x1="95" y1="115" x2="120" y2="100"/>
+    <line x1="160" y1="108" x2="185" y2="120"/>
+    <line x1="235" y1="100" x2="258" y2="115"/>
+    <line x1="100" y1="170" x2="126" y2="180"/>
+    <line x1="170" y1="182" x2="196" y2="168"/>
+    <line x1="240" y1="172" x2="262" y2="186"/>
+  </g>
+  <g font-size="8.5" font-weight="bold">
+    <text x="90" y="118" fill="#dc2626">+</text><text x="122" y="100" fill="#2563eb">−</text>
+    <text x="155" y="110" fill="#dc2626">+</text><text x="188" y="124" fill="#2563eb">−</text>
+    <text x="230" y="102" fill="#dc2626">+</text><text x="261" y="118" fill="#2563eb">−</text>
+    <text x="95" y="173" fill="#dc2626">+</text><text x="128" y="184" fill="#2563eb">−</text>
+    <text x="165" y="186" fill="#dc2626">+</text><text x="199" y="170" fill="#2563eb">−</text>
+    <text x="235" y="175" fill="#dc2626">+</text><text x="264" y="190" fill="#2563eb">−</text>
+  </g>
+  <!-- E field arrows -->
+  <line x1="72" y1="140" x2="308" y2="140" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="190" y="152" text-anchor="middle" font-size="9" font-weight="bold" fill="#dc2626">E 場每秒反轉 10 億次量級（GHz）</text>
+  <text x="190" y="232" text-anchor="middle" font-size="9.5" fill="#374151">轉動慢半拍＋摩擦 → 每個週期抽走一小口能量變熱</text>
+  <!-- microwave analogy box -->
+  <rect x="60" y="248" width="260" height="66" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="190" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#9a3412">生活對照組：微波爐（2.45 GHz）</text>
+  <text x="190" y="286" text-anchor="middle" font-size="9" fill="#7c2d12">水分子＝很會吸的電偶極 → 飯熱了</text>
+  <text x="190" y="302" text-anchor="middle" font-size="9" fill="#7c2d12">FR4＝比較不會吸的「飯」→ 訊號涼了</text>
+  <!-- right: complex permittivity + per-cycle tax -->
+  <text x="555" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">工程記帳法：ε 拆成「儲能」與「生熱」兩本</text>
+  <rect x="420" y="66" width="130" height="84" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="485" y="88" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">ε′（Dk）</text>
+  <text x="485" y="106" text-anchor="middle" font-size="8.5" fill="#374151">乖乖儲能奉還</text>
+  <text x="485" y="120" text-anchor="middle" font-size="8.5" fill="#374151">決定 Z₀、速度</text>
+  <text x="485" y="136" text-anchor="middle" font-size="8.5" fill="#374151">（週 1–2 的老朋友）</text>
+  <rect x="562" y="66" width="130" height="84" rx="8" fill="#fef2f2" stroke="#dc2626"/>
+  <text x="627" y="88" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#991b1b">ε″</text>
+  <text x="627" y="106" text-anchor="middle" font-size="8.5" fill="#374151">摩擦變熱、要不回來</text>
+  <text x="627" y="120" text-anchor="middle" font-size="8.5" fill="#374151">決定介質損</text>
+  <text x="627" y="136" text-anchor="middle" font-size="8.5" fill="#374151">（今天的主角）</text>
+  <text x="556" y="176" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">tan δ = ε″/ε′ ＝ 每週期抽稅比例</text>
+  <!-- per-cycle tax to linear f -->
+  <rect x="420" y="192" width="272" height="122" rx="10" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="556" y="214" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#5b21b6">為什麼稅率 ∝ f（一次方）？</text>
+  <text x="556" y="236" text-anchor="middle" font-size="9" fill="#374151">每「搖一次」抽固定比例（tan δ）</text>
+  <text x="556" y="254" text-anchor="middle" font-size="9" fill="#374151">頻率 = 每秒搖幾次</text>
+  <text x="556" y="274" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#7c3aed">每秒稅金 = 次數 × 每次比例 ∝ f</text>
+  <text x="556" y="298" text-anchor="middle" font-size="8.5" fill="#6b7280">對照導體損：路肩隨 √f 變窄的幾何效應 → 只有 √f</text>
+  <!-- bottom strip -->
+  <rect x="60" y="336" width="632" height="118" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="376" y="358" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">兩個兇手的體質對照（今天最重要的一張表）</text>
+  <text x="376" y="380" text-anchor="middle" font-size="9.5" fill="#374151">導體損：∝ √f｜看「幾何」（線寬、銅粗糙度）｜加寬有救、換板材沒救</text>
+  <text x="376" y="400" text-anchor="middle" font-size="9.5" fill="#374151">介質損：∝ f｜看「材料」（tan δ）｜換板材有救、<tspan font-weight="bold" fill="#dc2626">加寬完全沒救</tspan></text>
+  <text x="376" y="422" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">共同點：都 ∝ 長度、都是累進稅（專宰高次諧波 → 磨邊沿 → ISI）</text>
+  <text x="376" y="442" text-anchor="middle" font-size="9" fill="#6b7280">∝ f 比 ∝ √f 陡 → 頻率夠高之後介質損必定反超——交叉點在哪？第 3 節算給你看</text>
+</svg>
+<figcaption>圖 1：介質損全景。左：板材裡的電偶極被 GHz 電場來回搖，轉動慢半拍＋摩擦 → 每週期抽一口能量（微波爐是同一物理的暴力版）。右上：介電常數拆成儲能的 ε′（Dk）與生熱的 ε″，比值就是 tan δ。右中：「每次抽固定比例 × 每秒次數 ∝ f」＝一次方稅率的由來。下：兩兇手體質對照——導體損看幾何、介質損看材料，藥方不通用。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤解先拆彈</span>
+  <p><strong>誤解一：「絕緣體不導電，怎麼會吃訊號能量？」</strong>——它吃的不是「電流穿過它」的能量（漏電流在好板材上確實可忽略），而是<strong>電場搖它</strong>的能量。訊號在傳輸線上跑，電場就住在走線與參考平面之間的介質裡（Day 5 的老畫面）——場在哪、稅就在哪收。這也解釋了為什麼介質損<strong>與線寬無關</strong>：線加寬，場的總量與能量按比例一起變，抽稅比例不變。<strong>誤解二：「tan δ 是頻率的函數，查一個數字沒用吧？」</strong>——嚴格說 tan δ 確實隨頻率略變，但好板材在 1–20 GHz 量級內相當平坦（供應商 datasheet 會標註量測頻率，如 @1 GHz、@10 GHz），工程上「一個數字走天下」的近似夠用；要做精確模擬時才需要寬頻 Debye 模型，今天不展開。<strong>誤解三：「Dk 低的板材 tan δ 一定低」</strong>——大致同方向（分子極性弱 → 兩者都低），但不是定律，選料時兩個數字都要看：Dk 管阻抗與時序、tan δ 管損耗，是兩張不同的考卷。</p>
+</div>
+
+<h2>2. 從 tan δ 到衰減：一條 ∝ f 的價目公式</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：稅單直接印在「每公尺、每 GHz」上</span>
+  <p>導體損要算 δ、算截面、算 R<sub>AC</sub>，一長串；介質損反而痛快——因為它跟幾何無關，衰減可以直接寫成「每公尺、每 GHz、每單位 tan δ」的單價。你只要記一個數字：<strong>91</strong>。FR4 代進去，答案是每 10 cm、每 GHz 約 0.3 dB 量級——跟 Day 25 算的導體損（0.47 dB/10 cm @1 GHz）居然同一個量級，這不是巧合，這正是「1–2 GHz 是兩兇手交接班的年代」的數學鐵證。</p>
+</div>
+
+<div class="formula">α<sub>diel</sub> = (π · f · √ε<sub>eff</sub> · tan δ) / c　　Np/m<br>手感版（×8.686 換 dB）：<strong>α<sub>diel</sub> ≈ 91 × f(GHz) × tan δ × √ε<sub>eff</sub>　dB/m</strong><br>FR4 微帶線代入（tan δ ≈ 0.02、ε<sub>eff</sub> ≈ 3.1 → √ε<sub>eff</sub> ≈ 1.76）：α<sub>diel</sub> ≈ 3.2 dB/m/GHz ≈ <strong>0.32 dB / 10 cm / GHz</strong>（量級）</div>
+<p><em>白話翻譯：第一行的來源直覺：訊號在介質裡每前進一個波長，就被「搖」了一個完整週期、抽一次稅——所以每公尺的稅 = 每公尺有幾個波長（∝ f·√ε<sub>eff</sub>）× 每週期稅率（tan δ）。頻率越高波長越短、每公尺被搖越多次，∝ f 就這麼來的。第三行是你要背的手感數字：<strong>FR4 上每 10 cm 每 GHz 約 0.3 dB</strong>。注意公式裡「沒有 w、沒有 t、沒有 Z₀」——介質損對你的走線幾何完全無感，這是它與導體損最大的分野。公式推導看不懂可以跳過，記住「91 × GHz × tan δ × √ε<sub>eff</sub>，單位 dB/m」與「FR4 ≈ 0.3 dB/10 cm/GHz」就能上工。</em></p>
+
+<div class="card pitfall">
+  <span class="label">FR4 的兩個隱藏地雷：吸濕與編織布</span>
+  <p><strong>地雷一（吸濕）：</strong>FR4 的環氧樹脂會吸收環境水氣（重量百分比零點幾 % 量級），而水是出了名的強損耗介質（微波爐就是靠它）——吸濕後 Dk 與 tan δ 都<strong>上升</strong>。FA 指紋：同一片板「乾燥箱烘過 OK、高溫高濕櫃跑完就 marginal」，損耗嫌疑名單上介質損排第一。低損板材通常吸濕率也做得低，這是價目表上看不到的隱形價值。<strong>地雷二（玻璃編織布，fiber weave）：</strong>FR4 = 玻璃纖維布 + 環氧樹脂，兩者 Dk 不同（玻璃約 6、樹脂約 3，量級）——走線恰好壓在玻璃紗上 vs 壓在樹脂窗上，局部 ε<sub>eff</sub> 不一樣。對單端線是小幅阻抗漣漪；對<strong>差動對</strong>是大事：P/N 兩腳若一腳騎紗、一腳騎窗，兩腳速度不同 → <strong>P/N skew</strong> → Day 21 講的「差動免疫力」被從腳底挖牆腳（skew 把差動訊號的一部分轉成共模）。對策：走線與板邊斜一個小角度（讓兩腳統計上騎到一樣的紗）、或選用開纖布（spread glass）。今天先掛號，量測篇再回來。</p>
+</div>
+
+<h2>3. 兩張稅表疊起來：交叉頻率——誰是主犯，算了才知道</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：√f 是爬坡、f 是直線衝——直線一定追過爬坡</span>
+  <p>把兩張稅表畫在同一張圖上：導體損是一條越來越平的爬坡曲線（√f），介質損是一條斜率固定的直線（f）。低頻時爬坡曲線在上面（導體損主導），但直線遲早追過它——追過的那一點叫<strong>交叉頻率 f<sub>x</sub></strong>。f<sub>x</sub> 以下，你該花錢的地方是銅（加寬、低粗糙度）；f<sub>x</sub> 以上，你該花錢的地方是板材（低 tan δ）。<strong>錢花錯邊，是高速板設計最貴的一種浪費</strong>——所以這一節的計算不是學術練習，是採購決策。</p>
+</div>
+
+<p>交叉頻率的算法：令 α<sub>cond</sub>(f) = α<sub>diel</sub>(f)。用 Day 25 的老朋友（0.15 mm 寬微帶線、1 oz 銅、Z₀ = 50 Ω、FR4）把數字代進去：</p>
+
+<div class="formula">α<sub>cond</sub> ≈ 0.47 × √f(GHz)　dB/10 cm　（Day 25 練習 2 的結果，∝ √f 外推）<br>α<sub>diel</sub> ≈ 0.32 × f(GHz)　dB/10 cm　（本課第 2 節）<br>令兩者相等：0.47·√f = 0.32·f　→　√f = 0.47/0.32 ≈ 1.47　→　<strong>f<sub>x</sub> ≈ 2.2 GHz（量級）</strong></div>
+<p><em>白話翻譯：這條 0.15 mm 的 FR4 微帶線，約 2 GHz 以下銅是主犯、以上板材是主犯。而 2 GHz 正好是現代高速介面的家門口——MIPI D-PHY 2.5 Gbps 的基頻 1.25 GHz 在交叉點附近（兩兇手平分秋色）、PCIe 3.0 8 Gbps 的基頻 4 GHz 已在介質損主場、更高速的通道則完全是板材的天下。注意 f<sub>x</sub> 不是自然常數，它隨幾何移動：線越窄 → 導體損越高 → f<sub>x</sub> 越高；換低損板材 → 介質損直線變平 → f<sub>x</sub> 大幅上移（練習 2 會算：換 tan δ 0.002 的板材後 f<sub>x</sub> 衝到遠超實用頻段——屆時瓶頸回到銅，這就是為什麼低損板料一定要配低粗糙度銅箔，不然錢白花一半）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">兩張稅表對決＋板材價目表：錢要花在主犯身上</text>
+  <!-- left: alpha vs f plot -->
+  <line x1="70" y1="300" x2="360" y2="300" stroke="#374151" stroke-width="1.4"/>
+  <line x1="70" y1="300" x2="70" y2="60" stroke="#374151" stroke-width="1.4"/>
+  <text x="360" y="316" text-anchor="end" font-size="9" fill="#374151">f (GHz)</text>
+  <text x="64" y="62" text-anchor="end" font-size="9" fill="#374151">α</text>
+  <text x="62" y="316" font-size="9" fill="#374151">0</text>
+  <!-- conductor: sqrt curve -->
+  <path d="M70,300 Q110,236 160,210 Q230,178 350,150" fill="none" stroke="#b45309" stroke-width="2.4"/>
+  <text x="300" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">導體損 ∝ √f（越來越平）</text>
+  <!-- dielectric: straight line -->
+  <line x1="70" y1="300" x2="330" y2="76" stroke="#dc2626" stroke-width="2.4"/>
+  <text x="238" y="84" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">介質損 ∝ f（直線衝）</text>
+  <!-- crossover -->
+  <circle cx="196" cy="192" r="6" fill="#7c3aed"/>
+  <line x1="196" y1="192" x2="196" y2="300" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="196" y="316" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#7c3aed">f_x ≈ 2.2 GHz（本例）</text>
+  <text x="130" y="268" text-anchor="middle" font-size="9" fill="#b45309">銅主犯區：</text>
+  <text x="130" y="281" text-anchor="middle" font-size="9" fill="#b45309">加寬/低粗糙度有感</text>
+  <text x="286" y="252" text-anchor="middle" font-size="9" fill="#dc2626">板材主犯區：</text>
+  <text x="286" y="265" text-anchor="middle" font-size="9" fill="#dc2626">換低 tan δ 料才有感</text>
+  <text x="215" y="345" text-anchor="middle" font-size="9" fill="#6b7280">f_x 會移動：線變窄→上移；換低損料→大幅上移（瓶頸回到銅）</text>
+  <!-- right: price list -->
+  <text x="560" y="58" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">板材價目表（tan δ 身分證，量級）</text>
+  <g font-size="9.5">
+    <rect x="420" y="72" width="280" height="40" rx="6" fill="#fee2e2" stroke="#dc2626"/>
+    <text x="430" y="89" font-weight="bold" fill="#991b1b">FR4（標準）：tan δ ≈ 0.02｜Dk ≈ 4.2–4.5</text>
+    <text x="430" y="104" fill="#7f1d1d">最便宜；約 0.3 dB/10cm/GHz——GHz 長線的痛源</text>
+    <rect x="420" y="120" width="280" height="40" rx="6" fill="#ffedd5" stroke="#ea580c"/>
+    <text x="430" y="137" font-weight="bold" fill="#9a3412">中損（mid-loss）：tan δ ≈ 0.01 上下</text>
+    <text x="430" y="152" fill="#7c2d12">加價換半價稅單；很多 NB 高速板的甜蜜點</text>
+    <rect x="420" y="168" width="280" height="40" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="430" y="185" font-weight="bold" fill="#14532d">低損（如 Megtron 級）：tan δ ≈ 0.002–0.004</text>
+    <text x="430" y="200" fill="#14532d">稅砍到約 1/5–1/10；伺服器/高速背板標配</text>
+    <rect x="420" y="216" width="280" height="40" rx="6" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="430" y="233" font-weight="bold" fill="#075985">RF/微波級（PTFE 系）：tan δ ≈ 0.001–0.002</text>
+    <text x="430" y="248" fill="#075985">天線/雷達用；貴且加工特殊，數位板少用</text>
+  </g>
+  <!-- flex section -->
+  <rect x="420" y="266" width="280" height="88" rx="8" fill="#f5f3ff" stroke="#7c3aed"/>
+  <text x="560" y="286" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#5b21b6">鏡頭模組 flex 的介質站哪裡？</text>
+  <text x="430" y="306" font-size="9" fill="#374151">PI（聚醯亞胺/Kapton 類）：Dk ≈ 3.2–3.5、</text>
+  <text x="430" y="320" font-size="9" fill="#374151">tan δ 約 0.01–0.02 量級（GHz、且吸濕會惡化）</text>
+  <text x="430" y="338" font-size="9" font-weight="bold" fill="#7c3aed">升級選項 LCP：tan δ ≈ 0.002 量級、幾乎不吸濕</text>
+  <text x="430" y="352" font-size="9" fill="#6b7280">→ 長 flex＋高速率才值得掏錢（練習 4）</text>
+  <!-- bottom summary -->
+  <rect x="70" y="372" width="630" height="92" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="385" y="394" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">總損耗記帳法：α_total(f) = α_cond(√f 稅) + α_diel(f 稅)，兩項都 × 長度</text>
+  <text x="385" y="416" text-anchor="middle" font-size="9.5" fill="#374151">FR4 手感：0.15 mm 線 @5 GHz ≈ 0.47√5 + 0.32×5 ≈ 1.05 + 1.6 ≈ 2.7 dB / 10 cm（介質損已是導體損的 1.5 倍）</text>
+  <text x="385" y="436" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">開藥前先確診：加寬只治 √f 項、換料只治 f 項——先算 f_x 再花錢</text>
+  <text x="385" y="454" text-anchor="middle" font-size="9" fill="#6b7280">兩項都是累進稅 → 都磨邊沿、都餵 ISI/DDJ——家族樹上掛同一枝，只是繳稅對象不同</text>
+</svg>
+<figcaption>圖 2：左：√f 爬坡（導體損）被 ∝ f 直線（介質損）追過，交叉點 f<sub>x</sub> 把頻譜切成「銅主犯區」與「板材主犯區」——本課例算出約 2.2 GHz，正好卡在現代高速介面家門口。右：板材價目表（tan δ 量級）與鏡頭模組 flex 的 PI/LCP 定位。下：總損耗 = 兩張稅單相加，@5 GHz 時 FR4 上介質損已反超——開藥前先算清楚誰是主犯。</figcaption>
+</figure>
+
+<h2>4. 實務案例：兩個老本行的介質帳</h2>
+<ul>
+  <li><strong>NB 主機板（板材選擇的政治學）：</strong>NB 板上並不是「整片板換低損料」——太貴。實務打法是混壓（hybrid stackup）：只把高速串列訊號走的那幾層換成中損/低損材料，其餘層留 FR4。你會在疊構表上看到兩種料號並存，這就是今天這堂課的採購版。決策依據正是 f<sub>x</sub> 與長度：20–30 cm 的 8 Gbps 級通道（基頻 4 GHz），FR4 的介質損一項就吃掉約 0.32 × 4 × 25 ≈ 3 dB 量級——換 tan δ 0.004 的料直接省下約 2.5 dB，比任何幾何微調都暴力。反過來，一條 3 cm 的短線就算跑同速率，介質損總額不到 0.4 dB——換料是浪費錢。<strong>損耗預算永遠是「單價 × 長度」，長度才是放大器。</strong></li>
+  <li><strong>鏡頭模組（flex 上的 PI）：</strong>Day 25 說過 flex 的導體帳（線窄 R<sub>AC</sub> 高、但壓延銅光滑省粗糙度稅）；今天補介質帳：常見 flex 介質 PI 的 tan δ 在 GHz 約 0.01–0.02 量級——跟 FR4 同一檔次、不算低損材料，而且 PI 吸濕率偏高、濕了更糟。好消息是鏡頭模組 flex 通常只有幾 cm，「單價 × 長度」的長度項小，所以多數手機模組用 PI 撐得住。壓力來自兩個方向：速率上探（C-PHY/D-PHY 一路加速）與長度上探（潛望式、摺疊機跨鉸鏈 10 cm 級 flex）——兩個因子一起翻，PI 的稅單就開始咬眼圖，這時 <strong>LCP（液晶聚合物，tan δ ≈ 0.002 量級、幾乎不吸濕）</strong>才進場——它貴、加工難，但在「長 flex × 高速率」的角落是救命藥。天線界早一步全面投奔 LCP（毫米波），camera flex 是跟著受惠的。面試連結：被問「long flex 跑高速 MIPI 你會檢查什麼」，材料身分證（銅是壓延還是電解、介質是 PI 還是 LCP）是展現領域深度的好答案。</li>
+  <li><strong>FA 視角（把兩堂課的指紋合訂）：</strong>損耗類 failure 的鑑別三板斧——①<strong>長度相關</strong>（短板 OK 長板掛：導體介質都有嫌疑）；②<strong>溫度相關</strong>（高溫更糟：銅 ρ 隨溫度升約 0.4%/°C 是導體損指紋；板材 tan δ 也隨溫度略升）；③<strong>濕度相關</strong>（高濕櫃跑完變糟、烘乾恢復：幾乎可以直接點名介質吸濕——銅不吸水）。第③斧是今天新發的刀：它能在不拆板的情況下把兩個兇手分開。</li>
+</ul>
+
+<h2>5. 動手練習（紙上推演，今天不需儀器）</h2>
+<p>速查帶著走：α<sub>diel</sub> ≈ 91 × f(GHz) × tan δ × √ε<sub>eff</sub> dB/m；FR4 ≈ 0.32 dB/10 cm/GHz；Day 25 的導體損例 ≈ 0.47√f(GHz) dB/10 cm。</p>
+
+<details>
+<summary>練習 1（介質損手感速成）：FR4 微帶線（tan δ = 0.02、√ε<sub>eff</sub> ≈ 1.76），10 cm 長。(a) 算 1 / 2.5 / 5 / 10 GHz 的介質損。(b) 同頻率下的導體損（0.47√f）各是多少？哪個頻率起介質損反超？(c) 換成 25 cm 的 NB 跨板通道，5 GHz 的總損耗（兩項相加）約幾 dB？(d) 這個數字為什麼「單看嚇人、實際還要更嚇人」？（提示：Day 25 講過的兩筆隱藏帳）</summary>
+<p><strong>解：</strong>(a) 0.32 × f：1 GHz → <strong>0.32 dB</strong>；2.5 GHz → <strong>0.80 dB</strong>；5 GHz → <strong>1.6 dB</strong>；10 GHz → <strong>3.2 dB</strong>（每 10 cm）。(b) 0.47√f：1 GHz → 0.47；2.5 GHz → 0.74；5 GHz → 1.05；10 GHz → 1.49 dB。對照可見 <strong>約 2.2 GHz 起介質損反超</strong>（1 GHz 時銅贏、2.5 GHz 起板材贏，跟正文 f<sub>x</sub> 一致）。(c) 25 cm = 2.5 × (1.6 + 1.05) ≈ <strong>6.6 dB 量級</strong>。(d) 還沒計入：①銅箔<strong>粗糙度</strong>加稅（數十 % 量級，Day 25）；②<strong>回流路徑</strong>的導體損（平面上的集膚電阻也要記帳）；再加上 connector 與 via 的不連續損失——所以實際通道的 insertion loss 通常比「教科書兩項相加」再糟一截，這也是為什麼正式設計要靠量測/模擬收口，手算只負責「量級對不對、錢花哪一邊」。</p>
+</details>
+
+<details>
+<summary>練習 2（交叉頻率是會跑的）：(a) 用正文的例子（α<sub>cond</sub> = 0.47√f、α<sub>diel</sub> = 0.32f）確認 f<sub>x</sub> ≈ 2.2 GHz。(b) 把板材換成 tan δ = 0.002 的低損料（√ε<sub>eff</sub> 近似不變），新的 f<sub>x</sub> 是多少？這個數字告訴你什麼？(c) 反向操作：板材不換，線寬從 0.15 mm 放寬到 0.3 mm（R<sub>AC</sub> 減半），f<sub>x</sub> 變多少？(d) 從 (b)(c) 各得出一條「花錢哲學」。</summary>
+<p><strong>解：</strong>(a) 0.47√f = 0.32f → √f = 1.47 → f = 2.16 ≈ <strong>2.2 GHz</strong>。✓ (b) α<sub>diel</sub> 變成 0.032f：0.47√f = 0.032f → √f = 14.7 → <strong>f<sub>x</sub> ≈ 216 GHz</strong>——遠超任何實用頻段，意思是：<strong>換了低損料之後，整個工作頻段內主犯變回銅</strong>。所以低損板料必須配低粗糙度銅箔（甚至加寬），否則你付了板材的錢、瓶頸卻卡在銅——錢白花一半。這就是高速板料「材料系統」要成套買的原因。(c) α<sub>cond</sub> 減半 = 0.235√f：0.235√f = 0.32f → √f = 0.73 → <strong>f<sub>x</sub> ≈ 0.54 GHz</strong>——加寬之後介質損更早接管主導權，繼續加寬的邊際效益迅速歸零。(d) 花錢哲學一（from b）：<strong>治了一個兇手，瓶頸就換人——升級要成套，逐項升級會浪費</strong>。哲學二（from c）：<strong>幾何槓桿只對 √f 項有效，拉到 f<sub>x</sub> 附近就到頂</strong>——超過之後每一分錢都該轉去買 tan δ。一句話：先算 f<sub>x</sub>，錢花在主犯身上。</p>
+</details>
+
+<details>
+<summary>練習 3（會議室決策題）：25 cm、8 Gbps（基頻 4 GHz）的 NB 通道 insertion loss 超標約 3 dB。四個提案：①整段線寬加倍（假設繞得開、疊構可重調）；②全板換低損材料；③只把高速層換中損料（混壓）；④加一顆 redriver。就「省下的 dB 數 / 成本 / 副作用」逐一評估，給出你的推薦順序。</summary>
+<p><strong>解：</strong>先確診：4 GHz 在 FR4 上遠高於 f<sub>x</sub>（2.2 GHz）→ <strong>介質損是主犯</strong>（0.32×4×2.5 ≈ 3.2 dB vs 導體 0.47×2×2.5 ≈ 2.35 dB）。逐項：① 加寬只砍 √f 項：省約 2.35×(1−1/√2)… 精確講 R<sub>AC</sub> 減半 → 導體損砍半 ≈ 省 1.2 dB，<strong>不夠</strong>，且吃掉繞線密度、疊構重調連動串擾規則（Day 25 練習 3 的老帳）。② 全板換低損：省最多（介質項砍 8 成 → 省約 2.5 dB，加上練習 2b 的連鎖，接近達標）但<strong>成本最高</strong>——低速層跟著付錢，浪費。③ 混壓：省的 dB 與②幾乎相同（高速訊號只看自己那幾層的介質），<strong>成本砍到只付該付的層</strong>——性價比王者，代價是疊構管理與供應鏈複雜一點。④ redriver：一定救得回（半路重新發車），但 BOM 成本、板面積、功耗、還引入自己的 jitter——是「幾何與材料都鎖死」時的最後手段。<strong>推薦順序：③ → ③+①補刀 → ④，②通常不選。</strong>面試考點：能不能先用 f<sub>x</sub> 確診主犯、再按「省 dB/成本」排序，而不是憑直覺喊換料。</p>
+</details>
+
+<details>
+<summary>練習 4（鏡頭模組題）：潛望式模組的 12 cm PI flex 跑 D-PHY 2.5 Gbps（基頻 1.25 GHz），眼圖 marginal。PI 取 tan δ ≈ 0.015、√ε<sub>eff</sub> ≈ 1.7（皆量級）。(a) 估這條 flex 的介質損。(b) 有人提議換 LCP（tan δ ≈ 0.002），能省幾 dB？值得嗎？還有哪些更便宜的槓桿該先試？(c) 可靠度實驗室回報：85°C/85%RH 跑完後眼圖明顯更糟、烘乾後恢復——這個證據指認誰？LCP 在這件事上有什麼隱藏加分？(d) 若模組是 3 cm 短 flex 的普通廣角鏡頭，同樣的 LCP 提案你批不批？</summary>
+<p><strong>解：</strong>(a) α<sub>diel</sub> ≈ 91 × 1.25 × 0.015 × 1.7 ≈ 2.9 dB/m → 12 cm ≈ <strong>0.35 dB</strong>（基頻處；撐邊沿的三次諧波 3.75 GHz 處約 1.0 dB）。(b) 換 LCP 省掉約 85%：基頻處省約 0.3 dB、三次諧波處省約 0.9 dB——<strong>有感但不是暴力救援</strong>。更便宜的槓桿先試：確認 TX 有沒有可調的 slew/驅動強度、RX 端 EQ 設定是否啟用、差動對幾何能否放寬（治導體項——1.25 GHz 其實還在導體損有話語權的區間，flex 線窄、R<sub>AC</sub> 高，f<sub>x</sub> 比硬板更高）、connector 與著陸 pad 的不連續（週 3 的帳）。LCP 排在這些之後、且要跟「加 lane 降速率」比價。(c) 濕度相關＋可逆 → <strong>介質吸濕</strong>（FA 三板斧的第三斧：銅不吸水）——直接點名 PI 的吸濕性。LCP 的隱藏加分正是<strong>吸濕率極低</strong>：它不只 tan δ 低，還把「濕度」這整個變因從方程式裡拔掉——可靠度餘裕比 dB 數字更值錢。(d) <strong>不批。</strong>3 cm 的介質損總額不到 0.1 dB 量級——「單價 × 長度」的長度項太小，換料省不出有意義的 dB；該筆預算拿去做別的。同一帖藥，長度不同就從良方變浪費——損耗決策永遠帶著長度算。</p>
+</details>
+
+<details>
+<summary>練習 5（兩兇手鑑別診斷總複習）：同一款 20 cm 通道，三個變異版本的量測結果——版本 A（原版 FR4、0.1 mm 線）@4 GHz 損耗 5.2 dB；版本 B（同板材、線加寬到 0.2 mm＋疊構重調維持 50 Ω）4.1 dB；版本 C（原幾何、換 tan δ 0.004 低損料）3.0 dB。(a) 從 A→B 與 A→C 的改善量，反推原版中導體損與介質損各占約多少？(b) 驗算是否自洽。(c) 若目標是 2.5 dB，下一步該怎麼組合？(d) 這題示範了哪種工程方法？</summary>
+<p><strong>解：</strong>(a) A→B：加寬一倍 → 導體損砍半 → 改善量 1.1 dB = 原導體損的一半 → <strong>導體損 ≈ 2.2 dB</strong>。A→C：tan δ 0.02→0.004 → 介質損剩 1/5 → 改善量 2.2 dB = 原介質損的 4/5 → <strong>介質損 ≈ 2.75 dB</strong>。(b) 驗算：2.2 + 2.75 ≈ 4.95 ≈ 5.2 dB ✓（差額 0.2–0.3 dB 可歸給 connector/via 等固定項，量級自洽）。(c) 兩招疊加：B＋C 同時做 → 5.2 − 1.1 − 2.2 ≈ <strong>1.9 dB &lt; 2.5 dB 達標</strong>（若只想動一處：C 之後剩 3.0 dB 仍超標，必須疊加——又見「治一個兇手瓶頸換人」）。(d) <strong>控制變因的分離實驗</strong>：一次只動一個槓桿，用改善量反推各分項的占比——與 Day 23/25 的「鄰道 idle 分離串擾/ISI」同一套思維，只是這次分離的是損耗內部的兩個兇手。面試講 FA 方法論時，這種「用實驗把混合帳拆成分項帳」的敘事非常加分。</p>
+</details>
+
+<h2>6. 面試怎麼考</h2>
+<p>介質損是「材料 × 系統決策」的交叉考點——考官想看的不是你會背 tan δ 定義，而是你能不能把材料參數接到 dB 預算、再接到花錢決策。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Explain dielectric loss — where does the energy physically go, why does it scale linearly with frequency while conductor loss goes as root-f, and how do the two different scalings change your design decisions?"</summary>
+<p><strong>參考答案骨架：</strong>The dielectric between the trace and its reference plane is full of polar molecules — tiny electric dipoles. The signal's E-field flips billions of times per second, and the dipoles try to follow it, but they rotate against molecular friction and always lag slightly. That lag times friction converts a small, fixed fraction of the stored field energy into heat every single cycle — it's exactly the physics of a microwave oven, just with a much less lossy material. We capture that per-cycle fraction in one number, the loss tangent: the ratio of the lossy part to the energy-storing part of the permittivity. Now the scaling: because the tax is a fixed fraction per cycle, the loss per second is just cycles-per-second times that fraction — linear in f. Conductor loss is different physics: the skin depth shrinks as one over root-f, so the effective cross-section shrinks and resistance grows only as root-f. A linear line always overtakes a square-root curve, so there's a crossover frequency — for a typical narrow FR4 microstrip it lands around the low-gigahertz range, right where modern serial links live. And that crossover drives the money decision, because the two mechanisms answer to completely different levers: conductor loss is geometry — widen the trace, specify smoother copper; dielectric loss is pure material — the trace shape is irrelevant, only a lower-loss laminate or a shorter run helps. So before spending, I compute which side of the crossover my fundamental and its edge-supporting harmonics sit on, then put the money on the actual dominant mechanism — and remember that fixing one just promotes the other to the new bottleneck, which is why low-loss laminates ship together with low-profile copper.</p>
+<p><strong>加分點：</strong>微波爐類比＋「fixed fraction per cycle → linear in f」的一句話物理；兩種 scaling 來自兩種不同物理（按次計費 vs 幾何縮水）；主動講出 crossover 與「levers 不通用」；收尾的「fix one, the other becomes the bottleneck」展現系統觀。</p>
+</details>
+
+<details>
+<summary>Q2: "A camera module passes bring-up at room conditions, but after 85/85 humidity soak the MIPI eye degrades noticeably — and it partially recovers after a bake. Walk me through your analysis and what you'd change."</summary>
+<p><strong>參考答案骨架：</strong>The humidity-dependence with recovery after bake is a strong fingerprint: copper doesn't absorb water, but polyimide and FR4-class dielectrics do — and water is an extremely lossy polar dielectric, so even a fraction of a percent of absorbed moisture raises both the dielectric constant and the loss tangent. That means the channel's dielectric loss went up, which hits the high harmonics hardest, smears the edges and closes the eye — consistent with a data-dependent, ISI-like degradation rather than a defect. To confirm before blaming material: first, repeat the soak-and-bake cycle to prove reversibility and rule out a genuine workmanship failure like corrosion or delamination, which would not recover; second, compare insertion loss of the flex before and after soak if fixtures allow, so I have dBs instead of adjectives; third, check whether the eye degradation is pattern-dependent — worse with PRBS than with a clock-like pattern — which points at frequency-dependent loss rather than, say, a leakage path shifting bias points. If it's confirmed moisture-driven dielectric loss, the fixes scale with severity: at the system level, check how much margin we actually need — maybe receiver equalization settings recover it for free; at the design level, shorten or widen the differential pair to buy margin on the conductor side; and at the material level, this is exactly the case where LCP earns its cost over polyimide — its loss tangent is several times lower and, just as important here, its moisture absorption is near zero, which removes the humidity variable from the equation entirely rather than just improving the dry-condition number. I'd also flag it to reliability: if margin is this thin against environment, the design needs a loss budget with humidity and temperature corners in it, not just a nominal-condition pass.</p>
+<p><strong>加分點：</strong>「可逆 vs 不可逆」先排除 workmanship failure 的鑑別紀律；「要 dB 不要形容詞」的量測習慣；pattern A/B 實驗再次登場；LCP 的賣點答到「拔掉濕度變因」而不只 tan δ 數字；最後把個案上升到「損耗預算要含環境 corner」的流程改善——Apple/Google FA 面最愛的收尾。</p>
+</details>
+
+<h2>7. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：介質損的物理成因一句話？tan δ 是什麼、為什麼稅率 ∝ f？</p>
+  <p class="a">A1：介質裡的<strong>電偶極被交變電場來回搖，轉動慢半拍＋分子摩擦</strong> → 每個週期把一小口場能變成熱（微波爐同一物理）。介電常數是複數：ε′ 儲能（Dk，管 Z₀/速度）、ε″ 生熱；<strong>tan δ = ε″/ε′ = 每週期抽稅比例</strong>。因為每次抽固定比例、頻率 = 每秒次數 → 每秒稅金 ∝ f（一次方）；對照導體損是「路肩隨 √f 變窄」的幾何效應才只有 √f。注意撞名：skin depth 的 δ 是長度、tan δ 的 δ 是相位角，無關。</p>
+  <p class="q">Q2：介質損衰減的手感公式與 FR4 速算值？公式裡「沒有」什麼？</p>
+  <p class="a">A2：<strong>α<sub>diel</sub> ≈ 91 × f(GHz) × tan δ × √ε<sub>eff</sub>　dB/m</strong>；FR4（tan δ ≈ 0.02）微帶線 ≈ <strong>0.32 dB / 10 cm / GHz</strong>（量級）。公式裡<strong>沒有線寬、銅厚、Z₀</strong>——介質損與走線幾何無關，只看材料與長度 → 加寬救不了它，只有換板材或縮短有救；反之導體損看幾何、換板材救不了。兩者都 ∝ 長度、都是累進稅（磨邊沿 → ISI/DDJ）。</p>
+  <p class="q">Q3：導體損 vs 介質損的交叉頻率怎麼算？例題答案與兩條推論？</p>
+  <p class="a">A3：令 α<sub>cond</sub> = α<sub>diel</sub>。例（0.15 mm FR4 微帶線）：0.47√f = 0.32f → <strong>f<sub>x</sub> ≈ 2.2 GHz</strong>——正好在現代高速介面家門口。推論一：換低損料（tan δ 0.002）後 f<sub>x</sub> 衝到約 200 GHz 量級 → 主犯變回銅 → <strong>低損板料必配低粗糙度銅箔，升級要成套</strong>。推論二：加寬使 f<sub>x</sub> 下移 → 幾何槓桿拉到 f<sub>x</sub> 附近就到頂。花錢哲學：先算 f<sub>x</sub>，錢花在主犯身上；治好一個，瓶頸換人。</p>
+  <p class="q">Q4：板材價目表（tan δ 量級）與鏡頭模組 flex 的 PI/LCP 定位？</p>
+  <p class="a">A4：FR4 ≈ 0.02（Dk 4.2–4.5）→ 中損 ≈ 0.01 → 低損（Megtron 級）≈ 0.002–0.004 → PTFE 系 ≈ 0.001–0.002。NB 實務用<strong>混壓</strong>：只換高速層，錢只付該付的層。flex 的 <strong>PI：tan δ 約 0.01–0.02 量級、會吸濕</strong>——與 FR4 同檔，短 flex（幾 cm）靠長度小撐住；<strong>LCP：tan δ ≈ 0.002 量級＋幾乎不吸濕</strong>——「長 flex × 高速率」才值得掏錢，且把濕度變因整個拔掉。損耗決策永遠是「單價 × 長度」。</p>
+  <p class="q">Q5：FA 鑑別損耗兇手的三板斧？FR4 的兩個隱藏地雷？</p>
+  <p class="a">A5：三板斧——①<strong>長度</strong>相關（短板 OK 長板掛：兩兇手都有嫌疑）；②<strong>溫度</strong>相關（高溫糟：銅 ρ 約 +0.4%/°C 是導體指紋，tan δ 也略升）；③<strong>濕度</strong>相關且烘乾可逆（<strong>直接點名介質吸濕——銅不吸水</strong>）。地雷一：FR4/PI 吸濕後 Dk 與 tan δ 都升 → 85/85 後 marginal 的常見根因。地雷二：<strong>玻璃編織布</strong>——玻璃紗與樹脂窗 Dk 不同，差動 P/N 一腳騎紗一腳騎窗 → skew → 差動免疫力被挖牆腳；對策：斜走線或開纖布。</p>
+</div>
+
+<h2>8. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 27：眼圖 I——把百萬個位元疊成一張臉：眼圖的解剖學</strong></p>
+  <p>損耗雙兇手到齊了，串擾三兄弟也結案了——但驗收這一切的終極儀表板還沒正式登場：<strong>眼圖（eye diagram）</strong>。明天你會學到眼圖是怎麼「疊」出來的（為什麼把幾百萬個 UI 疊在一起反而看得更清楚）、眼睛的五官各叫什麼（眼高、眼寬、交叉點、mask）、每一種病在眼圖上留下什麼指紋——反射把眼睛咬出缺口、串擾把眼皮加厚、損耗把眼睛瞇成一條縫、ISI 讓交叉點裂成好幾條。學完你就能看著一張眼圖「面相診斷」：這條通道得的是週 2 的病、週 4 的病、還是本週的病。Phase 1 的所有刀，明天開始收進同一個刀鞘。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 26 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 27｜眼圖 I——把百萬個位元疊成一張臉：眼圖的解剖學</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 27 天（週三新觀念課）</div>
+  <h1>Day 27：眼圖 I——把百萬個位元疊成一張臉：眼圖的解剖學</h1>
+  <div class="meta">2026-08-19（三）｜預估學習時間：90 分鐘｜難度：★★★☆☆（沒有新物理，全是「怎麼看」——但這是你面試時一定會被丟一張圖的主題）｜Phase 1 儀表板正式點亮</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>五週以來我們認識了一屋子的病：反射（週 2–3）、串擾（週 4）、損耗與 ISI（本週）。今天正式介紹<strong>把所有病收進同一張圖的終極儀表板——眼圖（eye diagram）</strong>。讀完你要能夠：</p>
+  <ol>
+    <li>解釋眼圖是怎麼「疊」出來的：把幾百萬個 UI 切片疊在同一格畫面上，為什麼疊起來反而看得更清楚</li>
+    <li>叫得出眼睛的五官：<strong>眼高（eye height）、眼寬（eye width）、交叉點（crossing point）、mask（遮罩）</strong>，以及交叉點旁那坨 jitter 直方圖</li>
+    <li>看臉認病——四大病種指紋：<strong>反射咬缺口、串擾加眼皮、損耗瞇眼、ISI 裂交叉點</strong>，並說出每一種對應前幾週的哪一堂課、第一刀該砍哪</li>
+    <li>理解眼圖的殘酷真相：<strong>眼睛張多開取決於你看多久</strong>——RJ 的高斯尾巴沒有底（Perfect Timing II Ch.4），示波器上看起來開的眼，在 BER 10⁻¹² 的世界可能是閉的</li>
+    <li>把眼寬拆成時間預算：<strong>眼寬 ≈ UI − 總 jitter</strong>，替明天的 jitter 累積課（RJ/DJ 記帳法）搭好舞台</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：所有的刀，今天收進同一個刀鞘</h2>
+<p>複習一下這五週各自的「病歷」：反射會讓波形長出台階與尖刺（Day 6–14）、串擾會在受害線上憑空冒出雜訊包（Day 18–23）、導體損＋介質損是兩張累進稅單、專磨邊沿（Day 25–26），而 pattern 相依的邊沿位移我們叫它 ISI/DDJ（Day 23–24 的 jitter 家族樹）。問題是：實驗室裡你不會一次只得一種病——真實通道是「全部一起來」。用單次波形（single-shot）看，只能看到一小段 pattern 的偶然長相；你需要一種顯示方式，把<strong>所有可能的 pattern 組合、所有雜訊的統計分布</strong>一次攤在眼前。這就是眼圖：高速訊號界的健檢總表，也是 Apple/Google 面試白板上出現率最高的一張圖。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天整堂課一句話</span>
+  <p>眼圖就是「<strong>幾百萬張證件照疊在一起的平均臉</strong>」。把一條長長的資料波形，按照每個位元的節拍（一個位元的時間格子叫 <strong>UI</strong>）剪成幾百萬張小紙條，然後全部疊在同一個燈箱上看：疊出來中間會留一個亮亮的菱形空洞——因為不管資料是 0 是 1，位元「中間」那一刻電壓總是乖乖待在高處或低處，沒人經過。這個空洞長得像一隻眼睛，所以叫眼圖。<strong>眼睛張得越開，收端越容易分辨 0 和 1；每一種訊號病都會用自己的方式把眼睛弄小</strong>——反射咬一個缺口、串擾把眼皮增厚、損耗把眼睛瞇成一條縫、ISI 讓眼角裂開。醫生看臉色認病，SI 工程師看眼圖認病——今天教你當這個醫生。公式看不懂沒關係，記住「疊照片、看空洞、認指紋」九個字，今天就及格了。</p>
+</div>
+
+<h2>1. 眼圖是怎麼疊出來的</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：為什麼「疊在一起」反而更清楚？</span>
+  <p>單看一張波形，你只看到「這一段 pattern 剛好長這樣」——像只看一個路人，你說不出這個城市的人長什麼樣。把一百萬個路人的照片對齊五官疊起來，個體的偶然消失、<strong>群體的統計浮現</strong>：平均臉在哪、臉的胖瘦分布多寬，一目瞭然。眼圖同理：單一位元的波形有偶然性（前面剛好是 0111 還是 0101，邊沿位置就不同——這正是 Day 23 的 ISI），但疊了百萬個 UI 之後，「最糟的組合」和「最好的組合」同時顯形，眼睛的邊界就是<strong>所有可能情況的包絡線</strong>。收端晶片沒得挑 pattern——它必須在最糟情況下也能判對——所以看包絡線（眼圖）才是看「收端眼中的世界」。</p>
+</div>
+
+<p>操作上的三個要素：</p>
+<ul>
+  <li><strong>切片節拍（時間軸對齊）：</strong>用位元時脈（或示波器從資料裡回復出來的 clock）當剪刀，每 1 個 UI（unit interval，1 個位元的時間長度，UI = 1/位元率——2.5 Gbps 的 UI 就是 400 ps）剪一刀。實務上螢幕通常顯示 2 個 UI 寬，讓你看得到完整的「一隻眼＋兩個交叉點」。</li>
+  <li><strong>疊加顯示（persistence）：</strong>示波器把每一片都畫在同一格、不擦掉舊的（餘暉/persistence 模式），常用顏色溫度表示「這個點被走過幾次」——越熱的顏色代表越常出現，冷色的稀疏軌跡就是罕見的極端 pattern。</li>
+  <li><strong>夠長的資料：</strong>要讓「最糟 pattern」有機會出現，來源通常是 PRBS（偽隨機位元序列）；疊的 UI 數越多，眼睛邊界越接近真實包絡——這件事的統計深水區在第 4 節，先埋個伏筆：<strong>疊多久，眼睛就多誠實</strong>。</li>
+</ul>
+
+<div class="formula">UI = 1 / 位元率　　（例：1 Gbps → 1 ns；2.5 Gbps → 400 ps；8 Gbps → 125 ps）<br>眼圖 = 波形以 UI 為週期摺疊（fold）後的二維直方圖：橫軸「UI 內的時間位置」、縱軸「電壓」、亮度「出現次數」</div>
+<p><em>白話翻譯：眼圖不是一條波形，是一張<strong>統計熱度圖</strong>：某個（時間, 電壓）格子越亮，代表百萬次疊加裡越多軌跡經過那裡。UI 這個字今天起會一直出現：它就是「一個位元分到的時間格子」，jitter 常用「幾分之幾個 UI」來報帳（0.1 UI @ 2.5 Gbps = 40 ps）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">眼圖的製作與解剖：把長波形剪成 UI 切片 → 疊成一隻眼 → 五官命名</text>
+  <!-- top: long waveform with cut lines -->
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">步驟①：長資料波形（例 pattern 0 1 1 0 1 0 0 1），每 1 UI 剪一刀</text>
+  <line x1="60" y1="110" x2="700" y2="110" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="60" y1="70" x2="700" y2="70" stroke="#e5e7eb" stroke-width="1"/>
+  <!-- waveform: 0 1 1 0 1 0 0 1 with finite edges -->
+  <path d="M60,110 L92,110 L108,70 L172,70 L188,110 L212,110 L228,70 L252,70 L268,110 L332,110 L348,70 L372,70 L388,110 L452,110 L468,70 L492,70"
+        transform="translate(60,0) scale(0.8,1) translate(-60,0)" fill="none" stroke="#0e7490" stroke-width="2.2"/>
+  <!-- cut lines every 64px starting 60 -->
+  <g stroke="#dc2626" stroke-width="1" stroke-dasharray="4 3">
+    <line x1="124" y1="60" x2="124" y2="120"/><line x1="188" y1="60" x2="188" y2="120"/>
+    <line x1="252" y1="60" x2="252" y2="120"/><line x1="316" y1="60" x2="316" y2="120"/>
+    <line x1="380" y1="60" x2="380" y2="120"/><line x1="444" y1="60" x2="444" y2="120"/>
+    <line x1="508" y1="60" x2="508" y2="120"/>
+  </g>
+  <text x="124" y="134" text-anchor="middle" font-size="8.5" fill="#dc2626">剪</text>
+  <text x="316" y="134" text-anchor="middle" font-size="8.5" fill="#dc2626">每 1 UI 剪一刀（UI = 1/位元率）</text>
+  <text x="508" y="134" text-anchor="middle" font-size="8.5" fill="#dc2626">剪</text>
+  <!-- arrow down -->
+  <path d="M380,148 L380,176 M372,168 L380,178 L388,168" fill="none" stroke="#374151" stroke-width="1.8"/>
+  <text x="470" y="168" font-size="10" fill="#374151">步驟②：全部切片對齊疊在同一格（persistence）</text>
+  <!-- middle: the eye -->
+  <rect x="150" y="190" width="460" height="200" rx="8" fill="#0b1220"/>
+  <!-- eye traces: multiple slightly offset lens curves, 2 UI wide display -->
+  <g fill="none" stroke="#22d3ee" stroke-width="1.4" opacity="0.85">
+    <path d="M170,210 C260,210 300,370 380,370 C460,370 500,210 590,210"/>
+    <path d="M170,370 C260,370 300,210 380,210 C460,210 500,370 590,370"/>
+    <path d="M170,214 C258,214 302,366 380,366 C458,366 502,214 590,214"/>
+    <path d="M170,366 C258,366 302,214 380,214 C458,214 502,366 590,366"/>
+    <path d="M170,210 L590,210"/>
+    <path d="M170,370 L590,370"/>
+  </g>
+  <g fill="none" stroke="#67e8f9" stroke-width="1" opacity="0.5">
+    <path d="M170,218 C256,218 304,362 380,362 C456,362 504,218 590,218"/>
+    <path d="M170,362 C256,362 304,218 380,218 C456,218 504,362 590,362"/>
+    <path d="M170,206 L590,206"/>
+    <path d="M170,374 L590,374"/>
+  </g>
+  <!-- crossing points -->
+  <circle cx="275" cy="290" r="5" fill="#f59e0b"/>
+  <circle cx="485" cy="290" r="5" fill="#f59e0b"/>
+  <text x="275" y="278" text-anchor="middle" font-size="9" font-weight="bold" fill="#f59e0b">交叉點</text>
+  <text x="485" y="278" text-anchor="middle" font-size="9" font-weight="bold" fill="#f59e0b">交叉點</text>
+  <!-- eye height arrow -->
+  <line x1="380" y1="222" x2="380" y2="358" stroke="#4ade80" stroke-width="1.6"/>
+  <path d="M375,230 L380,220 L385,230 M375,350 L380,360 L385,350" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+  <text x="392" y="294" font-size="9.5" font-weight="bold" fill="#4ade80">眼高</text>
+  <!-- eye width arrow -->
+  <line x1="288" y1="290" x2="472" y2="290" stroke="#f472b6" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <text x="380" y="308" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#f472b6">眼寬（兩交叉點內緣之間）</text>
+  <!-- mask hexagon -->
+  <polygon points="322,290 352,246 408,246 438,290 408,334 352,334" fill="none" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="6 3"/>
+  <text x="380" y="242" text-anchor="middle" font-size="9" font-weight="bold" fill="#ef4444">mask（禁區：軌跡碰到＝fail）</text>
+  <!-- jitter histogram at crossing -->
+  <g fill="#f59e0b" opacity="0.8">
+    <rect x="262" y="382" width="4" height="4"/><rect x="267" y="378" width="4" height="8"/>
+    <rect x="272" y="372" width="4" height="14"/><rect x="277" y="374" width="4" height="12"/>
+    <rect x="282" y="379" width="4" height="7"/><rect x="287" y="383" width="4" height="3"/>
+  </g>
+  <text x="275" y="400" text-anchor="middle" font-size="8.5" fill="#f59e0b">交叉點的時間直方圖＝jitter 分布</text>
+  <text x="596" y="404" text-anchor="end" font-size="8.5" fill="#94a3b8">顯示寬度通常 2 UI：一隻完整的眼＋兩個交叉點</text>
+  <!-- bottom summary strip -->
+  <rect x="60" y="416" width="640" height="72" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="438" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0f4c5c">五官點名：眼高＝電壓餘裕（收端判 0/1 靠它）｜眼寬＝時間餘裕（取樣時刻的容許誤差）</text>
+  <text x="380" y="458" text-anchor="middle" font-size="9.5" fill="#374151">交叉點＝所有邊沿的聚集處（它的「胖瘦」＝jitter、它的「高度」＝duty cycle 對稱性）</text>
+  <text x="380" y="476" text-anchor="middle" font-size="9.5" fill="#374151">mask＝規範畫的禁區多邊形：百萬軌跡沒有任何一條踩進去才算 pass（MIPI/USB/PCIe 各有自家 mask）</text>
+</svg>
+<figcaption>圖 1：眼圖製作三步驟。上：長波形每 1 UI 剪一刀；中：全部切片疊在同一格（persistence 顯示），中央留下菱形空洞＝「眼」；標出五官——眼高（綠）、眼寬（粉）、交叉點（橘）與其 jitter 直方圖、mask 禁區（紅虛線六邊形）。下：五官的工程意義速記。</figcaption>
+</figure>
+
+<h2>2. 五官解剖：每一個器官都對應一種「餘裕」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：收端是個要在暴雨中接球的人</span>
+  <p>收端晶片做的事，是在每個 UI 的某一刻「伸手取樣」，判斷當下是 0 還是 1。<strong>眼高</strong>是「球離地多高」——電壓餘裕，太低就會把 1 看成 0；<strong>眼寬</strong>是「接球時機可以誤差多少」——時間餘裕，因為收端自己的取樣時刻也會抖。<strong>交叉點</strong>是所有上升沿與下降沿聚集的地方——邊沿們到得越不整齊，交叉點就越「胖」，胖掉的部分直接從眼寬扣。<strong>mask</strong> 則是規範單位替收端畫的「最低限度空地」：不管你的通道得了什麼病，只要百萬條軌跡沒有一條踩進這塊禁區，收端就保證接得住。</p>
+</div>
+
+<ul>
+  <li><strong>眼高（eye height）：</strong>眼睛中央（通常取 UI 正中）上下邊界之間的垂直開口。它 = 訊號擺幅 −（損耗磨掉的）−（串擾疊上來的）−（反射殘波啃掉的）− 雜訊。收端規格書裡對應「最小輸入擺幅」類參數。</li>
+  <li><strong>眼寬（eye width）：</strong>兩個交叉點「內緣」之間的水平開口。它 = UI − 總 jitter（左右交叉點各被自己的 jitter 分布吃掉一塊）。這條式子明天會升級成正式的 jitter 預算。</li>
+  <li><strong>交叉點（crossing point）：</strong>上升沿與下降沿相交的位置。兩個健康指標：<strong>①水平方向的胖瘦</strong>——把交叉點的時間位置做直方圖，就是 jitter 的分布（示波器的 jitter 量測本質上就是在統計這坨直方圖）；<strong>②垂直方向的高度</strong>——理想在擺幅的 50%。若 1 的脈寬與 0 的脈寬不等（duty cycle distortion，DCD），上升沿與下降沿的交會處會偏離 50%、甚至水平方向分裂成兩坨。Perfect Timing II Ch.4 講 DCD 時特別點名：這種失真「<strong>用眼圖看最明顯</strong>」（this is most evident when viewing a signal with an eye diagram）——2002 年的 clock 世界就已經拿眼圖當 DCD 的照妖鏡。</li>
+  <li><strong>mask（遮罩）：</strong>規範定義的多邊形禁區（常見六邊形＋上下兩條橫帶）。判定規則簡單粗暴：<strong>疊完規定數量的 UI 後，禁區內軌跡命中數為零（或低於規定值）才 pass</strong>。MIPI D-PHY、USB、PCIe、HDMI 各有自家 mask 形狀與測試條件——你在鏡頭模組量測報告上看過的那個六邊形就是它（專題 1 提過 D-PHY 眼圖規範，數值依速率檔位查規格書，這裡不背數字）。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">常見誤解先拆彈</span>
+  <p><strong>誤解一：「眼圖是量出來的一條波形」</strong>——不是，它是<strong>統計圖</strong>。同一條通道、同一台儀器，疊 10 萬個 UI 和疊 1 億個 UI 的眼圖「不一樣大」（後者更小、更誠實——見第 4 節）。報眼高眼寬不附「疊了多少 UI / 目標 BER」，數字沒有意義。<strong>誤解二：「眼圖過 mask = 通道沒問題」</strong>——mask 只保證「收端接得住」這條底線，不代表沒病：一條通道可以帶著明顯的反射缺口、串擾眼皮照樣壓線過 mask——量產放大個 corner 就翻車。眼圖是健檢，不是免死金牌，餘裕（margin）多少要另外報。<strong>誤解三：「交叉點在 50% 是天經地義」</strong>——那是 0/1 脈寬對稱的獎品，不是預設。差動對 P/N 不對稱、驅動器上拉/下拉強度不等、AC 耦合後 duty 失衡，都會把交叉點推離 50%——它是「發射端健康度」的免費探針，看眼圖時別只盯著中間的洞。</p>
+</div>
+
+<h2>3. 看臉認病：四大病種指紋（Phase 1 總複習的另一種打開方式）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：每種病都有自己的「毀容手法」</span>
+  <p>四個慣犯的手法完全不同：<strong>反射</strong>是狙擊手——殘波在固定延遲後回來補一刀，所以它在眼睛的<strong>固定位置</strong>咬出一個缺口或一條贅肉（位置 = 2 倍到不連續點的飛行時間，這正是 Day 9 TDR 的讀法反過來用）；<strong>串擾</strong>是流氓團夥——鄰道 pattern 跟你不相關、什麼時刻都可能來，所以它把上下軌跡「整條增厚」，像腫起來的眼皮；<strong>損耗</strong>是慢性病——高頻被抽稅、邊沿變慢擺幅變小，整隻眼睛均勻地「瞇」起來，垂直水平一起縮；<strong>ISI</strong> 是精神分裂——邊沿位置隨前面的 pattern 分成好幾種情況，交叉點裂成<strong>多條分離的軌跡</strong>（不是均勻變胖，是「幾條清楚的分身」——這是它跟 RJ 最大的長相差異）。記住這四張臉，你就能在儀器前十秒鐘給出第一輪鑑別診斷。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">四大病種的眼圖指紋：看臉認病、對號入座</text>
+  <!-- panel 1: reflection notch -->
+  <rect x="45" y="40" width="330" height="230" rx="10" fill="#0b1220"/>
+  <text x="210" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#fca5a5">① 反射：固定位置咬缺口（週 2–3 的病）</text>
+  <g fill="none" stroke="#22d3ee" stroke-width="1.3" opacity="0.85">
+    <path d="M65,90 C130,90 160,220 210,220 C260,220 290,90 355,90"/>
+    <path d="M65,220 C130,220 160,90 210,90 C260,90 290,220 355,220"/>
+    <path d="M65,90 L355,90"/><path d="M65,220 L355,220"/>
+  </g>
+  <!-- notch: a dip on top rail at fixed position -->
+  <path d="M235,90 C245,90 248,112 258,112 C268,112 271,90 281,90" fill="none" stroke="#f87171" stroke-width="2"/>
+  <path d="M235,86 C245,86 248,108 258,108 C268,108 271,86 281,86" fill="none" stroke="#f87171" stroke-width="1.2" opacity="0.7"/>
+  <circle cx="258" cy="112" r="4" fill="none" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="210" y="244" text-anchor="middle" font-size="8.5" fill="#fca5a5">缺口離主沿的距離＝2×到不連續點的飛行時間（TDR 讀法反用）</text>
+  <text x="210" y="258" text-anchor="middle" font-size="8.5" fill="#94a3b8">第一刀：TDR 找位置 → 端接/stub/via 藥方櫃（Day 13）</text>
+  <!-- panel 2: crosstalk eyelid -->
+  <rect x="385" y="40" width="330" height="230" rx="10" fill="#0b1220"/>
+  <text x="550" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#fcd34d">② 串擾：眼皮整條增厚（週 4 的病）</text>
+  <g fill="none" stroke="#22d3ee" stroke-width="1.3" opacity="0.85">
+    <path d="M405,95 C470,95 500,215 550,215 C600,215 630,95 695,95"/>
+    <path d="M405,215 C470,215 500,95 550,95 C600,95 630,215 695,215"/>
+  </g>
+  <!-- thick fuzzy rails -->
+  <g fill="none" stroke="#fbbf24" stroke-width="1" opacity="0.6">
+    <path d="M405,88 L695,88"/><path d="M405,93 L695,93"/><path d="M405,98 L695,98"/>
+    <path d="M405,102 L695,102"/><path d="M405,208 L695,208"/><path d="M405,212 L695,212"/>
+    <path d="M405,217 L695,217"/><path d="M405,222 L695,222"/>
+  </g>
+  <text x="550" y="244" text-anchor="middle" font-size="8.5" fill="#fcd34d">上下軌整條變成毛茸茸的粗帶（鄰道 pattern 不相關→無固定位置）</text>
+  <text x="550" y="258" text-anchor="middle" font-size="8.5" fill="#94a3b8">第一刀：鄰道 idle A/B 實驗（Day 22）→ 間距/換層/差動</text>
+  <!-- panel 3: loss squint -->
+  <rect x="45" y="285" width="330" height="230" rx="10" fill="#0b1220"/>
+  <text x="210" y="307" text-anchor="middle" font-size="11" font-weight="bold" fill="#86efac">③ 損耗：整隻眼均勻瞇小（本週的病）</text>
+  <!-- small slow eye: reduced swing, slow edges -->
+  <g fill="none" stroke="#22d3ee" stroke-width="1.3" opacity="0.85">
+    <path d="M65,340 C140,345 165,455 210,455 C255,455 280,345 355,340"/>
+    <path d="M65,460 C140,455 165,345 210,345 C255,345 280,455 355,460"/>
+    <path d="M65,340 C120,336 300,336 355,340"/>
+    <path d="M65,460 C120,464 300,464 355,460"/>
+  </g>
+  <!-- ghost of healthy eye -->
+  <g fill="none" stroke="#334155" stroke-width="1" stroke-dasharray="4 3">
+    <path d="M65,320 C130,320 160,480 210,480 C260,480 290,320 355,320"/>
+    <path d="M65,480 C130,480 160,320 210,320 C260,320 290,480 355,480"/>
+  </g>
+  <text x="210" y="489" text-anchor="middle" font-size="8.5" fill="#86efac">邊沿變慢＋擺幅縮水→眼高眼寬一起縮（虛線＝發射端的健康眼）</text>
+  <text x="210" y="503" text-anchor="middle" font-size="8.5" fill="#94a3b8">第一刀：算 f_x 認主犯（Day 26）→ 加寬/換料/縮短/EQ</text>
+  <!-- panel 4: ISI split crossing -->
+  <rect x="385" y="285" width="330" height="230" rx="10" fill="#0b1220"/>
+  <text x="550" y="307" text-anchor="middle" font-size="11" font-weight="bold" fill="#c4b5fd">④ ISI：交叉點裂成多條分身（Day 23 的病）</text>
+  <g fill="none" stroke="#22d3ee" stroke-width="1.2" opacity="0.8">
+    <path d="M405,335 C470,335 500,460 550,460 C600,460 630,335 695,335"/>
+    <path d="M405,460 C470,460 500,335 550,335 C600,335 630,460 695,460"/>
+  </g>
+  <!-- split edges: parallel distinct traces at crossing -->
+  <g fill="none" stroke="#a78bfa" stroke-width="1.2" opacity="0.9">
+    <path d="M405,335 C462,335 494,460 544,460"/>
+    <path d="M405,460 C462,460 494,335 544,335"/>
+    <path d="M419,335 C478,335 508,460 558,460"/>
+    <path d="M419,460 C478,460 508,335 558,335"/>
+  </g>
+  <circle cx="475" cy="398" r="14" fill="none" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="550" y="489" text-anchor="middle" font-size="8.5" fill="#c4b5fd">邊沿按「前面 pattern」分成幾條清楚的分身（≠均勻模糊）</text>
+  <text x="550" y="503" text-anchor="middle" font-size="8.5" fill="#94a3b8">第一刀：pattern A/B（clock-like vs PRBS，Day 23）→ 治損耗/反射源頭或開 EQ</text>
+  <!-- bottom strip -->
+  <rect x="45" y="524" width="670" height="30" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="544" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">鑑別心法：固定位置→反射｜整條增厚→串擾｜均勻縮小→損耗｜清楚分身→ISI｜均勻高斯霧→RJ（明天的主角）</text>
+</svg>
+<figcaption>圖 2：四大病種指紋圖鑑。①反射在固定位置咬缺口（距離可反推兇案地點）；②串擾把上下軌增厚成毛帶（時間上無固定位置）；③損耗讓整隻眼均勻瞇小（對照虛線健康眼）；④ISI 讓邊沿裂成數條清楚分身。底部一行是十秒鑑別心法——第五種「均勻高斯霧」留給明天的 RJ。</figcaption>
+</figure>
+
+<p>把鑑別再往下鑽一層——兩組容易搞混的長相：</p>
+<ul>
+  <li><strong>ISI 分身 vs RJ 模糊：</strong>ISI 是「有限種 pattern 造成有限條邊沿」——放大交叉點會看到<strong>幾條分得開的軌跡</strong>（DJ，有界）；RJ 是熱雜訊等無數小因素疊加，交叉點是一團<strong>連續的高斯霧</strong>，越往外越淡但永遠沒有絕對邊界（無界）。Perfect Timing II Ch.4 的分類正是這條線：DJ「可追溯到特定來源、有界、以固定量成長」，RJ「高斯分布、無界、只能用 σ 描述」。這個長相差異明天會變成正式的記帳規則。</li>
+  <li><strong>損耗瞇眼 vs 串擾眼皮：</strong>都讓眼高變小，但損耗是「邊沿斜率也一起變慢」（累進稅磨高頻）、且縮小量隨線長/速率單調變化；串擾的邊沿斜率不變、厚度隨<strong>鄰道開關</strong>——鄰道 idle 一關，眼皮立刻消腫（Day 22 的分離實驗直接搬過來用）。</li>
+</ul>
+
+<h2>4. 統計深水區：你的眼圖，取決於你看了多久</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：路口一小時沒車禍，不代表一年沒車禍</span>
+  <p>你在示波器前疊了 3 秒鐘、大概 10⁶–10⁷ 個 UI 量級，眼睛看起來開開的——但你的鏈路規格要求 BER 10⁻¹²（<strong>一兆個位元最多錯一個</strong>）。10⁻¹² 等級的稀有事件，10⁷ 個樣本裡根本輪不到出場：就像在路口站一小時沒看到車禍，就宣布「這路口一年都不會有車禍」。RJ 的高斯尾巴沒有底——疊越久，越稀有的極端時刻越會現身，眼睛的實際邊界一路往內縮。所以嚴謹的說法不是「眼寬多少」，而是「<strong>在 BER 10⁻¹² 下眼寬多少</strong>」——看不到那麼久怎麼辦？量出高斯的 σ，用統計外插。這就是明天 jitter 課要教的記帳法。</p>
+</div>
+
+<p>把這件事定量到「手感」等級：</p>
+<div class="formula">RJ 是高斯分布 → 只能報 σ（RMS），peak-to-peak 沒有真值、只有「對應某機率的取值」<br>Perfect Timing II Ch.4：±1σ 涵蓋 68.26%、±2σ 涵蓋 95.4%；工程慣例取 <strong>±6σ 當 pk-pk</strong>（涵蓋約 99.9999999%），並註明實務界限「不超過 14σ」<br>現代 serial link 慣例：BER 10⁻¹² → RJ 的有效 pk-pk ≈ <strong>14 × σ</strong>（±7σ 量級）——與 PT2 的 14σ 上限殊途同歸<br>眼寬（@BER） ≈ UI − DJ<sub>pp</sub> − 14 × RJ<sub>rms</sub>　（明天正式開帳）</div>
+<p><em>白話翻譯：DJ（反射/串擾/ISI/DCD 這些「有兇手的」）是有界的——它吃掉的眼寬是個固定量，看再久也不會變多。RJ（熱雜訊這些「天生的」）無界——你願意等多稀有的事件，它就能抖多遠，所以它吃掉的量跟你的 BER 目標掛鉤：10⁻¹² 大約要留 14 倍 σ 的保護帶。Perfect Timing II 在 2002 年用 ±6σ 當工程慣例（clock 世界當時夠用）、同時註明界限可到 14σ——以現代標準需上修：如今 serial link 動輒要求 BER 10⁻¹²，14σ 已是入場券而非上限。這也解釋了誤解一：persistence 眼圖是「有限樣本的快照」，BER 眼圖才是「合約規定的眼」——兩者之間靠高斯外插搭橋（bathtub curve，浴缸曲線，週 6 量測篇會正式登場，今天先記名字）。</em></p>
+
+<div class="card pitfall">
+  <span class="label">拆彈：那 mask test 疊多少才算數？</span>
+  <p>各規範自己講清楚：mask test 的合格判定永遠綁著「<strong>疊多少 UI、允許幾個 hit</strong>」的測試條件（例如「N 百萬 UI 內 0 hit」的形式——數字依介面規格書，不背）。所以兩份報告比眼圖，先翻到測試條件那一頁：疊 10⁵ UI 過 mask 和疊 10⁸ UI 過 mask，是兩個不同等級的成績。同理，自家實驗室要留檔比對（今天 vs 三個月後、A 版 vs B 版），<strong>疊加 UI 數、pattern 種類（PRBS 幾階）、測試點位置</strong>三件事必須固定——否則你比的不是通道，是測試條件。</p>
+</div>
+
+<h2>5. 實務案例：兩個老本行的眼圖現場</h2>
+<ul>
+  <li><strong>NB 主機板（bring-up 的第一張圖）：</strong>高速介面 bring-up 卡住，SI 工程師第一件事幾乎都是「把眼圖叫出來」——因為它十秒內告訴你病種方向：眼睛均勻瞇小 → 先查通道長度與板材（Day 25–26 的兩張稅單）；固定位置缺口 → TDR 出動找 stub/connector（週 3）；眼皮毛茸茸 → 關鄰道再量一次（Day 22 分離實驗）；交叉點裂開 → pattern 相依，查 EQ 設定與損耗。<strong>順序感</strong>是資深與資淺的分野：先看臉分診、再開對應的檢查，而不是抱著模擬器亂掃參數。另一個 NB 現場細節：量測點在 connector 前還是後、有沒有經過 package，眼圖長相差很多——報告不註明測試點，數字會被 layout 與 FA 兩邊各自解讀成對自己有利的版本。</li>
+  <li><strong>鏡頭模組（MIPI 眼圖驗收）：</strong>模組廠出貨與系統端收貨之間，D-PHY 眼圖過不過 mask 是常見的驗收介面。你以後看模組量測報告時的三個檢查點：①<strong>速率檔位與 mask 版本</strong>對不對（不同 Gbps 檔 mask 不同）；②<strong>測試點</strong>在哪——模組 connector 端量的眼，跟走完主板 flex＋connector 到 SoC 端的眼是兩回事，驗收合約要寫清楚誰負責哪一段；③<strong>邊沿條件</strong>——LP→HS 切換後的前幾個 UI（burst 開頭）常是最醜的，規範對量測窗口有定義。交叉點高度也值得掃一眼：VCM/OIS 驅動的電源雜訊若耦進 TX，有時會先以 duty 失衡（交叉點偏移）的形式露出馬腳——這條線索週 15 講 actuator 雜訊耦合時會回收。</li>
+  <li><strong>FA 視角（眼圖是「症狀」，不是「病因」）：</strong>眼圖告訴你「病得多重、往哪科掛號」，但確診永遠要回到病灶檢查：TDR（反射科）、鄰道 A/B（串擾科）、插損掃頻（損耗科）、pattern A/B（ISI 科）。面試講 FA 流程時，「眼圖分診 → 專科確診 → 對症下藥 → 回眼圖驗收」這個閉環，比任何單一技巧都加分。</li>
+</ul>
+
+<h2>6. 動手練習（紙上推演，今天不需儀器）</h2>
+<p>速查帶著走：UI = 1/位元率；眼寬 ≈ UI − DJ<sub>pp</sub> − 14×RJ<sub>rms</sub>（@BER 10⁻¹²）；四指紋：固定缺口＝反射、增厚眼皮＝串擾、均勻瞇眼＝損耗、裂交叉＝ISI。</p>
+
+<details>
+<summary>練習 1（UI 與疊加的手感）：一條 D-PHY 通道跑 2.5 Gbps。(a) UI 是多少 ps？(b) 示波器疊 2 秒鐘、資料佔空 100%，大約疊了幾個 UI（量級）？(c) 這個疊加量抓得到 BER 10⁻¹² 等級的稀有事件嗎？差幾個數量級？(d) 若規格要求 jitter 用 UI 報帳，量到某項 jitter 為 30 ps，換算成 UI 是多少？</summary>
+<p><strong>解：</strong>(a) UI = 1/2.5 GHz = <strong>400 ps</strong>。(b) 2 s ÷ 400 ps = <strong>5×10⁹ 個 UI（量級）</strong>——注意這是理想值，實際示波器有擷取死區（dead time），真正入帳的 UI 常低一到數個數量級，取 10⁷–10⁹ 量級思考即可。(c) 抓不到。10⁻¹² 事件平均要 10¹² 個 UI 才出現一次（= 400 秒不間斷、且儀器零死區——實務上更久），差 <strong>3 個數量級以上</strong>。所以 BER 10⁻¹² 的眼寬不能「看」出來，只能量 σ 後<strong>外插</strong>（明天教）。(d) 30 ps / 400 ps = <strong>0.075 UI</strong>。UI 記帳的好處：跨速率比較時直接可比（0.075 UI 在任何速率都是「吃掉 7.5% 時間格子」）。</p>
+</details>
+
+<details>
+<summary>練習 2（看臉認病四連拍）：同一款 NB 平台四塊板的眼圖描述如下，請各自指認病種、對應週次、與你開的第一張檢查單：(A) 眼睛上軌在離主交叉點約 1.2 ns 處有一個穩定的凹陷，位置不隨 pattern 種類改變；(B) 眼高比金板小 15%，上下軌呈均勻毛帶，把同排相鄰兩條 lane 關掉後眼高回到金板水準；(C) 眼高眼寬都比金板小，邊沿明顯變緩，換短版治具板後大幅恢復；(D) 交叉點放大後可見三條分得很開的邊沿軌跡，切成 1010 clock pattern 後合併成一條。</summary>
+<p><strong>解：</strong>(A) <strong>反射</strong>（週 2–3）。固定位置＝固定飛行時間：1.2 ns ÷ 2 = 0.6 ns 單程 → 以 FR4 約 6 ns/m（15 cm/ns 量級）估算，兇案地點在約 <strong>9–10 cm 外</strong>——開 TDR 單，重點掃該距離的 via/stub/connector。(B) <strong>串擾</strong>（週 4）。鄰道 idle 消腫是決定性證據（Day 22 分離實驗）；查間距/平行長度/是否同層相鄰，藥方按 Day 19 噪聲預算倒推。(C) <strong>損耗</strong>（本週）。長度相關＋邊沿變緩＝累進稅指紋；下一步算 f<sub>x</sub>（Day 26）認主犯：基頻低於 f<sub>x</sub> 查銅（線寬/粗糙度），高於 f<sub>x</sub> 查板材（tan δ），或直接開 RX EQ。(D) <strong>ISI</strong>（Day 23）。pattern 相依＋有限條分身＝DDJ；clock pattern 下合併是教科書級確診。根因通常還是損耗或反射的殘波在前一位元留下的尾巴——治源頭或上 EQ。<strong>共同心法：每個診斷都有一個「A/B 實驗」當確診證據，不靠單張眼圖定罪。</strong></p>
+</details>
+
+<details>
+<summary>練習 3（眼寬預算初體驗）：8 Gbps 通道（UI = 125 ps），量得 DJ<sub>pp</sub> = 28 ps、RJ<sub>rms</sub> = 2.5 ps。(a) 用 BER 10⁻¹² 慣例（14σ）算眼寬。(b) 收端要求取樣點兩側各至少 0.15 UI 的眼寬餘裕，過不過？(c) 工程師甲說「把 RJ 從 2.5 ps 壓到 2.0 ps」、工程師乙說「把 DJ 從 28 ps 壓到 21 ps」，哪個對眼寬幫助大？這說明 jitter 預算的什麼特性？(d) 若同一份 jitter 換到 BER 10⁻⁹ 的規格（約 12σ 量級），眼寬變多少？這說明什麼？</summary>
+<p><strong>解：</strong>(a) 眼寬 ≈ 125 − 28 − 14×2.5 = 125 − 28 − 35 = <strong>62 ps（0.50 UI）</strong>。(b) 要求 2×0.15 UI = 0.30 UI = 37.5 ps 的總開口？不對——題意是取樣點兩側各 0.15 UI，即需要眼寬 ≥ 0.30 UI = 37.5 ps → 62 ps <strong>過，餘裕 24.5 ps</strong>。(c) 甲省 14×0.5 = <strong>7 ps</strong>；乙省 <strong>7 ps</strong>——打平！關鍵洞察：<strong>RJ 在預算表上自帶 14 倍槓桿</strong>——每壓 1 ps 的 σ，眼寬回收 14 ps；所以「RJ 看起來很小就不管它」是新手陷阱，2.5 ps 的 σ 在帳上是 35 ps、比 DJ 28 ps 還大。(d) 12×2.5 = 30 ps → 眼寬 = 125−28−30 = <strong>67 ps</strong>。同一條通道，換個 BER 目標眼就變大——再次證明「眼寬」是（通道 × 統計信心）的函數，不是通道單獨的屬性。報數字必附 BER。</p>
+</details>
+
+<details>
+<summary>練習 4（交叉點偵探題）：一顆 camera sensor 的 D-PHY TX，眼圖交叉點高度在擺幅的 43% 而非 50%，且水平方向微幅分裂成兩坨。(a) 這叫什麼失真？物理上代表什麼？(b) 它屬於 RJ 還是 DJ？家族樹上掛哪一枝？(c) 列出至少三個可能根因。(d) 為什麼 Perfect Timing II 說這種失真「用眼圖看最明顯」——用「疊加」的原理解釋單看波形為什麼容易漏掉它。</summary>
+<p><strong>解：</strong>(a) <strong>Duty cycle distortion（DCD）</strong>，又叫 pulse width distortion / half-period jitter（Perfect Timing II Ch.4 的正式分類）：1 的脈寬 ≠ 0 的脈寬，上升沿與下降沿系統性地錯開，交會處偏離 50%、時間軸上裂成兩群（上升沿一群、下降沿一群）。(b) <strong>DJ</strong>——有界、可追溯來源、以固定量出現（Ch.4：DJ 的四個子類之一，與 data-dependent、sinusoidal、uncorrelated bounded 並列）。(c) 根因候選：①TX 驅動器上拉/下拉強度不對稱（P/N MOS 尺寸或偏壓失衡）；②差動對 P/N 走線長度/負載不對稱（skew 轉成 duty 失衡——Day 26 掛號的 fiber weave skew 也是候選之一）；③參考電壓/判準偏移（接收端測量閾值沒放在真正的 50%）；④電源軌塌陷使高低電平不對稱（VCM/OIS 雜訊耦合的可疑路徑，週 15 回收）。(d) 單張波形裡，上升沿與下降沿相隔至少一個位元、分開出現，肉眼很難比較「這個沿平均比那個沿早幾 ps」；眼圖把<strong>所有上升沿疊成一群、所有下降沿疊成另一群</strong>，兩群的系統性錯位直接變成「交叉點偏移／分裂」這種一眼可見的幾何特徵——疊加把「時間上分散的微小系統差」壓縮成「空間上集中的明顯位移」，這正是統計疊圖的威力。</p>
+</details>
+
+<details>
+<summary>練習 5（報告打假題）：供應商送來模組眼圖報告：「eye width 0.62 UI，pass」。列出你要求補齊的至少五項測試條件，並各說明「缺了它，數字會怎麼被灌水」。</summary>
+<p><strong>解：</strong>①<strong>疊加 UI 數 / 目標 BER</strong>——疊 10⁵ UI 的 0.62 UI 和 BER 10⁻¹² 外插的 0.62 UI 差一個世界；只疊一下下，RJ 尾巴根本沒現身，眼寬天生虛胖。②<strong>Pattern 種類</strong>——用 1010 clock pattern 量，ISI/DDJ 整枝消失（Day 23/練習 2D 的原理反過來作弊）；要求 PRBS 且註明階數（階數越高、包含的最長連 0/連 1 越長，ISI 考驗越完整）。③<strong>測試點</strong>——模組金手指端 vs 走完 flex＋connector 的系統端，損耗差好幾 dB；驗收點必須是合約定義的參考平面。④<strong>速率檔位與 mask/規格版本</strong>——低速檔的眼天生比高速檔開，規格版本不同判準也不同。⑤<strong>量測頻寬與探測方式</strong>——示波器頻寬不足會把高頻雜訊與 jitter「濾掉」，眼被儀器美顏（週 6 探棒與頻寬課的預告）；還有 CDR/觸發設定（用什麼 clock 對齊切片）——用「跟著抖的 clock」對齊，會把共模 jitter 抵消掉，眼寬好看但不代表真實取樣情境。<strong>心法：眼圖數字沒有測試條件就只是圖案；「怎麼量的」與「量到多少」同等重要。</strong></p>
+</details>
+
+<h2>7. 面試怎麼考</h2>
+<p>眼圖是 camera HW 面試的「圖像題之王」——考官常直接畫一張醜眼圖要你分診，或反過來要你解釋眼圖的統計本質。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Walk me through what an eye diagram actually is, and explain why an eye that looks wide open on the scope can still fail in the field at BER 1e-12."</summary>
+<p><strong>參考答案骨架：</strong>An eye diagram is not a waveform — it's a statistical overlay. You slice a long data stream into one-UI segments using the recovered clock, and stack millions of slices on the same axes with persistence. Individual pattern randomness averages into a visible envelope: the empty diamond in the middle is where no trajectory ever goes, and that opening is exactly the receiver's decision margin — eye height is voltage margin, eye width is timing margin, and the crossing-point histogram is the jitter distribution. Now the trap: what you see on the scope is a finite-sample snapshot. A few seconds of persistence gives you maybe ten-to-the-seven captured UIs, but the link spec is a bit error rate of ten-to-the-minus-twelve — a one-in-a-trillion event. Random jitter is Gaussian and unbounded: its tails keep producing rarer, larger deviations the longer you watch, so the true eye at that BER is narrower than anything a short acquisition can show — you're missing the tail events by orders of magnitude. Deterministic jitter is bounded, so it's fully visible quickly, but RJ has to be handled statistically: measure its sigma, then extrapolate — at ten-to-the-minus-twelve you budget roughly fourteen sigma of it. So the honest statement is never "the eye is open," it's "the eye is open by this much at this BER, measured at this test point with this pattern." A wide-open scope eye with a fat Gaussian crossing can be a closed eye at contract BER — that's exactly the field failure that a quick bench check misses.</p>
+<p><strong>加分點：</strong>「statistical overlay, not a waveform」開場定調；eye height/width 對應 voltage/timing margin 的一句話翻譯；RJ unbounded vs DJ bounded 的分野與 14σ 外插；收尾「open at this BER, this test point, this pattern」展現量測紀律——這句是資深味的來源。</p>
+</details>
+
+<details>
+<summary>Q2: "Here's an eye diagram from a camera module MIPI lane: the eye is generally healthy but there's a repeatable notch on the top rail, and the crossing point sits below the 50% level. How do you attack this?"</summary>
+<p><strong>參考答案骨架：</strong>Two separate fingerprints, so I'd run two separate investigations. First the notch: it's repeatable and at a fixed position, which is the signature of a reflection, not noise — a residual wave from an impedance discontinuity arriving at a fixed delay after each edge. The position is the clue: the delay from the main edge to the notch equals the round-trip flight time to the discontinuity, so I can convert it to a physical distance and go hunting with a TDR — on a camera module the usual suspects at that distance are the board-to-board connector, a via transition, or a test-point stub on the flex. Fix is at the source: kill the stub, tune the connector footprint, or improve the termination — not cosmetics at the receiver. Second, the crossing point below 50%: that's duty-cycle distortion — rising and falling edges are systematically asymmetric. It's deterministic jitter, and eye stacking makes it obvious because all rising edges pile into one group and falling edges into another. Root causes I'd screen: transmitter pull-up versus pull-down asymmetry, P-to-N skew in the differential pair — on a flex, fiber-weave or length mismatch — or a supply-related shift in the switching threshold; on a camera module I'd specifically check whether VCM or OIS driver noise is modulating the TX supply. Then verify each hypothesis with an A/B: notch position versus TDR distance, DCD versus a static pattern test, supply hypothesis versus actuator on/off. And finally re-run the mask test after each fix at the contractual test point and BER, because the goal isn't a prettier picture — it's restored margin, documented under the agreed test conditions.</p>
+<p><strong>加分點：</strong>把一張圖拆成兩個獨立指紋、各開各的檢查；notch 位置→飛行時間→物理距離的 TDR 反推；DCD 的機制與 camera 特有嫌疑犯（VCM/OIS 電源耦合）；每個假設配一個 A/B 驗證；收尾回到「合約測試條件下的 margin」。</p>
+</details>
+
+<h2>8. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：眼圖是什麼？怎麼做出來的？為什麼「疊起來反而更清楚」？</p>
+  <p class="a">A1：眼圖＝把長資料波形<strong>每 1 UI 剪一刀、幾百萬片疊在同一格</strong>（persistence）形成的<strong>統計熱度圖</strong>（不是波形！）。UI = 1/位元率（2.5 Gbps → 400 ps）。疊加讓個別 pattern 的偶然消失、統計包絡浮現：中央空洞的邊界＝所有最糟組合的包絡線＝收端真正面對的世界。顯示通常 2 UI 寬（一隻眼＋兩交叉點）。</p>
+  <p class="q">Q2：眼圖五官與各自的工程意義？</p>
+  <p class="a">A2：<strong>眼高</strong>＝電壓餘裕（擺幅−損耗−串擾−反射−雜訊）；<strong>眼寬</strong>＝時間餘裕（兩交叉點內緣間距 ≈ UI−總 jitter）；<strong>交叉點</strong>＝邊沿聚集處——水平胖瘦＝jitter 直方圖、垂直高度偏離 50%＝duty cycle distortion（PT2 Ch.4：DCD「用眼圖看最明顯」）；<strong>mask</strong>＝規範禁區多邊形，規定 UI 數內零（或限量）命中才 pass，MIPI/USB/PCIe 各有自家 mask。</p>
+  <p class="q">Q3：四大病種的眼圖指紋與第一刀？</p>
+  <p class="a">A3：<strong>反射</strong>→固定位置咬缺口（缺口延遲=2×飛行時間→TDR 反推距離）；<strong>串擾</strong>→上下軌整條增厚毛帶（鄰道 idle A/B 消腫確診）；<strong>損耗</strong>→整眼均勻瞇小＋邊沿變緩（算 f_x 認主犯）；<strong>ISI</strong>→交叉點裂成有限條清楚分身（pattern A/B：clock pattern 下合併）。第五種：<strong>RJ</strong>＝連續高斯霧、無清楚邊界（vs ISI 的分立軌跡——DJ 有界/RJ 無界，PT2 Ch.4 分類）。</p>
+  <p class="q">Q4：為什麼示波器上開的眼可能在 BER 10⁻¹² 是閉的？眼寬預算公式？</p>
+  <p class="a">A4：persistence 眼是有限樣本快照（10⁶–10⁹ UI 量級），10⁻¹² 稀有事件差 3+ 個數量級輪不到出場；RJ 高斯尾巴無界→看越久眼越窄。解法：量 σ 後統計外插。<strong>眼寬(@BER) ≈ UI − DJ_pp − 14×RJ_rms</strong>（BER 10⁻¹² 慣例 ≈ ±7σ；PT2 Ch.4 用 ±6σ、註明上限 14σ——2002 標準，現代 serial link 需上修至 14σ 入場）。RJ 自帶 14 倍槓桿：σ 壓 1 ps＝眼寬賺 14 ps。報眼寬必附 BER/UI 數。</p>
+  <p class="q">Q5：眼圖報告必須附的測試條件？眼圖在 FA 流程的角色？</p>
+  <p class="a">A5：五要素——①疊加 UI 數/目標 BER；②pattern 種類（PRBS 階數；clock pattern 會讓 ISI 隱形）；③測試點位置（模組端 vs 系統端差數 dB）；④速率檔/mask 版本；⑤儀器頻寬與 CDR/觸發設定。缺一項數字就可能被灌水。FA 角色：眼圖是<strong>分診台不是確診書</strong>——「眼圖分診→專科確診（TDR/鄰道 A/B/掃頻/pattern A/B）→對症下藥→回眼圖驗收」閉環。</p>
+</div>
+
+<h2>9. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 28：Jitter 深潛——RJ/DJ 記帳法與 jitter 的累積：為什麼 PLL 串越多、時序越髒</strong></p>
+  <p>今天眼寬公式裡那句「UI − DJ − 14×RJ」只是掀開了帳本的封面。明天正式開帳：jitter 家族樹各枝（RJ、DCD、DDJ/ISI、SJ、BUJ）怎麼分開量、怎麼合併算 TJ、cycle-to-cycle / period / long-term 三種量法差在哪（Perfect Timing II Ch.4 的正宗分類）——然後進入更陰險的主題：jitter 會<strong>累積</strong>。時脈從晶振出發、經過 PLL、再經 buffer 分發，每一站都往上加一筆（Perfect Timing II Ch.13 的 cascading PLLs）——為什麼有些 jitter 會被 PLL 濾掉、有些會被放大？camera sensor 的 PLL 吃進髒的參考時脈會怎樣？明天把「時間軸上的雜訊」一次算清楚。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 27 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

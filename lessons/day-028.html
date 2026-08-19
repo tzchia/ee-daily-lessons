@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 28｜Jitter 深潛——RJ/DJ 記帳法與 jitter 的累積：為什麼 PLL 串越多、時序越髒</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 28 天（週四新觀念課）</div>
+  <h1>Day 28：Jitter 深潛——RJ/DJ 記帳法與 jitter 的累積：為什麼 PLL 串越多、時序越髒</h1>
+  <div class="meta">2026-08-20（四）｜預估學習時間：90 分鐘｜難度：★★★★☆（觀念不難但「名詞地雷」全行業最密——同一個字在三份 datasheet 裡可以是三種意思，今天教你排雷）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>昨天的眼寬公式「UI − DJ<sub>pp</sub> − 14×RJ<sub>rms</sub>」只掀開了帳本封面。今天正式開帳，讀完你要能夠：</p>
+  <ol>
+    <li>畫出完整的 <strong>jitter 家族樹</strong>：TJ 拆成 RJ 與 DJ，DJ 再拆四枝（DCD、DDJ/ISI、SJ、BUJ），並說出每一枝「怎麼分開量、怎麼合併記帳」——RJ 用 RSS、DJ 用 pk-pk 直加</li>
+    <li>分清楚 clock 世界的三種量法：<strong>cycle-to-cycle / period / long-term jitter</strong>（Perfect Timing II Ch.4 的正宗定義），並知道每一種各自「傷害哪一種系統」</li>
+    <li>解釋 PLL 的雙重人格：它既是 <strong>jitter 濾波器</strong>（loop bandwidth 外的抖動被濾掉）也是 <strong>jitter 產生器</strong>（自己加一筆），而且頻帶內還有 <strong>jitter peaking</strong>（放大！）——Perfect Timing II Ch.13 的核心觀念</li>
+    <li>看懂 jitter 累積的實測數據：串三顆 zero-delay buffer，cycle-to-cycle jitter 從 37 ps 一路長到 68 ps；串五顆，低頻 phase noise 增益近 30 dB、直方圖裂成雙峰（PT2 Ch.13 原始量測）——並記住經驗法則「<strong>串接 PLL 盡量不超過三顆</strong>」</li>
+    <li>把這一切接回老本行：NB 主機板的時脈樹（clock generator → buffer → 各介面）與 camera sensor 的 MCLK → 內部 PLL 路徑，各自的 jitter 帳怎麼查、髒了怎麼 FA</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：昨天看的是「症狀」，今天算的是「帳」</h2>
+<p>Day 27 我們學會把幾百萬個 UI 疊成一張眼圖，用交叉點的「胖瘦」看 jitter 的分布，並且埋了一條公式：眼寬(@BER) ≈ UI − DJ<sub>pp</sub> − 14×RJ<sub>rms</sub>。但那時我們把 DJ 當成一個籠統的數字。真實世界裡，DJ 是好幾個來源的總和、RJ 也是好幾個來源的總和，而且<strong>合併規則不一樣</strong>——記錯規則，預算表不是太悲觀就是太樂觀。更麻煩的是：資料訊號的 jitter 只是故事的一半——資料是「被時脈打出來的」，時脈自己也會抖，而時脈從晶振出發、經過 PLL 倍頻、再經 buffer 分發，<strong>每過一站帳上就多一筆</strong>。今天上半場教「記帳法」（怎麼分類、怎麼量、怎麼加），下半場教「帳是怎麼越滾越大的」（jitter 累積與 cascading PLLs）。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天整堂課一句話</span>
+  <p>Jitter 記帳就像替一家公司查帳：支出分成「<strong>固定支出</strong>」（DJ——房租水電，金額有上限、有明確對象，帳目直接相加）和「<strong>隨機損耗</strong>」（RJ——每天的零星耗損，單筆很小但沒有上限，只能用統計描述，而且多個隨機源合併時「不會全部同時最倒楣」，所以用平方和開根號）。下半場講的是「<strong>轉包</strong>」：時脈訊號從晶振到晶片，中間每經過一個 PLL 就像轉包一層——每一層都會把上游的一部分誤差傳下去（jitter transfer）、自己再加一點新誤差（jitter generation），某些頻率的誤差甚至會被<strong>放大</strong>（jitter peaking）。轉包三層還能忍，轉包五層帳就爆了——這不是比喻，是 Perfect Timing II 拿真儀器串五顆 PLL 量出來的。公式看不懂沒關係，記住「固定支出直加、隨機損耗開根號、轉包每層加一筆」三句話，今天就及格了。</p>
+</div>
+
+<h2>1. Jitter 家族樹：先把科目立好，帳才記得下去</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：為什麼要分 RJ 和 DJ？因為「有兇手的」和「天生的」對策完全不同</span>
+  <p>DJ（deterministic jitter，確定性抖動）是「<strong>有兇手的</strong>」：反射、串擾、電源雜訊、pattern 相依……每一筆都能追到一個具體來源，而且金額有上限（有界）——兇手抓到、對症下藥，這筆支出就消失。RJ（random jitter，隨機抖動）是「<strong>天生的</strong>」：熱雜訊等無數個微小因素疊加，高斯分布、沒有上限（無界）——你無法「修掉」熱雜訊，只能靠統計留保護帶（昨天的 14σ）。所以工程上第一件事永遠是<strong>把兩者拆開</strong>：DJ 的部分去 FA、RJ 的部分去記帳。拆不開的話，你可能拿著 20 ps 的「總 jitter」到處找兇手，結果其中 15 ps 是天生的熱雜訊，白忙一場。</p>
+</div>
+
+<p>Perfect Timing II Ch.4 的正宗分類——TJ（total jitter）分兩大股東，DJ 底下再分四個子科目：</p>
+<ul>
+  <li><strong>RJ（random jitter）：</strong>來自「大量自然界的獨立因素」（PT2 原文：thermal noise、輻射、半導體晶格結構等「無法個別分辨的成分」）。高斯分布、無界、只能報 σ（RMS）。多個 RJ 源合併時，因為彼此獨立、不會同時走到極端，用 <strong>RSS（root-sum-square，平方和開根號）</strong>。</li>
+  <li><strong>DJ 子科目一——DCD（duty cycle distortion）：</strong>又名 pulse width distortion、half-period jitter——高電平脈寬 ≠ 低電平脈寬，上升沿與下降沿系統性錯開。昨天練習 4 的主角，PT2 說它「用眼圖看最明顯」。來源：驅動器上拉/下拉不對稱、判準閾值偏移、P/N 不對稱。</li>
+  <li><strong>DJ 子科目二——DDJ / ISI（data-dependent jitter / inter-symbol interference）：</strong>PT2 Ch.4 有一句很精煉的話：這兩個名字描述<strong>同一件事的兩種視角</strong>——「data dependent jitter 在時域量測，inter-symbol interference 在頻域分析（頻寬不足造成的 pulse spreading）」。邊沿位置隨前面的 pattern 改變（Day 23 的老朋友）。PT2 也點明：這一枝「常見於資料流、在離散數位時脈上不典型」——因為 clock pattern 是固定的 1010，沒有 pattern 可相依。這就是為什麼昨天說「切 clock pattern 可以讓 ISI 現形/隱形」。</li>
+  <li><strong>DJ 子科目三——SJ（sinusoidal jitter）：</strong>邊沿位置以正弦規律來回擺動。典型來源：開關電源的 ripple 以固定頻率調變供電、或刻意注入（jitter tolerance 測試就是故意打 SJ 進去考收端）。另外有一個「良性慣犯」：spread spectrum clocking（SSC，展頻時脈）本質上就是刻意加入的低頻頻率調變——這條線索第 3 節會回收。</li>
+  <li><strong>DJ 子科目四——BUJ（bounded uncorrelated jitter）：</strong>PT2 稱 uncorrelated bounded jitter——「不相關」指與自己的 bit pattern 無關、「有界」指有固定上限。原文點名兩大來源：<strong>電源雜訊與串擾</strong>（鄰道的 pattern 跟你不相關，但耦合量有上限）。</li>
+</ul>
+
+<div class="formula">TJ(@BER 10⁻¹²) ≈ DJ<sub>pp</sub> + 14 × RJ<sub>rms</sub><br>DJ<sub>pp</sub> = DCD + DDJ + SJ + BUJ（各取 pk-pk，<strong>線性直加</strong>＝最壞情況對齊，保守記法）<br>RJ<sub>rms</sub> = √(σ₁² + σ₂² + σ₃² + …)（獨立隨機源 <strong>RSS 合併</strong>）<br>眼寬(@BER) ≈ UI − TJ(@BER)</div>
+<p><em>白話翻譯：DJ 是「固定支出」——最保守的記法是假設所有兇手同一時刻一起下手，所以 pk-pk 直接相加（實務上各家規範也有較精緻的加法，但面試與初版預算表用直加最不會出事）。RJ 是「隨機損耗」——兩個獨立的隨機源不會永遠同時走到最壞，數學上變異數相加、σ 開根號：σ 1.2 ps 和 1.6 ps 的兩個源合併是 √(1.44+2.56) = 2.0 ps，不是 2.8 ps。最後 RJ 這一項乘 14 換成 BER 10⁻¹² 的等效 pk-pk（昨天教的外插），跟 DJ 相加得 TJ。注意順序：<strong>先分開量、再各自合併、最後才相加</strong>——直接量一個「總 pk-pk」是沒有意義的數字（有限樣本的 RJ pk-pk 沒有真值，昨天講過）。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Jitter 家族樹與記帳規則（Perfect Timing II Ch.4 分類）</text>
+  <!-- TJ root -->
+  <rect x="300" y="44" width="160" height="44" rx="10" fill="#0f4c5c"/>
+  <text x="380" y="62" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">TJ 總 jitter</text>
+  <text x="380" y="78" text-anchor="middle" font-size="9" fill="#a5f3fc">TJ ≈ DJ_pp + 14×RJ_rms @BER 10⁻¹²</text>
+  <!-- branches -->
+  <path d="M340,88 L200,118" stroke="#64748b" stroke-width="1.6" fill="none"/>
+  <path d="M420,88 L560,118" stroke="#64748b" stroke-width="1.6" fill="none"/>
+  <!-- DJ node -->
+  <rect x="90" y="118" width="220" height="56" rx="10" fill="#7c3aed"/>
+  <text x="200" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">DJ 確定性（有兇手）</text>
+  <text x="200" y="157" text-anchor="middle" font-size="9" fill="#ddd6fe">有界・可追溯・以固定量成長</text>
+  <text x="200" y="169" text-anchor="middle" font-size="9" font-weight="bold" fill="#fde68a">記帳：pk-pk 線性直加</text>
+  <!-- RJ node -->
+  <rect x="450" y="118" width="220" height="56" rx="10" fill="#0e7490"/>
+  <text x="560" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">RJ 隨機（天生的）</text>
+  <text x="560" y="157" text-anchor="middle" font-size="9" fill="#a5f3fc">高斯・無界・只能報 σ（RMS）</text>
+  <text x="560" y="169" text-anchor="middle" font-size="9" font-weight="bold" fill="#fde68a">記帳：σ 取 RSS，再 ×14 換 pk-pk</text>
+  <!-- DJ children -->
+  <g stroke="#a78bfa" stroke-width="1.3" fill="none">
+    <path d="M130,174 L88,208"/><path d="M175,174 L163,208"/>
+    <path d="M225,174 L237,208"/><path d="M270,174 L312,208"/>
+  </g>
+  <g font-size="9.5" text-anchor="middle">
+    <rect x="38" y="208" width="100" height="66" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="88" y="224" font-weight="bold" fill="#5b21b6">DCD</text>
+    <text x="88" y="238" fill="#374151">1/0 脈寬不等</text>
+    <text x="88" y="250" fill="#374151">交叉點偏 50%</text>
+    <text x="88" y="264" fill="#6b7280">量：眼圖最明顯</text>
+    <rect x="146" y="208" width="100" height="66" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="196" y="224" font-weight="bold" fill="#5b21b6">DDJ / ISI</text>
+    <text x="196" y="238" fill="#374151">隨 pattern 改變</text>
+    <text x="196" y="250" fill="#374151">時域/頻域同件事</text>
+    <text x="196" y="264" fill="#6b7280">量：pattern A/B</text>
+    <rect x="254" y="208" width="100" height="66" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="304" y="224" font-weight="bold" fill="#5b21b6">SJ</text>
+    <text x="304" y="238" fill="#374151">正弦規律擺動</text>
+    <text x="304" y="250" fill="#374151">電源 ripple/SSC</text>
+    <text x="304" y="264" fill="#6b7280">量：頻譜找單音</text>
+    <rect x="362" y="208" width="106" height="66" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="415" y="224" font-weight="bold" fill="#5b21b6">BUJ</text>
+    <text x="415" y="238" fill="#374151">與自身 pattern 無關</text>
+    <text x="415" y="250" fill="#374151">串擾・電源雜訊</text>
+    <text x="415" y="264" fill="#6b7280">量：鄰道 idle A/B</text>
+  </g>
+  <!-- RJ child -->
+  <path d="M560,174 L560,208" stroke="#67e8f9" stroke-width="1.3" fill="none"/>
+  <rect x="492" y="208" width="136" height="66" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="560" y="224" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#155e75">熱雜訊等自然源</text>
+  <text x="560" y="238" text-anchor="middle" font-size="9.5" fill="#374151">σ_tot=√(σ₁²+σ₂²+…)</text>
+  <text x="560" y="250" text-anchor="middle" font-size="9.5" fill="#374151">例：1.2²+1.6² → 2.0 ps</text>
+  <text x="560" y="264" text-anchor="middle" font-size="9" fill="#6b7280">不是 2.8！不同時最倒楣</text>
+  <!-- histogram strip -->
+  <rect x="38" y="292" width="684" height="118" rx="10" fill="#0b1220"/>
+  <text x="380" y="312" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#e2e8f0">直方圖長相（PT2 Ch.4 圖 4.4/4.5 觀念重繪）：拆帳的第一眼證據</text>
+  <!-- pure gaussian -->
+  <g transform="translate(120,318)">
+    <path d="M0,80 C20,80 30,10 50,10 C70,10 80,80 100,80" fill="none" stroke="#22d3ee" stroke-width="2"/>
+    <text x="50" y="76" text-anchor="middle" font-size="8.5" fill="#67e8f9">單一高斯鐘形</text>
+  </g>
+  <text x="170" y="404" text-anchor="middle" font-size="9" fill="#a5f3fc">→ RJ 主導（PT2：Gaussian 表示 RJ 是主源）</text>
+  <!-- bimodal -->
+  <g transform="translate(430,318)">
+    <path d="M0,80 C14,80 20,22 34,22 C48,22 52,58 66,58 C80,58 84,16 98,16 C112,16 118,80 132,80" fill="none" stroke="#f472b6" stroke-width="2"/>
+    <text x="66" y="76" text-anchor="middle" font-size="8.5" fill="#f9a8d4">雙峰/多峰（每峰各自是小高斯）</text>
+  </g>
+  <text x="500" y="404" text-anchor="middle" font-size="9" fill="#f9a8d4">→ DJ 混入 RJ（PT2：bimodal/multi-modal，峰距≈DJ）</text>
+  <!-- footer strip -->
+  <rect x="38" y="422" width="684" height="36" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="437" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">記帳三步：①各枝分開量（各有專屬 A/B 實驗）→ ②RJ 取 RSS、DJ 直加 → ③TJ = DJ_pp + 14×RJ_rms</text>
+  <text x="380" y="452" text-anchor="middle" font-size="9" fill="#374151">直方圖是「拆帳第一眼」：鐘形＝RJ 主導；雙峰＝有 DJ 混入，峰與峰的距離就是 DJ 的量級</text>
+</svg>
+<figcaption>圖 1：jitter 家族樹（Perfect Timing II Ch.4 分類）。TJ 拆成 DJ（四子科目：DCD、DDJ/ISI、SJ、BUJ，pk-pk 直加）與 RJ（σ 取 RSS 再 ×14）。下方直方圖是拆帳的第一眼證據：純鐘形＝RJ 主導；雙峰＝DJ 混入，且「每個峰自己還是一個小高斯」（PT2 原文觀念）——峰距讀出 DJ、單峰寬度讀出 RJ。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">常見誤解先拆彈</span>
+  <p><strong>誤解一：「RJ 很小，先忽略」</strong>——昨天已拆過：RJ 在 BER 10⁻¹² 帳上自帶 14 倍槓桿，σ 2.5 ps 入帳是 35 ps。<strong>誤解二：「多個 RJ 源直加比較保險」</strong>——不是保險，是錯帳。獨立高斯源的正確合併是 RSS；直加會把預算表灌水到「怎麼設計都不過」，逼團隊去砍不該砍的東西。反過來，<strong>DJ 用 RSS 就是造假</strong>——DJ 不是隨機的，最壞情況它們真的會對齊。<strong>誤解三：「量到的 pk-pk 就是 jitter」</strong>——PT2 Ch.4 原文提醒：直方圖的尾巴「沒有延伸到無限遠、有固定值，是因為樣本數有限」——pk-pk 是「這一次量測的最大減最小」，樣本翻倍它就變大，永遠報 σ＋樣本數（或 BER），別報裸的 pk-pk。</p>
+</div>
+
+<h2>2. Clock 世界的三種量法：cycle-to-cycle / period / long-term</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：同一班公車，三種「不準時」</span>
+  <p>把時脈想成一班理論上每 10 分鐘一班的公車。<strong>Period jitter（班距誤差）</strong>：某一班和「表定 10 分鐘」差多少——這班等了 10 分 03 秒，period jitter 就是 +3 秒。<strong>Cycle-to-cycle jitter（班距的變化率）</strong>：這一班的班距跟上一班的班距差多少——上一班隔 10 分 03 秒、這一班隔 9 分 58 秒，c2c 就是 5 秒。乘客最有感的其實是這個：班距忽長忽短比「一律慢 3 秒」難受得多。<strong>Long-term jitter（累積誤差）</strong>：從早上第一班起算，到第 100 班時，實際發車時刻和理論時刻表差了多少——每班差一點點，一路累積可以差很多。三種量法量的是同一班公車，但服務的客人不同：接駁下一段行程的人在乎 c2c，趕單次會議的人在乎 period，排一整天行程的人在乎 long-term。</p>
+</div>
+
+<p>Perfect Timing II Ch.4 的正式定義（這一段是 datasheet 排雷的彈藥庫）：</p>
+<ul>
+  <li><strong>Cycle-to-cycle jitter（又名 short-term / adjacent cycle jitter）：</strong>「時脈輸出邊沿相對於<strong>前一週期</strong>對應位置的變化」。做法：量每個週期長度 t₁、t₂、t₃…，J₁ = t₂ − t₁、J₂ = t₃ − t₂，取「一段時間內（<strong>典型一萬個週期</strong>）J 的最大值」。PT2 註明這是<strong>最難量的一種</strong>，通常需要 TIA（Timing Interval Analyzer）等專用設備。誰在乎它：<strong>下游有 PLL 的系統</strong>——PT2 原文：「PLL 可能無法追蹤這種高頻 jitter，因而產生 timing skew」（這句是下半場的伏筆）。datasheet 陷阱：有些用 ± 表示（可超前可落後）、有些給 pk-pk（樣本裡最長週期減最短週期——這個數字會<strong>比相鄰週期的真實差值大</strong>，PT2 原文特別警告）。</li>
+  <li><strong>Period jitter（又名 absolute jitter）：</strong>「時脈輸出邊沿相對於<strong>理想位置</strong>的最大變化」——固定第一個上升沿，量第二個上升沿比理想週期早或晚多少，同樣典型取一萬個週期的最大值。傷害對象：<strong>同步系統的 timing budget</strong>——直接吃掉 cycle time 與 setup/hold 餘裕（週 1 的 Ch.3 timing budget 在這裡接上線）。表示法三家：pk-pk（分布底寬＝最晚減最早）、RMS/σ/one-sigma（三者同義，PT2 明說），由定義 σ 版永遠小於 pk-pk 版——datasheet 比數字前先看單位是哪一種。</li>
+  <li><strong>Long-term jitter：</strong>「經過<strong>許多週期</strong>後，邊沿相對理想位置的最大偏移」。「許多」是多少依應用而定——PT2 給的參考：PC 主機板與繪圖應用「通常指 10–20 µs 的區間」。書中經典案例：繪圖卡的像素時脈 long-term jitter 過大，本該打在座標 (10,24) 的像素資料跑到 (11,28)——整個畫面平移，俗稱螢幕「running」。這個案例對 camera 人有既視感：sensor 的 pixel clock / line timing 若長期漂移，行與行的取樣位置就會錯位——同一種病，方向相反（顯示 vs 擷取）。</li>
+</ul>
+
+<div class="formula">J[n] = t<sub>E</sub>[n]<sub>IDEAL</sub> − t<sub>E</sub>[n]<sub>ACTUAL</sub>（PT2 Ch.4：瞬時 jitter＝理想邊沿減實際邊沿）<br>cycle-to-cycle：J₁ = t₂ − t₁（相鄰週期相減，典型統計約 10⁴ 週期取 max）<br>period：實際週期 − 理想週期（固定參考沿，統計 pk-pk 或 σ）<br>long-term：第 N 週期的實際邊沿 − 理想邊沿（N 大；主機板/繪圖慣例看 10–20 µs 區間）<br>Jitter<sub>UI</sub> = Jitter(sec) / 1 UI(sec)（資料通訊界慣用 UI 正規化——跨速率直接可比）</div>
+<p><em>白話翻譯：三種量法只差在「跟誰比」：c2c 跟<strong>上一班</strong>比、period 跟<strong>時刻表</strong>比、long-term 跟<strong>一整天的時刻表</strong>比。第四行是昨天練習 1(d) 的正式出處：PT2 原文說資料通訊界慣用 UI 為單位，把 jitter 除以一個 UI 正規化。順帶排雷：datasheet 寫「jitter: 50 ps」而不註明是哪一種、哪種統計——這種規格等於沒寫，追問供應商是基本功。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">三種量法圖解：跟誰比，決定你量到什麼（PT2 Ch.4 圖 4.6–4.8 觀念重繪）</text>
+  <!-- panel 1: cycle to cycle -->
+  <rect x="40" y="40" width="680" height="128" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="60" y="62" font-size="11.5" font-weight="bold" fill="#7c3aed">① Cycle-to-cycle：跟「上一個週期」比（J₁ = t₂ − t₁）</text>
+  <!-- clock waveform with varying periods -->
+  <path d="M70,140 L70,100 L130,100 L130,140 L186,140 L186,100 L250,100 L250,140 L302,140 L302,100 L370,100 L370,140 L430,140 L430,100 L494,100 L494,140 L545,140"
+        fill="none" stroke="#0e7490" stroke-width="2"/>
+  <g font-size="9" fill="#475569" text-anchor="middle">
+    <path d="M70,152 L186,152" stroke="#94a3b8" stroke-width="1"/><text x="128" y="164">t₁</text>
+    <path d="M186,152 L302,152" stroke="#94a3b8" stroke-width="1"/><text x="244" y="164">t₂（比 t₁ 短一點）</text>
+    <path d="M302,152 L430,152" stroke="#94a3b8" stroke-width="1"/><text x="366" y="164">t₃（比 t₂ 長一點）</text>
+  </g>
+  <text x="575" y="105" font-size="9.5" fill="#7c3aed" font-weight="bold">J₁=t₂−t₁, J₂=t₃−t₂</text>
+  <text x="575" y="120" font-size="9" fill="#475569">典型統計 10⁴ 週期取 max</text>
+  <text x="575" y="135" font-size="9" fill="#475569">最難量：需 TIA 級設備</text>
+  <text x="575" y="150" font-size="9" fill="#dc2626">受害者：下游 PLL 追不上</text>
+  <!-- panel 2: period -->
+  <rect x="40" y="182" width="680" height="128" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="60" y="204" font-size="11.5" font-weight="bold" fill="#0e7490">② Period：跟「理想週期」比（固定參考沿）</text>
+  <path d="M70,282 L70,242 L134,242 L134,282 L198,282 L198,242 L262,242 L262,282 L326,282" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <!-- ideal edge marker -->
+  <line x1="198" y1="232" x2="198" y2="292" stroke="#16a34a" stroke-width="1.4" stroke-dasharray="5 3"/>
+  <text x="198" y="228" text-anchor="middle" font-size="8.5" fill="#16a34a">理想下一沿</text>
+  <!-- actual edge distribution -->
+  <g fill="#f59e0b" opacity="0.85">
+    <rect x="184" y="296" width="3" height="4"/><rect x="188" y="292" width="3" height="8"/>
+    <rect x="192" y="286" width="3" height="14"/><rect x="196" y="284" width="3" height="16"/>
+    <rect x="200" y="288" width="3" height="12"/><rect x="204" y="293" width="3" height="7"/>
+    <rect x="208" y="297" width="3" height="3"/>
+  </g>
+  <text x="255" y="300" font-size="8.5" fill="#b45309">實際沿的分布（早或晚）</text>
+  <text x="440" y="240" font-size="9.5" fill="#0e7490" font-weight="bold">又名 absolute jitter</text>
+  <text x="440" y="256" font-size="9" fill="#475569">pk-pk＝最晚−最早；σ/RMS/one-sigma 同義</text>
+  <text x="440" y="272" font-size="9" fill="#475569">由定義 σ 版 &lt; pk-pk 版（比規格先看單位）</text>
+  <text x="440" y="288" font-size="9" fill="#dc2626">受害者：setup/hold 與 cycle time 預算</text>
+  <!-- panel 3: long-term -->
+  <rect x="40" y="324" width="680" height="128" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="60" y="346" font-size="11.5" font-weight="bold" fill="#be185d">③ Long-term：跟「N 個週期後的理想時刻表」比（累積漂移）</text>
+  <path d="M70,424 L70,388 L100,388 L100,424 L130,424 L130,388 L160,388 L160,424 L190,424" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <text x="130" y="440" text-anchor="middle" font-size="8.5" fill="#475569">Cycle 0 起跑</text>
+  <text x="240" y="406" font-size="12" fill="#94a3b8">⋯ N 個週期 ⋯</text>
+  <line x1="380" y1="378" x2="380" y2="434" stroke="#16a34a" stroke-width="1.4" stroke-dasharray="5 3"/>
+  <text x="380" y="372" text-anchor="middle" font-size="8.5" fill="#16a34a">理想第 N 沿</text>
+  <path d="M330,424 L330,388 L410,388 L410,424 L455,424" fill="none" stroke="#be185d" stroke-width="2"/>
+  <path d="M380,398 L410,398" stroke="#be185d" stroke-width="1.2"/>
+  <path d="M404,394 L412,398 L404,402" fill="none" stroke="#be185d" stroke-width="1.2"/>
+  <text x="418" y="380" font-size="8.5" fill="#be185d">實際第 N 沿（漂了）</text>
+  <text x="510" y="384" font-size="9.5" fill="#be185d" font-weight="bold">「許多週期」依應用：</text>
+  <text x="510" y="400" font-size="9" fill="#475569">PC 主機板/繪圖 ≈ 10–20 µs（PT2 慣例）</text>
+  <text x="510" y="416" font-size="9" fill="#475569">經典案例：像素 (10,24) 打到 (11,28)</text>
+  <text x="510" y="432" font-size="9" fill="#dc2626">受害者：畫面 running／行取樣錯位</text>
+  <!-- footer -->
+  <rect x="40" y="460" width="680" height="14" rx="4" fill="none"/>
+  <text x="380" y="471" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">記法：c2c 跟上一班比｜period 跟時刻表比｜long-term 跟一整天的時刻表比——datasheet 沒寫是哪種＝等於沒寫</text>
+</svg>
+<figcaption>圖 2：三種量法的差異全在「參考點」。①cycle-to-cycle 拿上一週期當參考（J₁=t₂−t₁，最難量、下游 PLL 追不上它）；②period 拿理想週期當參考（吃 setup/hold 預算）；③long-term 拿 N 週期後的理想時刻當參考（累積漂移，PT2 的繪圖卡 running 案例）。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">量測工具的殘酷事實（PT2 Ch.4 原文，2002 年的忠告至今有效）</span>
+  <p>PT2 直白地寫：工程師常用示波器的 persistence 疊圖量 jitter，「雖然能提供粗略量測，但<strong>非常不準確、且受觸發不穩定所苦</strong>」——示波器自己的 trigger jitter 與 retrace jitter 會混進你的讀值。書中建議用 TIA（Timing Interval Analyzer）或帶專用 jitter 分析韌體的高取樣率示波器（用儀器自己更精準的取樣時鐘做基準）。<strong>以現代標準需上修的部分：</strong>2002 年的 TIA 是獨立儀器；今日主流做法是即時示波器（real-time scope）搭配 jitter 分解軟體（單次長擷取後由軟體離線算出每個沿的位置，避開重複觸發問題），或用取樣示波器＋precision timebase。但核心忠告不變：<strong>用「螢幕上看起來的粗細」報 jitter 數字，在任何年代都是不及格的量測</strong>——你量到的是「訊號 jitter ＋ 觸發 jitter」的混合物。這也是明天實作日的伏筆之一。</p>
+</div>
+
+<h2>3. Jitter 的累積：PLL 的雙重人格與 cascading 的代價</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：PLL 是個「重講一遍」的傳話人</span>
+  <p>時脈從晶振到晶片，常常不是直達車：先進一顆 PLL 倍頻（25 MHz 變 100 MHz 之類），再進 zero-delay buffer（內含 PLL）分發到十個地方。PLL 的工作方式像個傳話人：<strong>聽懂上游的意思之後，用自己的嗓子重講一遍</strong>。這帶來三件事——①<strong>慢的變化他跟得上</strong>（loop bandwidth 以內的頻率漂移會忠實傳下去，包括慢速抖動）；②<strong>快的變化他跟不上</strong>（loop bandwidth 以外的高頻抖動被他「聽不清就忽略」——濾掉了！這是 PLL 當 jitter 濾波器的好處）；③<strong>他自己會加料</strong>（自己的 VCO 與電源雜訊會生出新的 jitter——jitter generation）。更陰險的是第四件事：在 loop bandwidth 附近有一段「回音區」，傳話人會把那個頻段的抖動<strong>講得比原來更大聲</strong>（jitter peaking，增益 &gt; 0 dB）。傳話一層還好，傳五層之後，回音區的內容被放大了五次——PT2 拿真儀器串五顆 PLL 量給你看：低頻雜訊增益疊到近 30 dB（約 30 倍電壓比），直方圖直接裂成雙峰。</p>
+</div>
+
+<p>Perfect Timing II Ch.13 的核心概念與實測數據（全部忠於原文）：</p>
+<ul>
+  <li><strong>Jitter transfer（傳遞）vs jitter generation（自生）：</strong>「每個 PLL 都有把輸入端的雜訊頻譜傳到輸出端的固有特性；不幸的是，它也有自己加入雜訊的固有特性。」一顆 PLL 到底是「淨化器」還是「污染源」，取決於它<strong>濾掉的比自己加的多還是少</strong>。標榜 low-jitter 的 PLL 通常濾高頻很強，「但傾向在較低頻產生不想要的雜訊」（PT2 原文——低雜訊不是免費的）。</li>
+  <li><strong>Jitter transfer curve（閉環增益曲線）：</strong>最有意義的特性圖。PT2 Ch.13 圖 13.2 的實例：某 PLL 的 loop bandwidth 約 <strong>2.5 MHz</strong>（輸出 −3 dB 處）；2 MHz 以上滾降（濾高頻）；但<strong>頻帶內的 jitter 被放大 0 到近 2 dB</strong>——最高點就是 jitter peak。翻成白話：這顆 PLL 對 2.5 MHz 以上的輸入抖動是濾波器、對 1 MHz 附近的輸入抖動是<strong>放大器</strong>。</li>
+  <li><strong>串接實測（cycle-to-cycle）：</strong>106.25 MHz 晶振（pk-pk jitter 37 ps）依序通過三顆 Cypress CY2308 zero-delay buffer：<strong>37 ps → 55 ps → 59 ps → 68 ps</strong>。PT2 的評語：短期（c2c）jitter 的累積「中等程度」、對當年多數系統仍在餘裕內——<strong>但長期 jitter 是另一回事</strong>。</li>
+  <li><strong>Phase noise 視角（頻域看累積）：</strong>相位雜訊＝頻域裡「訊號功率對某偏移頻率處 1 Hz 頻寬內雜訊功率」的比值。串接的殺傷力在這裡現形：晶振原輸出頻譜乾淨平坦；過第一顆 PLL 後，載波旁約 <strong>1 MHz 處長出「肩膀」</strong>（正是該 PLL 的 loop bandwidth——jitter peaking 的頻域長相）；串到第五顆，<strong>低頻增益疊到近 30 dB</strong>——cycle-to-cycle 只小漲，<strong>long-term jitter 被大幅放大</strong>。這正對應第 2 節的分工：PLL 追得上（並傳遞、甚至放大）慢的、追不上（並濾掉）快的。</li>
+  <li><strong>Tracking skew（追不動的代價）：</strong>第五顆 PLL 輸出 pk-pk 71 ps，但分布<strong>不再是高斯——裂成雙峰</strong>：輸入的相位雜訊已經大到 PLL 無法追蹤，只能「盡力跟」（best-effort tracking），輸出與輸入之間出現系統性偏移。PT2 補充原理：PLL 天生能追 long-term jitter、天生追不了 cycle-to-cycle jitter（迴路響應慢）。</li>
+  <li><strong>設計守則（PT2 Ch.13 結論）：</strong>①經驗法則——<strong>串接 PLL 一般不要超過三顆</strong>；若必須更多，取得各顆的 jitter transfer curve、把「會衰減 jitter 的」排進鏈路，安排得當可串六顆以上；②<strong>避免串接 jitter transfer curve 相似的 PLL</strong>（peaking 頻段重疊會逐級指數成長）；③輸入參考很髒時，<strong>第一顆就放 jitter-attenuating PLL</strong>（loop bandwidth 收窄、滾降陡峭），別讓髒東西一路傳播；④loop bandwidth 是最關鍵的參數——2002 年廠商視為機密、如今（PT2 當年已觀察到）越來越願意提供；拿不到曲線就<strong>實測短期＋長期 jitter</strong>，「無論如何，都建議做 jitter 量測」。</li>
+  <li><strong>SSC（展頻時脈）與 PLL 的互動：</strong>PT2 特別警告：若參考時脈帶展頻（NB 主機板為壓 EMI 的標配，週 9 會正課），下游 PLL 的 loop bandwidth 必須<strong>顯著高於展頻調變速率</strong>，否則調變會被濾掉、或造成 tracking skew。（現代常見的 SSC 調變速率在約 30–33 kHz 量級、down-spread 約 0.5%——依介面規範，數字記量級即可。）反過來：要求低雜訊的目的地，就不該餵它展頻源——「不要把展頻裝進需要低雜訊的設計」是 PT2 原話的直譯。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">PLL 的雙重人格與串接的代價（Perfect Timing II Ch.13 實測觀念重繪）</text>
+  <!-- left: jitter transfer curve -->
+  <rect x="40" y="40" width="340" height="230" rx="10" fill="#0b1220"/>
+  <text x="210" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">Jitter transfer curve（閉環增益）</text>
+  <!-- axes -->
+  <line x1="80" y1="230" x2="360" y2="230" stroke="#475569" stroke-width="1"/>
+  <line x1="80" y1="80" x2="80" y2="230" stroke="#475569" stroke-width="1"/>
+  <text x="220" y="248" text-anchor="middle" font-size="8.5" fill="#94a3b8">jitter 頻率（對數軸）→</text>
+  <text x="58" y="150" text-anchor="middle" font-size="8.5" fill="#94a3b8" transform="rotate(-90 58 150)">增益 (dB)</text>
+  <!-- 0 dB line -->
+  <line x1="80" y1="140" x2="360" y2="140" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="352" y="136" text-anchor="end" font-size="8" fill="#94a3b8">0 dB</text>
+  <!-- transfer curve: flat 0dB, peak ~2dB near 1MHz, -3dB at 2.5MHz, rolloff -->
+  <path d="M80,140 C150,140 190,138 225,126 C243,120 252,122 262,140 C275,164 300,200 350,218"
+        fill="none" stroke="#22d3ee" stroke-width="2.2"/>
+  <!-- peak marker -->
+  <circle cx="232" cy="124" r="4" fill="#f59e0b"/>
+  <text x="212" y="106" text-anchor="middle" font-size="8.5" fill="#f59e0b" font-weight="bold">jitter peaking：帶內放大</text>
+  <text x="212" y="117" text-anchor="middle" font-size="8" fill="#fbbf24">（PT2 實例：增益近 +2 dB）</text>
+  <!-- -3dB marker -->
+  <circle cx="262" cy="140" r="3.5" fill="#4ade80"/>
+  <text x="288" y="158" font-size="8.5" fill="#4ade80">loop BW（−3 dB）</text>
+  <text x="288" y="169" font-size="8" fill="#86efac">PT2 實例：約 2.5 MHz</text>
+  <!-- zones -->
+  <text x="130" y="200" font-size="8.5" fill="#a5f3fc">帶內：忠實傳遞</text>
+  <text x="130" y="211" font-size="8.5" fill="#a5f3fc">（慢抖動跟著走）</text>
+  <text x="296" y="196" font-size="8.5" fill="#4ade80">帶外：濾掉</text>
+  <text x="296" y="207" font-size="8.5" fill="#4ade80">（快抖動追不上）</text>
+  <text x="210" y="262" text-anchor="middle" font-size="8.5" fill="#f9a8d4">陷阱：peaking 頻段重疊的 PLL 串接 → 逐級指數放大</text>
+  <!-- right: cascade accumulation -->
+  <rect x="396" y="40" width="324" height="230" rx="10" fill="#0b1220"/>
+  <text x="558" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">串接實測：c2c jitter 一路長大（CY2308 ×3）</text>
+  <!-- chain icons -->
+  <g font-size="8.5" text-anchor="middle">
+    <rect x="412" y="76" width="56" height="30" rx="6" fill="#334155"/><text x="440" y="89" fill="#e2e8f0">晶振</text><text x="440" y="100" fill="#94a3b8">106.25 MHz</text>
+    <rect x="490" y="76" width="56" height="30" rx="6" fill="#0e7490"/><text x="518" y="95" fill="#fff">PLL #1</text>
+    <rect x="568" y="76" width="56" height="30" rx="6" fill="#0e7490"/><text x="596" y="95" fill="#fff">PLL #2</text>
+    <rect x="646" y="76" width="56" height="30" rx="6" fill="#0e7490"/><text x="674" y="95" fill="#fff">PLL #3</text>
+  </g>
+  <g stroke="#64748b" stroke-width="1.4" fill="none">
+    <path d="M468,91 L488,91 M484,87 L490,91 L484,95"/>
+    <path d="M546,91 L566,91 M562,87 L568,91 L562,95"/>
+    <path d="M624,91 L644,91 M640,87 L646,91 L640,95"/>
+  </g>
+  <!-- bars -->
+  <g>
+    <rect x="424" y="196" width="34" height="37" fill="#22d3ee"/><text x="441" y="190" text-anchor="middle" font-size="9" fill="#a5f3fc" font-weight="bold">37 ps</text>
+    <rect x="502" y="178" width="34" height="55" fill="#38bdf8"/><text x="519" y="172" text-anchor="middle" font-size="9" fill="#bae6fd" font-weight="bold">55 ps</text>
+    <rect x="580" y="174" width="34" height="59" fill="#818cf8"/><text x="597" y="168" text-anchor="middle" font-size="9" fill="#c7d2fe" font-weight="bold">59 ps</text>
+    <rect x="658" y="165" width="34" height="68" fill="#c084fc"/><text x="675" y="159" text-anchor="middle" font-size="9" fill="#e9d5ff" font-weight="bold">68 ps</text>
+  </g>
+  <line x1="410" y1="233" x2="706" y2="233" stroke="#475569" stroke-width="1"/>
+  <text x="558" y="248" text-anchor="middle" font-size="8.5" fill="#94a3b8">pk-pk cycle-to-cycle jitter（TIA 長時間量測，PT2 Ch.13 原始數據）</text>
+  <text x="558" y="262" text-anchor="middle" font-size="8.5" fill="#fbbf24">c2c 只是「中等累積」——真正爆帳的在下面：長期 jitter</text>
+  <!-- bottom: phase noise + bimodal -->
+  <rect x="40" y="284" width="416" height="196" rx="10" fill="#0b1220"/>
+  <text x="248" y="306" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">頻域看累積：phase noise「肩膀」逐級長高</text>
+  <!-- carrier spikes with growing shoulders -->
+  <g fill="none" stroke-width="1.8">
+    <!-- osc: clean spike -->
+    <path d="M75,450 L105,450 L118,340 L131,450 L161,450" stroke="#4ade80"/>
+    <text x="118" y="466" text-anchor="middle" font-size="8.5" fill="#4ade80">晶振：乾淨平坦</text>
+    <!-- pll1: small shoulders -->
+    <path d="M185,450 L200,446 C212,442 214,430 222,428 L228,340 L234,428 C242,430 244,442 256,446 L271,450" stroke="#22d3ee"/>
+    <text x="228" y="466" text-anchor="middle" font-size="8.5" fill="#22d3ee">PLL #1：長出肩膀</text>
+    <!-- pll5: big shoulders -->
+    <path d="M295,450 L306,428 C322,404 330,382 342,378 L348,340 L354,378 C366,382 374,404 390,428 L401,450" stroke="#f472b6"/>
+    <text x="348" y="466" text-anchor="middle" font-size="8.5" fill="#f9a8d4">串到第 5 顆：低頻增益近 30 dB</text>
+  </g>
+  <text x="248" y="330" text-anchor="middle" font-size="8.5" fill="#94a3b8">肩膀位置 ≈ loop BW（PT2 實例：距 106.25 MHz 載波約 1 MHz 處）</text>
+  <!-- bimodal panel -->
+  <rect x="470" y="284" width="250" height="196" rx="10" fill="#0b1220"/>
+  <text x="595" y="306" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">追不動的代價：tracking skew</text>
+  <path d="M495,450 C509,450 517,388 533,388 C549,388 553,424 571,424 C589,424 595,378 613,378 C631,378 643,450 659,450"
+        fill="none" stroke="#f472b6" stroke-width="2"/>
+  <path d="M520,458 L672,458 M666,454 L674,458 L666,462" fill="none" stroke="#94a3b8" stroke-width="1"/>
+  <text x="595" y="472" text-anchor="middle" font-size="8.5" fill="#94a3b8">第 5 顆輸出：pk-pk 71 ps、直方圖裂成雙峰</text>
+  <text x="595" y="330" text-anchor="middle" font-size="8.5" fill="#f9a8d4">輸入相位雜訊大到 PLL 追不上</text>
+  <text x="595" y="343" text-anchor="middle" font-size="8.5" fill="#f9a8d4">只能 best-effort → 分布不再高斯</text>
+  <!-- footer strip -->
+  <rect x="40" y="492" width="680" height="22" rx="6" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="380" y="507" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">守則：串接 PLL ≤ 3 顆（經驗法則）｜避免 peaking 頻段重疊｜參考髒 → 第一顆放 jitter attenuator｜拿不到曲線就實測</text>
+</svg>
+<figcaption>圖 3：PLL 的雙重人格（左上：jitter transfer curve——帶內傳遞且有近 +2 dB 的 peaking、−3 dB 處為 loop BW 約 2.5 MHz、帶外濾除）與串接代價（右上：37→55→59→68 ps 的 c2c 累積；左下：phase noise 的「肩膀」在 loop BW 處逐級長高、五級後低頻增益近 30 dB；右下：第五顆輸出直方圖裂成雙峰＝tracking skew）。數據皆出自 Perfect Timing II Ch.13 原始量測。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">把三節串成一句話</span>
+  <p>第 1 節立科目（RJ/DJ 怎麼拆、怎麼加）、第 2 節定量法（跟誰比：上一班/時刻表/一整天）、第 3 節看流向（每過一顆 PLL：帶外濾掉、帶內傳遞＋peaking 放大、自己再加一筆）。三者合體就是完整的 jitter 工程：<strong>在正確的節點、用正確的量法、把每一筆記到正確的科目，然後沿著時脈樹追蹤它的流向</strong>。這也是為什麼 c2c/period/long-term 不是書呆子的分類——PLL 對三者的態度完全不同（追不了 c2c、會放大 long-term），量錯種類，你會對系統健康做出完全相反的判斷。</p>
+</div>
+
+<h2>4. 實務案例：兩個老本行的 jitter 帳本</h2>
+<ul>
+  <li><strong>NB 主機板的時脈樹（你天天走過的案發現場）：</strong>典型鏈路是「晶振 → 主 clock generator（內含 PLL、通常帶 SSC）→ 各介面 buffer / zero-delay buffer → CPU/PCH/PCIe/顯示」。用今天的眼光重看：①每一級 buffer 是不是 PLL-based？串了幾級？（PT2 的三顆守則直接適用——別忘了 SoC/ASIC <strong>內部</strong>還有自己的 PLL，PT2 特別提醒這一層常被漏算）；②主 clock gen 開了 SSC，下游哪些 PLL 需要「追著展頻跑」？它們的 loop bandwidth 夠高嗎？（追不上＝tracking skew）；③FA 時量哪一種 jitter？給同步邏輯的 clock 看 period（吃 setup/hold）、給下游 PLL 的參考看 c2c 與 phase noise（PLL 追不了快的）、給顯示管線的看 long-term（PT2 的 running 案例）。</li>
+  <li><strong>Camera sensor 的 MCLK → 內部 PLL（面試高頻場景）：</strong>sensor 收一根低頻參考時脈 MCLK（常見約 19.2 或 24 MHz 量級，依平台），<strong>內部 PLL 倍頻</strong>到數百 MHz 至 GHz 量級供 pixel array 時序與 MIPI 發射器。套用 jitter transfer 觀念：MCLK 上「loop bandwidth 以內」的低頻雜訊（電源 ripple 調變、鄰近開關訊號的低頻耦合）會被 sensor PLL <strong>忠實傳遞甚至 peaking 放大</strong>，最終出現在 MIPI 眼圖的 jitter 裡；而 MCLK 上的高頻毛刺反而可能被濾掉。所以「MIPI 眼圖 jitter 超標」的嫌疑人名單必須包含<strong>上游的 MCLK 品質</strong>與 <strong>sensor PLL 的供電</strong>——不是只盯著 D-PHY 走線。另一個實務點：有些平台的 MCLK 由主板 clock generator 的其中一路輸出提供——這路輸出若與其他吵鬧的輸出共用一顆晶片/一組電源，串擾與電源雜訊會以 BUJ 的身分入帳（Ch.4 診斷清單第 4 條的真實版）。</li>
+  <li><strong>FA checklist（PT2 Ch.4「Diagnostic Techniques」五步，2002 年寫的、今天照用）：</strong>時脈 jitter 超標時依序查——①<strong>PLL 電源腳的去耦與 layout</strong>：對照廠商建議的電容值與最小電感接法（週 8 的正課預告）；②<strong>直接 A/B 確認電源嫌疑</strong>：把 PLL 的 VDD 腳改餵外部乾淨電源（PT2 承認「翹 VDD 腳很麻煩」，但這是最快的陽性確認——比辛苦地去特性化電源雜訊頻譜快得多）；③<strong>看參考時脈的頻譜</strong>：接頻譜分析儀，檢查 <strong>loop bandwidth 以內</strong>有沒有邊帶（sideband）——帶內的雜訊會被傳遞/放大，帶外的其實無害，這就是為什麼要「看頻譜」而不是「看波形」；④<strong>查輸出走線的串擾</strong>：時脈線旁邊有沒有高速開關訊號平行走？PT2 建議時脈線旁放 ground trace 或加大間距（週 4 的 guard trace 正課在 clock 世界的原生出處）；⑤<strong>質疑量測本身</strong>：是不是示波器觸發 jitter 在灌水？換 jitter 分析韌體/TIA 級手段再量一次，並確認零件本身沒挑錯（選型的 jitter 規格根本不夠）。這張清單的排序哲學很面試——<strong>便宜的 A/B 實驗排在昂貴的特性化之前</strong>。</li>
+</ul>
+
+<h2>5. 動手練習（紙上推演，今天不需儀器）</h2>
+<p>速查帶著走：TJ ≈ DJ<sub>pp</sub>＋14×RJ<sub>rms</sub>；RJ 合併用 RSS、DJ 直加；c2c 跟上一班比、period 跟時刻表比、long-term 跟一整天比；PLL：帶外濾、帶內傳＋peaking、自己加一筆；串接守則 ≤3 顆。</p>
+
+<details>
+<summary>練習 1（三種量法的手感）：一顆 100 MHz 時脈（理想週期 10 ns＝10000 ps），TIA 連續量到五個週期長度：10003、9998、10004、9996、10002 ps。(a) 算出四個 cycle-to-cycle jitter 值，本段的 max |c2c| 是多少？(b) 本段的 period jitter pk-pk 是多少？(c) 若第一個沿在 t=0 對齊理想時刻表，五個週期結束時累積偏移（long-term 方向的量）是多少？(d) 下游是一顆 loop bandwidth 很低的 PLL，三種數字裡它最「在乎」哪一種？為什麼？</summary>
+<p><strong>解：</strong>(a) J₁=9998−10003=−5、J₂=10004−9998=+6、J₃=9996−10004=−8、J₄=10002−9996=+6 → max |c2c| = <strong>8 ps</strong>（PT2 定義：J = 相鄰週期相減，實務統計約一萬週期取 max，本題只是五週期的手感版）。(b) 週期偏差：+3、−2、+4、−4、+2 → pk-pk = 4−(−4) = <strong>8 ps</strong>（最長週期減最短週期）。(c) 累積 = 3−2+4−4+2 = <strong>+3 ps</strong>——注意正負會互相抵銷，這就是為什麼 long-term 不是 period 的簡單倍數：隨機成分會走「醉漢走路」、慢速漂移才會單向累積。(d) <strong>Cycle-to-cycle</strong>。PT2 Ch.4 原文：下游有 PLL 時 c2c 最重要，因為「PLL 可能無法追蹤這種高頻 jitter，因而產生 timing skew」——快速的週期變化落在 PLL loop bandwidth 之外，它跟不上，輸出與輸入間就出現追蹤誤差（Ch.13 的 tracking skew 就是這件事的極端版）。</p>
+</details>
+
+<details>
+<summary>練習 2（TJ 記帳全流程）：8 Gbps 通道（UI=125 ps）拆帳量得——RJ 源：晶振 σ=1.2 ps、TX PLL 自生 σ=1.6 ps；DJ 源：DCD 6 ps、ISI 14 ps、電源耦合的 BUJ 5 ps（皆 pk-pk）。(a) 合併 RJ_rms。(b) 合併 DJ_pp。(c) 算 TJ@BER 10⁻¹² 與眼寬。(d) 有人主張把兩個 RJ 直加成 2.8 ps「比較保守」，帳面眼寬差多少？為什麼說這不是保守而是錯誤？(e) 若預算不夠，砍「換低 jitter 晶振（σ→0.6 ps）」和「修 ISI（14→7 ps）」哪個賺比較多？</summary>
+<p><strong>解：</strong>(a) RJ_rms = √(1.2²+1.6²) = √(1.44+2.56) = √4.0 = <strong>2.0 ps</strong>。(b) DJ_pp = 6+14+5 = <strong>25 ps</strong>（確定性來源假設最壞對齊，直加）。(c) TJ = 25 + 14×2.0 = 25+28 = <strong>53 ps</strong> → 眼寬 ≈ 125−53 = <strong>72 ps（0.58 UI）</strong>。(d) 直加 2.8 ps 入帳 14×2.8 = 39.2 ps，眼寬變 125−25−39.2 = 60.8 ps——帳面平白少了 <strong>11.2 ps</strong>。這不是保守：獨立高斯源的極端值不會永遠同時發生，RSS 才是數學上正確的合併；灌水的預算會逼團隊花錢解決不存在的問題（例如為了「不夠的眼寬」去換更貴的板材，實際上眼寬本來就夠）。錯帳沒有保守的方向，只有錯。(e) 晶振：RJ_rms 變 √(0.36+2.56)=1.71 ps，TJ 省 14×(2.0−1.71) ≈ <strong>4.1 ps</strong>；修 ISI 省 <strong>7 ps</strong>——本題修 ISI 賺較多。教訓：14 倍槓桿是掛在「σ 的變化量」上的，RSS 之下單一 RJ 源的改善會被其他源「稀釋」（大源不動、小源再小也拉不動總 σ）——先攻<strong>最大的那個 σ</strong> 或直接砍 DJ 大戶，帳本會告訴你順序。</p>
+</details>
+
+<details>
+<summary>練習 3（讀 PT2 的串接數據）：Ch.13 實測——106.25 MHz 晶振 37 ps（pk-pk c2c），串三顆 CY2308 ZDB 後依序 55、59、68 ps。(a) 哪一級「漲幅」最大？合理的解釋是什麼？(b) c2c 只中等成長，但書中說 long-term 才是災難（五級後低頻 phase noise 增益近 30 dB）——用 jitter transfer 的「帶內/帶外」解釋為什麼兩者命運不同。(c) 第五顆輸出 71 ps 且直方圖雙峰——用第 1 節的「直方圖讀帳」規則，這個雙峰在帳本上該記哪個科目？它的根因跟一般的 DCD 雙峰一樣嗎？(d) 若你是這個時脈樹的 owner，PT2 給了哪三條可執行的守則？</summary>
+<p><strong>解：</strong>(a) 第一級：37→55（+18 ps），之後 +4、+9。合理解釋：每顆 PLL 的 <strong>jitter generation（自生底噪）</strong>是「新科目開帳」——第一顆把自己的 VCO/電源雜訊整筆加進來（與晶振的 jitter 以 RSS 疊）；後續各級加的自生量與第一級相當，但在已經變大的基數上，RSS 的增量看起來變小（√(55²+x²) 對 x 不敏感）——這正是 RSS 合併的數學長相。(b) c2c 是<strong>高頻</strong>成分——大多落在 loop bandwidth <strong>之外</strong>，每級 PLL 都濾掉一部分，所以累積溫和；long-term 是<strong>低頻</strong>成分——落在 loop bandwidth <strong>之內</strong>，每級都忠實傳遞、還在 peaking 頻段（肩膀處，該例約 1 MHz）加碼放大——五級的 peaking 相乘（dB 相加）就疊出近 30 dB。帶內外的命運差，就是「傳話人聽得懂的會一路傳下去、還越傳越誇張」。(c) 雙峰＝有 <strong>DJ</strong> 混入（每峰各自是小高斯）。但根因不是 TX 的 DCD——是 <strong>tracking skew</strong>：輸入相位雜訊超出 PLL 追蹤能力，輸出在「跟上/跟不上」兩種狀態間切換，形成有界的雙態偏移——記帳上屬 DJ（有界、可追溯），來源科目是「PLL 追蹤失能」，藥方是治上游（減少餵進來的帶內雜訊）或換 loop 特性不同的 PLL，而不是去修 TX 驅動器。(d) ①串接一般<strong>不超過三顆</strong>；②避免串 jitter transfer curve <strong>相似（peaking 重疊）</strong>的 PLL——安排得當（讓會衰減的擋在前面）可串六顆以上；③參考髒時<strong>第一顆放 jitter-attenuating PLL</strong>（窄 loop BW＋陡滾降），並且「無論如何都做 jitter 實測」。</p>
+</details>
+
+<details>
+<summary>練習 4（jitter transfer 曲線應用題）：某 zero-delay buffer 的 jitter transfer 特性同 PT2 圖 13.2：loop BW（−3 dB）約 2.5 MHz、帶內 peaking 近 +2 dB（峰約在 1 MHz）。輸入參考上有三筆「污染」：(A) 33 kHz 的 SSC 展頻調變（刻意的）、(B) 約 1 MHz 的電源 ripple 邊帶、(C) 約 50 MHz 的串擾毛刺。(a) 三筆各自的命運（傳遞/放大/濾除）？(b) 哪一筆最危險？為什麼「刻意的 (A) 被濾掉」反而也是災難？(c) 若這顆 buffer 下游還要串第二顆 loop 特性相同的 PLL，(B) 會怎樣？(d) 用這題說明為什麼 FA 時「把參考時脈接上頻譜分析儀、檢查 loop BW 以內的邊帶」（PT2 Ch.4 診斷第 3 步）是關鍵動作。</summary>
+<p><strong>解：</strong>(a) (A) 33 kHz ≪ 2.5 MHz：<strong>帶內、忠實傳遞</strong>（這正是我們要的——SSC 必須被下游跟上才能發揮壓 EMI 的作用）；(B) 約 1 MHz：<strong>帶內且正中 peaking 頻段——被放大約 2 dB（約 1.26 倍）</strong>；(C) 50 MHz ≫ 2.5 MHz：<strong>帶外、被滾降濾除</strong>——輸出端幾乎看不到。(b) 最危險是 (B)：不但不被濾、還被加倍奉還。(A) 被濾掉的情境（若某顆 buffer loop BW 太低）是另一種災難：PT2 明說 SSC 調變被 roll-off 會「濾掉展頻或造成 tracking skew」——下游時脈失去展頻（EMI 峰值回來了）、或輸出跟不上調變產生系統性 skew；所以「下游 loop BW 必須顯著高於 SSC 調變速率」。(c) 兩級 peaking 頻段重疊 → dB 相加：+2 dB 變 +4 dB（幅度約 1.6 倍），逐級指數成長——這正是 PT2「避免串接相似 transfer curve」守則的定量理由。(d) 波形上看 1 MHz 的微小調變幾乎不可見，但頻譜儀上它是載波旁清楚的邊帶；而「危不危險」的判準不是邊帶大小本身，而是<strong>它在不在 loop BW 以內</strong>——帶內小邊帶（會被傳遞＋放大＋逐級累積）比帶外大毛刺（會被濾掉）危險得多。頻域＋loop BW 知識 = 十分鐘分辨「要治的」和「不用治的」。</p>
+</details>
+
+<details>
+<summary>練習 5（camera FA 綜合題）：某鏡頭模組專案，SoC 端量 MIPI 眼圖 jitter 超標，RJ/DJ 分解顯示：RJ_rms 明顯偏高、且 DJ 裡有一筆約 100 kHz 週期性的 SJ。sensor 的 MCLK（24 MHz）由主板 clock generator 供應，sensor 內部 PLL 倍頻後驅動 MIPI TX。模組本身在治具上（乾淨電源＋儀器級 MCLK）量測時一切正常。(a) 「治具正常、整機超標」這個 A/B 已經排除了哪些嫌疑人？(b) 剩下的兩大嫌疑路徑是什麼？各對應 PT2 Ch.4 診斷清單的哪一步？(c) 針對 100 kHz SJ，你的下一個實驗是什麼（提示：整機上有什麼東西以這個量級的頻率工作）？(d) 若最後確認是 MCLK 上的低頻邊帶，為什麼「sensor PLL 把它傳遞甚至放大」在理論上完全說得通？</summary>
+<p><strong>解：</strong>(a) 治具上模組正常 → <strong>sensor 本體、模組 flex 上的 D-PHY 走線、模組內部電源設計</strong>基本排除（同一顆模組、換了環境就好了）——嫌疑收斂到「整機環境提供給模組的東西」：MCLK 品質與供電品質。(b) 路徑一：<strong>MCLK 參考時脈被污染</strong>（主板 clock gen 該路輸出的串擾/共電源雜訊、走線耦合）→ 對應 PT2 診斷第 3 步「參考時脈接頻譜儀、查 loop BW 內邊帶」與第 4 步「查時脈走線旁的開關訊號」；路徑二：<strong>整機供電餵給 sensor 的軌有雜訊</strong>（調變 sensor 內部 PLL）→ 對應第 1 步「查去耦與 layout」與第 2 步「外部乾淨電源 A/B」（整機上可用電源線改接/斷開嫌疑負載近似之）。(c) 100 kHz 量級的週期性來源，camera 整機上的頭號嫌疑是<strong>開關式電源的切換頻率或其分頻產物</strong>（常見數百 kHz–MHz 量級，依設計）與 <strong>VCM/OIS 驅動器的 PWM/更新率</strong>（量級依方案）——實驗：<strong>逐一 on/off A/B</strong>（關 OIS、鎖 VCM 電流、關閉/切換嫌疑 DC-DC 至 PWM/PFM 不同模式），看 100 kHz SJ 是否消失；同時把 MCLK 接頻譜儀，看載波旁 ±100 kHz 邊帶是否隨之增減——兩個證據鏈交叉定罪。(d) 100 kHz 遠低於一般 PLL 的 loop bandwidth（典型在數十 kHz 到數 MHz 量級，依設計）——若在 sensor PLL 帶內，jitter transfer 理論說它會被<strong>忠實傳遞</strong>；若恰落在 peaking 頻段還會被<strong>放大</strong>；倍頻本身也會放大帶內輸入相位雜訊（PT2 Ch.13：倍頻使輸入 phase noise 增加約等於倍頻比的倍數，僅在 −3 dB 帶寬內）。所以「低頻小邊帶 → 高速輸出大 jitter」不是玄學，是 transfer curve 的正常演出。</p>
+</details>
+
+<h2>6. 面試怎麼考</h2>
+<p>Jitter 是 SI 面試的「名詞地雷區」＋「系統思考照妖鏡」：初階問定義（三種量法、RJ/DJ），資深問流向（PLL 與時脈樹）。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "A clock buffer datasheet lists cycle-to-cycle jitter, period jitter, and long-term jitter. Explain the difference, and tell me which one you'd care about if this clock feeds a downstream PLL, versus if it feeds a synchronous logic block directly."</summary>
+<p><strong>參考答案骨架：</strong>They differ only in the reference you compare each edge against. Cycle-to-cycle jitter compares each period to the previous one — J equals t2 minus t1 — so it captures how fast the period is changing; it's the highest-frequency view, it's the hardest to measure, and it's typically characterized over about ten thousand cycles. Period jitter compares each period to the ideal period, so it tells you how much a single cycle can shrink — that's what eats setup and hold margin. Long-term jitter compares an edge N cycles away to the ideal timeline, so it captures accumulated low-frequency drift; for motherboard and graphics clocks the convention is to look over roughly ten to twenty microseconds. Now the routing question: if the clock feeds synchronous logic directly, I care most about period jitter, because the worst-case short cycle directly subtracts from my timing budget. If it feeds a downstream PLL, I care most about cycle-to-cycle jitter and the phase noise spectrum — a PLL is a low-pass filter for input jitter: it tracks slow variation inside its loop bandwidth, but it cannot follow fast cycle-to-cycle changes, so that energy turns into tracking error between input and output. And the spectrum matters more than a single number: noise inside the loop bandwidth gets transferred and even amplified by jitter peaking, while noise outside gets filtered. So my honest answer is: same clock, three numbers, and which one is 'the spec' depends entirely on what's listening on the other end.</p>
+<p><strong>加分點：</strong>「differ only in the reference」一句話定調；三種量法各配一個受害者（PLL / setup-hold / display drift）；點出 PLL 的 low-pass 本質與 peaking；收尾「depends on what's listening」展現系統視角。若被追問量測，補「scope persistence is a rough estimate at best — trigger jitter contaminates it; use a jitter-analysis-grade instrument」。</p>
+</details>
+
+<details>
+<summary>Q2: "Our camera sensor's MIPI output fails jitter spec in the full system, but the same module passes on the bench with a clean reference clock and lab supplies. Walk me through your failure analysis."</summary>
+<p><strong>參考答案骨架：</strong>The bench-versus-system A/B is already the most valuable data point: the module, its flex routing, and its internal design are effectively cleared, because the same hardware passes when the environment is clean. So the failure lives in what the system feeds the module — two paths: the reference clock, and the power rails. First I'd decompose the jitter instead of staring at a total number: random versus deterministic, and look for periodicity in the deterministic part, because a discrete tone points at a specific aggressor. Then I'd attack the reference path: put the system MCLK on a spectrum analyzer and look for sidebands close to the carrier — specifically inside the sensor PLL's loop bandwidth. That's the key filter for suspects: the sensor's internal PLL multiplies this reference up to the MIPI rate, and it will faithfully transfer — and near the loop bandwidth even amplify, via jitter peaking — any noise inside its band, while noise outside the band gets filtered anyway. Frequency multiplication also scales up in-band phase noise roughly by the multiplication factor. In parallel, the supply path: check decoupling against the recommended layout, and do the classic A/B of feeding the sensor rail from a clean external supply, or toggling suspected aggressors — switching regulators, and on a camera module specifically the VCM and OIS drivers — while watching whether the periodic jitter component and the MCLK sidebands move together. Every hypothesis gets its own on/off experiment, and I close the loop by re-running the MIPI eye and jitter decomposition at the contractual test point after the fix. The mindset: jitter at a multi-gigabit output is often born megahertz-and-below at the input — follow the clock tree upstream before blaming the high-speed lane.</p>
+<p><strong>加分點：</strong>開場就把 bench/system A/B 當證據使用（排除法）；RJ/DJ 分解＋找週期性；「loop bandwidth 是嫌疑人篩選器」的觀念（帶內傳遞/peaking 放大、帶外自動無罪）；camera 特有嫌疑犯（VCM/OIS、開關電源）；倍頻放大帶內 phase noise；收尾金句「born megahertz at the input」。</p>
+</details>
+
+<h2>7. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：TJ 記帳公式？RJ 與 DJ 的合併規則為何不同？</p>
+  <p class="a">A1：<strong>TJ(@BER 10⁻¹²) ≈ DJ_pp + 14×RJ_rms</strong>。DJ（有界、有兇手：DCD＋DDJ/ISI＋SJ＋BUJ）取 pk-pk <strong>線性直加</strong>——最壞情況會真的對齊；RJ（無界高斯）各源 σ 取 <strong>RSS</strong>（√Σσ²）——獨立隨機源不會同時最倒楣（1.2 與 1.6 合併是 2.0 不是 2.8），再 ×14 換 BER 10⁻¹² 等效 pk-pk。順序：先分開量→各自合併→最後相加。直方圖速讀：純鐘形＝RJ 主導；雙峰/多峰＝DJ 混入（每峰仍是小高斯，峰距≈DJ）——PT2 Ch.4。</p>
+  <p class="q">Q2：cycle-to-cycle / period / long-term jitter 的定義與各自的「受害者」？</p>
+  <p class="a">A2：差別只在「跟誰比」（PT2 Ch.4）：<strong>c2c</strong>＝跟上一週期比（J₁=t₂−t₁，典型統計約 10⁴ 週期取 max，最難量）→受害者＝<strong>下游 PLL</strong>（追不上高頻 jitter→timing skew）；<strong>period</strong>（=absolute）＝跟理想週期比→受害者＝<strong>setup/hold 與 cycle time 預算</strong>；<strong>long-term</strong>＝N 週期後跟理想時刻表比（主機板/繪圖慣例看 10–20 µs）→受害者＝<strong>顯示/擷取的位置對齊</strong>（PT2 經典：像素 (10,24) 跑到 (11,28)，畫面 running）。</p>
+  <p class="q">Q3：PLL 對 jitter 的三重角色？jitter transfer curve 上的三個關鍵特徵？</p>
+  <p class="a">A3：①<strong>濾波器</strong>：loop BW 以外的輸入 jitter 被滾降濾除（PLL 追不了快的）；②<strong>傳遞器＋放大器</strong>：帶內忠實傳遞，且 loop BW 附近有 <strong>jitter peaking</strong>（增益&gt;0 dB，PT2 實例：loop BW 約 2.5 MHz、峰值近 +2 dB）；③<strong>產生器</strong>：自己的 VCO/電源雜訊加一筆（jitter generation）。淨效果＝濾掉的 vs 自加的誰多。倍頻另放大帶內輸入 phase noise 約等於倍頻比。低雜訊 PLL 的代價：常在低頻多生雜訊（PT2 Ch.13）。</p>
+  <p class="q">Q4：串接 PLL 的實測代價與設計守則？</p>
+  <p class="a">A4：PT2 Ch.13 實測：106.25 MHz 晶振 37 ps（pk-pk c2c）串三顆 CY2308 ZDB → <strong>55→59→68 ps</strong>（中等）；但 phase noise 的「肩膀」（在 loop BW 約 1 MHz 處）逐級長高，<strong>五級後低頻增益近 30 dB</strong>——long-term 才是災難；第五顆輸出 71 ps 且直方圖<strong>雙峰</strong>＝tracking skew（輸入雜訊超出追蹤能力，best-effort）。守則：<strong>串接 ≤3 顆</strong>；避免 peaking 頻段重疊的相似 PLL；參考髒→第一顆放 jitter-attenuating PLL（窄帶＋陡滾降）；SSC 下游 loop BW 須顯著高於調變率；拿不到曲線就實測。</p>
+  <p class="q">Q5：時脈 jitter 超標的 FA 五步（PT2 Ch.4 診斷清單）？量測本身的陷阱？</p>
+  <p class="a">A5：①查 PLL 電源腳去耦/layout 對照建議值；②VDD 腳改餵外部乾淨電源做 A/B（最快的陽性確認）；③參考時脈上頻譜儀查 <strong>loop BW 以內</strong>的邊帶（帶內才會被傳遞/放大——判準是頻率位置不是幅度）；④查時脈走線旁的開關訊號（建議鄰放 ground trace 或加大間距）；⑤質疑量測與選型本身。量測陷阱：示波器 persistence 量 jitter「粗略且非常不準」——混入 trigger/retrace jitter；用 jitter 分析韌體/TIA 級手段（2002 忠告，現代改即時示波器＋jitter 分解軟體，原則不變）。心法：便宜的 A/B 排在昂貴的特性化前面。</p>
+</div>
+
+<h2>8. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 29（週五實作日）：把損耗與眼圖搬上示波器——persistence 疊眼、pattern A/B 與鄰道分離實驗</strong></p>
+  <p>連續兩天的紙上談兵該驗收了。明天帶著課程指引進公司：用示波器的 persistence/餘暉模式親手疊出一隻眼睛、用訊號產生器做 clock pattern vs PRBS 的 A/B（親眼看 ISI 分身合併）、重演鄰道 idle 的串擾消腫實驗，並且體會 PT2 的警告——示波器觸發 jitter 怎麼污染你的讀值、換觸發設定眼圖會「變臉」多少。沒有高速 serial 訊號源也沒關係：指引裡會給用一般函數產生器與數十 MHz 時脈就能做的替代實驗。帶上今天的速查表，明天見真章。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 28 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

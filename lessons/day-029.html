@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 29｜實作日：把眼圖疊上示波器——persistence 疊眼、ISI 現形術與「你的儀器在說謊」偵測課</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 29 天（週五實作日）</div>
+  <h1>Day 29：把眼圖疊上示波器——persistence 疊眼、ISI 現形術與「你的儀器在說謊」偵測課</h1>
+  <div class="meta">2026-08-21（五）｜預估操作時間：90～110 分鐘｜難度：★★★☆☆（治具比上週更簡單——一顆電阻一顆電容；難的是今天有一半時間在量「儀器自己的謊」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Day 25～28 講了損耗、眼圖、jitter 三部曲，今天全部搬上桌。全程只用公司標配：訊號產生器（雙通道更好）、百 MHz 級示波器、電源供應器、幾顆電阻電容、上週的排線治具。做完你要能夠：</p>
+  <ol>
+    <li>用示波器的 <strong>persistence（餘暉）模式親手疊出一隻眼睛</strong>，並且知道這種疊法「觸發點附近永遠假乾淨、離觸發越遠越糊」的原理與極限</li>
+    <li>用一顆 R 一顆 C 做出「頻寬受限的爛通道」，做 <strong>clock pattern vs 資料 pattern 的 A/B</strong>——親眼看 ISI 的「分身」怎麼從無到有（Day 23／27 的分身合併現場直播），並用 RC 公式<strong>算出</strong>分身間距、跟游標讀值對帳</li>
+    <li>重演 Day 27 的<strong>鄰道 idle 消腫實驗</strong>：攻擊源開/關、鎖頻/不鎖頻，看串擾以「相關 DJ」與「不相關 BUJ」兩種長相入侵眼圖（Day 28 家族樹的活體標本）</li>
+    <li>實地驗證 PT2 Ch.4 的警告：<strong>示波器 persistence 量 jitter「粗略且非常不準」</strong>——用 BNC 三通量出你這台示波器自己的 trigger jitter 底噪，學會用「平方相減」把儀器的謊從讀值裡扣掉</li>
+    <li>玩「換觸發設定看眼圖變臉」：觸發電平、觸發斜率、頻寬限制、地線長短——每轉一個鈕，眼圖就換一張臉；哪張才是訊號的真面目？（Perfect Timing II Ch.11 的 t<sub>DISPLAY</sub> 公式現場對帳）</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：三堂課的紙上人物，今天全部到案</h2>
+<p>Day 25/26 說訊號跑久了會累（skin effect＋tan δ 把邊沿磨鈍）；Day 27 說把百萬個 UI 疊起來看那張臉，眼皮的分身是 ISI、交叉點的胖是 jitter；Day 28 把 jitter 拆成家族樹，並埋了兩個伏筆——「persistence 量 jitter 很粗略」和「換個觸發、讀值就變」。今天的策略跟 Day 22 一樣是<strong>比例尺魔法</strong>：板上 GHz、ps 級的物理，用 kHz～MHz 訊號和 µs 級的 RC 通道放大一萬倍，讓百 MHz 示波器看得一清二楚——<strong>方程式一字不改，只換單位</strong>。另外今天有個新戲份：儀器本人也是被告。上半場量訊號，下半場量「量測本身」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在玩什麼</span>
+  <p>三件事。第一件：學會示波器的「長時間曝光」——persistence 模式就像相機開 B 快門拍馬路，車流過幾千次，軌跡疊成一張圖；訊號掃過幾千次，波形疊成一隻眼睛。第二件：故意把訊號餵進一條「太細的水管」（一顆電阻一顆電容組成的低通濾波器），水流快慢全看前一秒管子裡剩多少水——這就是 ISI 的本質：<strong>現在的邊沿，起點由過去的 pattern 決定</strong>；我們會讓分身一條一條長出來，還要用公式算出它們該相隔多遠。第三件（今天最值錢）：抓示波器說謊。示波器畫波形前要先「對齊」（觸發），但它自己的對齊有手震——手震會混進你的 jitter 讀值。我們用一條 BNC 三通把<strong>同一個訊號</strong>分給兩個通道，一個當對齊基準、一個當被告：兩路本是同一人，量出來卻有胖瘦——那個胖瘦就是<strong>儀器自己的手震</strong>，量出來、記下來、以後每次讀 jitter 先扣掉它。公式看不懂沒關係，記住三句話：「疊圖靠對齊、ISI 看起點、讀值先扣儀器的謊」，今天就及格了。</p>
+</div>
+
+<h2>1. 器材清單與行前準備</h2>
+<ul>
+  <li><strong>訊號產生器</strong>：方波／脈波，能調 duty（佔空比）；<strong>雙通道機型今天會用好用滿</strong>（CH2 當攻擊源與非同步觸發源）。若你的機型支援 <strong>PRBS／PN 序列輸出</strong>（不少現代任意波形產生器有），實驗 3 走主路線 A；不支援也完全沒關係——<strong>替代路線 B（duty 階梯法）</strong>全程只需要普通方波，效果一樣有說服力</li>
+  <li><strong>示波器</strong>：100 MHz 以上、雙通道、有 <strong>persistence（餘暉／afterglow）模式</strong>（最好有無限餘暉與色階 color grading）、游標與自動量測；10:1 探棒 ×2</li>
+  <li><strong>爛通道套件</strong>：電阻約 1 kΩ ×1、電容約 1 nF ×1（τ = RC ≈ 1 µs 量級；另備 470 pF、2.2 nF 各一顆換擋用）、麵包板或烙鐵</li>
+  <li><strong>BNC 三通（T 型）×1 ＋ BNC 線 ×2</strong>——實驗 5 的主角：把同一訊號分給兩個通道</li>
+  <li><strong>上週的 3 m 排線治具</strong>（Day 22 那條，含端接電阻）——實驗 4 直接沿用；沒留著就照 Day 22 第 2 節十分鐘重搭</li>
+  <li><strong>電源供應器</strong>：今天當配角——實驗 4 加碼段給攻擊 buffer 供電、或當「乾淨電源」的 A/B 對照組</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">行前必讀的三個坑（今天的坑一半在儀器上）</span>
+  <p><strong>坑一：persistence 疊的是「觸發對齊後」的圖。</strong>示波器每次掃描都把波形「對齊到觸發點」再疊上去——所以<strong>觸發點那一格永遠又利又乾淨</strong>，那是對齊造出來的假象，不是訊號真的乾淨；離觸發越遠，訊號自己的累積 jitter＋儀器的觸發手震一起入鏡，越來越糊。讀 jitter 一律在<strong>離觸發固定距離</strong>的位置讀，並在記錄表註明「離觸發 N 個週期」。</p>
+  <p><strong>坑二：探棒地線是今天的頭號嫌疑犯。</strong>Perfect Timing II Ch.11 算過一筆帳：一條約 3 吋的探棒地線迴圈電感約 <strong>150 nH</strong>，配 5 pF 探棒輸入電容，光地線就把可辨識的邊沿速度拖到約 <strong>2.9 ns</strong>——書中例子裡 1 ns 的真實邊沿，經過 400 MHz 示波器＋400 MHz 探棒＋長地線，螢幕上顯示 <strong>3.3 ns</strong>（t<sub>DISPLAY</sub> 公式，見實驗 6）。今天全程用<strong>短地針</strong>或把地夾夾在最近的地點；實驗 6 會故意用長地線示範「儀器造出來的振鈴」。</p>
+  <p><strong>坑三：頻寬限制鈕（BW Limit）記得檢查。</strong>很多示波器通道預設或被前一位使用者開了 20 MHz 頻寬限制——今天大部分實驗訊號在 MHz 級沒事，但實驗 6 要看快邊沿時它會把波形磨圓。PT2 Ch.11 的換算：示波器可辨識的最快邊沿 ≈ 0.338/f<sub>3dB</sub>（1 GHz 機器約 340 ps；重複波形要看得完整，頻寬至少要是訊號基頻的 3 倍；數位示波器取樣率對頻寬至少 4:1、10:1 以上才漂亮）。開工前把兩個通道的 BW Limit 都關掉、探棒補償校一次（方波平頂不翹不塌）。</p>
+</div>
+
+<h3>1.1 撐全場的三個數字</h3>
+<p>①爛通道的時間常數：<strong>τ = RC = 1 kΩ × 1 nF = 1 µs</strong>，對應頻寬 f<sub>3dB</sub> = 1/(2πτ) ≈ 159 kHz——這就是我們的「板材＋長走線」替身：PT2 Ch.4 說 ISI 從頻域看就是「頻寬不足造成的 pulse spreading」，一顆 RC 就是最純粹的頻寬不足。②資料速率兩擋：<strong>200 kb/s（UI = 5 µs = 5τ，輕損耗）與 1 Mb/s（UI = 1 µs = 1τ，重損耗）</strong>——同一條通道，換個速率就從好眼變爛眼（Day 26 的「損耗是每 UI 記帳」）。③RC 充放電的萬用公式：<strong>V(t) = V<sub>終</sub> ＋ (V<sub>起</sub> − V<sub>終</sub>)·e<sup>−t/τ</sup></strong>——今天所有「分身該差多遠」的預測都從它來。三個數字先寫在記錄本第一行。</p>
+
+<div class="formula">τ = RC（爛通道的記憶長度）　　f<sub>3dB</sub> = 1/(2πτ)<br>V(t) = V<sub>終</sub> + (V<sub>起</sub> − V<sub>終</sub>)·e<sup>−t/τ</sup>（起點不同 → 過閾值時刻不同 = DDJ/ISI）<br>過閾值時刻：t<sub>cross</sub> = τ·ln[(V<sub>終</sub> − V<sub>起</sub>)/(V<sub>終</sub> − V<sub>th</sub>)]<br>t<sub>DISPLAY</sub> = √(t²<sub>SIGNAL</sub> + t²<sub>PROBE</sub> + t²<sub>SCOPE</sub> + t²<sub>GROUND</sub>)（Perfect Timing II Ch.11）<br>σ<sub>訊號</sub> = √(σ²<sub>讀值</sub> − σ²<sub>儀器底噪</sub>)（jitter 的平方相減扣帳法，同 RSS 邏輯反向用）</div>
+<p><em>白話翻譯：第一二行是爛通道的個性——它有記憶（τ），電壓永遠「從現在的位置朝目標指數爬」。第三行是今天的主角公式：<strong>起點 V<sub>起</sub> 不一樣，爬到閾值 V<sub>th</sub> 的時刻就不一樣</strong>——這個時刻差就是 ISI 造成的 jitter，待會兒游標量出來要跟它對帳。第四行是 PT2 Ch.11 的名言：螢幕顯示的邊沿 = 訊號、探棒、示波器、地線四個人的邊沿<strong>平方相加開根號</strong>——儀器不夠快時，你看到的是儀器不是訊號。第五行把同一招反過來用：讀值裡混了儀器的手震（兩者獨立，變異數相加），所以<strong>真訊號 = 讀值平方減底噪平方再開根號</strong>——這是今天要帶回家的最重要一招。</em></p>
+
+<h2>2. 實驗 1（約 15 分）：persistence 疊眼基本功——先疊一隻「乾淨的眼」當基準</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：B 快門拍車流</span>
+  <p>persistence 模式就是示波器的 B 快門：每一次觸發掃過的波形不擦掉，全部留在螢幕上疊加；開色階（color grading）的話，走過越多次的地方越亮——亮度就是<strong>出現次數的直方圖</strong>，Day 27 說眼圖是「幾百萬個 UI 的疊影統計」，今天你親手把統計疊出來。先疊一個沒有 ISI、沒有串擾的乾淨方波當「健康基準照」，之後每個實驗都跟它比。</p>
+</div>
+
+<p><strong>接法：</strong>產生器 CH1 方波（0～3 V、500 kHz、duty 50%、邊沿最快）直接進示波器 CH1（探棒 10:1 或 BNC 直入皆可，記下用哪種）。示波器：CH1 觸發、上升沿、電平設在擺幅中點 1.5 V；時基調到一格約半個週期，畫面上看到約 2 個週期。</p>
+<ol>
+  <li><strong>開 persistence：</strong>顯示選單裡找 persistence／餘暉，先選 1～2 秒，再切「無限（infinite）」；有色階就開。讓它疊 30 秒。</li>
+  <li><strong>觀察三個位置：</strong>①觸發那個沿——細得像刀（假乾淨：對齊造的）；②下一個沿（半週期後）——略胖；③把時基延遲（horizontal delay）調到觸發後 100 µs（50 個週期後）再看——明顯糊一圈。<strong>用游標量三處的「糊寬」（pk-pk）記下來</strong>：這條「離觸發越遠越糊」的曲線，一半是產生器自己的累積 jitter（Day 28 的 long-term：醉漢走路）、一半是示波器的觸發手震——比例多少，實驗 5 見分曉。</li>
+  <li><strong>健康照存檔：</strong>清除餘暉、回到觸發點附近、重疊 30 秒，截圖存「乾淨基準」。眼高（上下軌間距）、交叉點位置（duty 50% → 應在垂直中點）用游標記錄。</li>
+</ol>
+
+<div class="card takeaway">
+  <span class="label">實驗 1 帶走的話</span>
+  <p>persistence 疊眼是「窮人的眼圖」：沒有 CDR、沒有 jitter 分解軟體，但機制跟高級儀器一模一樣——<strong>對齊、疊加、統計</strong>。它的兩條天生限制今天都會撞到：①對齊基準是「觸發那一沿」而不是理想時鐘，所以觸發手震全程參演；②它只給你「看」，不給你分解 RJ/DJ——PT2 Ch.4 說它「粗略且非常不準」就是這個意思。知道限制在哪，粗略工具也能做出可信的相對比較（A/B 同條件互比永遠成立）。</p>
+</div>
+
+<h2>3. 實驗 2（約 20 分）：一顆 R 一顆 C 的爛通道——損耗把眼睛吃掉的現場</h2>
+<p><strong>接法：</strong>產生器 CH1 → 串 1 kΩ → 節點 X → 1 nF 到地；示波器 CH1 探棒放節點 X。這就是我們的「長走線＋爛板材」替身（f<sub>3dB</sub> ≈ 159 kHz）。</p>
+<ol>
+  <li><strong>輕損耗擋：</strong>方波 100 kHz（UI = 5 µs = 5τ）。預測：每個 UI 內電壓有足夠時間爬到接近軌（5τ ≈ 99%），波形圓角但擺幅幾乎全額。疊 persistence 存圖。</li>
+  <li><strong>重損耗擋：</strong>切到 500 kHz（UI = 1 µs = 1τ）。預測：一個 UI 只爬得到 1−e<sup>−1</sup> ≈ 63% 的路程——<strong>擺幅縮水、邊沿變斜坡、圓角吃進眼裡</strong>。量：穩態擺幅 vs 輕損耗擋的擺幅比、10–90% 邊沿時間。這就是 Day 25/26 損耗三症狀（擺幅縮、邊沿鈍、眼變小）的桌上版——只是板上的兇手是 √f 的 skin effect 與線性 f 的 tan δ，這裡的兇手是一階 RC；症狀同款，數學不同款（誠實標註）。</li>
+  <li><strong>換擋玩：</strong>C 換 470 pF（τ 減半）與 2.2 nF（τ 加倍）各看一眼——「同一速率、換一塊板材」的替身。哪一擋眼睛先閉上？</li>
+</ol>
+
+<h2>4. 實驗 3（約 25 分）：ISI 現形術——clock pattern vs 資料 pattern 的 A/B（今天的主菜）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：起跑點不同的賽跑</span>
+  <p>Day 23/27 說過：固定的 1010 pattern 沒有 ISI，因為每個邊沿的「起跑點」都一樣；真資料有長 0 長 1，每個邊沿起跑前「電壓停在哪」由前面的 pattern 決定——起跑點低的爬到終點線（閾值）就晚到。今天讓這件事<strong>從無到有</strong>：先餵 1010（乾淨單軌跡），再餵有長短 run 的 pattern（分身一條條長出來），最後用 RC 公式算「起跑點差多少 → 晚到多少」，跟游標讀值對帳。</p>
+</div>
+
+<h3>主路線 A（產生器支援 PRBS／PN 序列時）</h3>
+<ol>
+  <li>產生器 CH1 輸出 PRBS（PN7 即可）、位元率 1 Mb/s、0～3 V，經過實驗 2 的 RC 通道；<strong>產生器的 SYNC／CH2 輸出設為位元時鐘</strong>接示波器 CH2 當觸發。</li>
+  <li>示波器：CH2 觸發、時基一格約 0.2 µs（畫面約 2 UI）、persistence 無限、疊 1 分鐘——<strong>一隻真正的資料眼圖出現</strong>：上下軌各裂成好幾條（不同 run 長度的穩態各不同）、交叉點散成一片、內眼比實驗 2 的 clock 眼小一大圈。</li>
+  <li><strong>A/B 的靈魂步驟：</strong>把 CH1 從 PRBS 切回同速率方波（= clock pattern，500 kHz 方波即 1 Mb/s 的 1010）——<strong>分身瞬間合併成單軌跡</strong>，眼睛張開。切回 PRBS，分身再現。這就是 Day 27 說的「切 clock pattern 讓 ISI 現形/隱形」，也是 PT2 Ch.4 那句「DDJ 常見於資料流、在離散時脈上不典型」的實驗版。</li>
+  <li>游標量：PRBS 眼的交叉點水平散開寬度（這就是 DDJ 的 pk-pk）、最高與最低的「1」電平差（垂直 ISI）。記錄表伺候。</li>
+</ol>
+
+<h3>替代路線 B（只有普通方波也能做——duty 階梯法）</h3>
+<p>原理：用 duty 控制「邊沿起跑前放電多久」——duty 越大、低電平時間越短、放電越不完全、上升沿起跑點越高。<strong>手動掃 duty，persistence 幫你把每一條軌跡都留著</strong>，分身照樣一條條長出來：</p>
+<ol>
+  <li>沿用實驗 2 接法：500 kHz、0～3 V 方波過 RC；示波器 CH1 觸發、觸發電平 1.5 V、<strong>上升沿</strong>；persistence 無限。</li>
+  <li>duty 依序停在 <strong>20% → 35% → 50% → 65% → 80%</strong>，每一擋停 10 秒讓它疊圖（觸發電平不要動）。</li>
+  <li><strong>預測（先畫再看）：</strong>五擋的上升沿起跑點 V<sub>起</sub> 各不同（duty 大 → 低電平時間短 → 放電少 → V<sub>起</sub> 高）→ 螢幕上疊出<strong>五條起點不同、彼此平行爬升的軌跡</strong>——這五條就是 ISI 分身的「慢動作解剖」：真 PRBS 裡它們是同時出現的，這裡我們讓它一次長一條。</li>
+  <li><strong>對帳（今天最有成就感的一格）：</strong>挑 duty 20% 與 80% 兩條，游標量它們<strong>過 1.5 V 的時刻差</strong>。理論值用 t<sub>cross</sub> = τ·ln[(3 − V<sub>起</sub>)/(3 − 1.5)] 各算一次再相減（V<sub>起</sub> 由放電時間算：V<sub>起</sub> = V<sub>高穩態</sub>·e<sup>−t<sub>低</sub>/τ</sup>，練習 1 有完整算例）。理論與游標對到兩成內就是教科書級成功——<strong>你剛用一顆電阻一顆電容，定量重現了 DDJ</strong>。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 2／3 治具與預測：RC 爛通道讓 ISI 分身現形</text>
+  <!-- jig -->
+  <rect x="36" y="44" width="104" height="46" rx="8" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="88" y="64" text-anchor="middle" font-size="11" fill="#374151">訊號產生器</text>
+  <text x="88" y="80" text-anchor="middle" font-size="9" fill="#6b7280">方波/PRBS 0–3V</text>
+  <line x1="140" y1="67" x2="196" y2="67" stroke="#374151" stroke-width="2"/>
+  <rect x="196" y="57" width="52" height="20" rx="4" fill="#fef3c7" stroke="#b45309"/>
+  <text x="222" y="71" text-anchor="middle" font-size="9.5" fill="#b45309">1 kΩ</text>
+  <line x1="248" y1="67" x2="330" y2="67" stroke="#374151" stroke-width="2"/>
+  <circle cx="290" cy="67" r="3.5" fill="#0e7490"/>
+  <text x="290" y="55" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0e7490">節點 X（CH1 探棒）</text>
+  <line x1="290" y1="67" x2="290" y2="96" stroke="#374151" stroke-width="2"/>
+  <line x1="278" y1="96" x2="302" y2="96" stroke="#374151" stroke-width="2.4"/>
+  <line x1="281" y1="102" x2="299" y2="102" stroke="#374151" stroke-width="2.4"/>
+  <text x="322" y="102" font-size="9.5" fill="#374151">1 nF 到地</text>
+  <text x="290" y="126" text-anchor="middle" font-size="9.5" fill="#7c3aed" font-weight="bold">τ = 1 µs、f₃dB ≈ 159 kHz——「頻寬不足」的最純替身（PT2 Ch.4：ISI = pulse spreading）</text>
+  <rect x="470" y="44" width="250" height="70" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="595" y="64" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f4c5c">觸發來源二選一</text>
+  <text x="595" y="81" text-anchor="middle" font-size="9" fill="#374151">路線 A：產生器 SYNC（位元時鐘）→ CH2 觸發</text>
+  <text x="595" y="96" text-anchor="middle" font-size="9" fill="#374151">路線 B：CH1 自觸發（電平 1.5 V、上升沿）</text>
+  <!-- panel: clock vs prbs eye -->
+  <rect x="40" y="146" width="330" height="180" rx="10" fill="#0b1220"/>
+  <text x="205" y="166" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#e2e8f0">A/B 之一：clock pattern（1010）——分身合併</text>
+  <path d="M60,296 C80,296 86,206 110,206 L150,206 C174,206 180,296 204,296 L244,296 C268,296 274,206 298,206 L338,206" fill="none" stroke="#22d3ee" stroke-width="2.4"/>
+  <text x="205" y="316" text-anchor="middle" font-size="9" fill="#a5f3fc">每個沿起跑點相同 → 單一軌跡、眼乾淨</text>
+  <rect x="392" y="146" width="330" height="180" rx="10" fill="#0b1220"/>
+  <text x="557" y="166" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#e2e8f0">A/B 之二：PRBS 過同一通道——分身現形</text>
+  <g fill="none" stroke-width="1.6" opacity="0.9">
+    <path d="M412,296 C436,296 442,206 466,206 L502,206 C526,206 532,296 556,296" stroke="#f472b6"/>
+    <path d="M412,278 C436,278 442,212 466,212 L502,212 C526,212 532,286 556,286" stroke="#f9a8d4"/>
+    <path d="M412,262 C436,262 442,224 466,224 L502,224 C526,224 532,272 556,272" stroke="#fbcfe8"/>
+    <path d="M556,296 C580,296 586,206 610,206 L646,206 C670,206 676,296 700,296" stroke="#f472b6"/>
+    <path d="M556,286 C580,286 586,214 610,214 L646,214 C670,214 676,282 700,282" stroke="#f9a8d4"/>
+  </g>
+  <line x1="392" y1="251" x2="722" y2="251" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="712" y="246" text-anchor="end" font-size="8" fill="#94a3b8">閾值 1.5 V</text>
+  <path d="M540,238 L576,238" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="557" y="234" text-anchor="middle" font-size="8.5" fill="#fbbf24" font-weight="bold">交叉點散開 = DDJ pk-pk（游標量它）</text>
+  <text x="557" y="316" text-anchor="middle" font-size="9" fill="#f9a8d4">起跑點各不同 → 上下軌裂成多條、內眼縮小</text>
+  <!-- duty ladder -->
+  <rect x="40" y="342" width="682" height="146" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="381" y="364" text-anchor="middle" font-size="11" font-weight="bold" fill="#7c3aed">替代路線 B：duty 階梯法——讓分身一次長一條（persistence 幫你留著）</text>
+  <g fill="none" stroke-width="1.8">
+    <path d="M90,462 C130,462 150,398 210,392" stroke="#7c3aed"/>
+    <path d="M90,448 C130,448 150,398 210,391" stroke="#8b5cf6"/>
+    <path d="M90,436 C130,436 150,397 210,390" stroke="#a78bfa"/>
+    <path d="M90,426 C130,426 150,396 210,389" stroke="#c4b5fd"/>
+    <path d="M90,418 C130,418 150,395 210,388" stroke="#ddd6fe"/>
+  </g>
+  <line x1="80" y1="428" x2="230" y2="428" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="238" y="432" font-size="8.5" fill="#64748b">1.5 V</text>
+  <text x="96" y="478" font-size="8.5" fill="#7c3aed">duty 20%（起跑最低、最晚到）</text>
+  <text x="96" y="412" font-size="8.5" fill="#a78bfa">duty 80%（起跑最高、最早到）</text>
+  <path d="M118,433 L156,433" stroke="#dc2626" stroke-width="1.4"/>
+  <text x="137" y="445" text-anchor="middle" font-size="8.5" fill="#dc2626" font-weight="bold">Δt = DDJ</text>
+  <text x="480" y="404" font-size="9.5" fill="#374151">預測公式：V<tspan font-size="7" dy="2">起</tspan><tspan dy="-2"> = V</tspan><tspan font-size="7" dy="2">高</tspan><tspan dy="-2">·e</tspan><tspan font-size="7" dy="-4">−t低/τ</tspan></text>
+  <text x="480" y="424" font-size="9.5" fill="#374151">t<tspan font-size="7" dy="2">cross</tspan><tspan dy="-2"> = τ·ln[(3−V</tspan><tspan font-size="7" dy="2">起</tspan><tspan dy="-2">)/(3−1.5)]</tspan></text>
+  <text x="480" y="448" font-size="9.5" font-weight="bold" fill="#0f4c5c">游標量 Δt ↔ 公式算 Δt：對到兩成內</text>
+  <text x="480" y="466" font-size="9.5" fill="#0f4c5c">= 你定量重現了 DDJ（不用 BERT、不用 PRBS）</text>
+</svg>
+<figcaption>圖 1：實驗 2/3 治具（RC 爛通道）與兩條路線的預測。左上：clock pattern 起跑點固定，單軌跡乾淨眼；右上：PRBS 起跑點隨 run 長度改變，上下軌裂成多條、交叉點散開（散開寬度即 DDJ）。下：duty 階梯法用手動掃 duty＋persistence 把分身「一次長一條」，並用 RC 公式對帳——ISI 的本質「起點由歷史決定」被拆到可以用游標量。</figcaption>
+</figure>
+
+<h2>5. 實驗 4（約 15 分）：鄰道串擾入侵眼圖——相關 vs 不相關的兩張臉</h2>
+<p>Day 27 講過「鄰道 idle、眼圖消腫」的 A/B，今天配上 Day 28 的家族樹語言重演一次。<strong>接法：</strong>沿用 Day 22 的排線治具——受害線走我們的「資料」（實驗 3 的 RC 輸出接進排線受害對，或直接餵 500 kHz 方波），攻擊對由<strong>產生器 CH2</strong> 驅動（0～3 V 方波）。示波器照實驗 3 的設定疊受害訊號的眼。</p>
+<ol>
+  <li><strong>Idle 基準：</strong>CH2 輸出關閉，疊 30 秒存圖——眼的「消腫照」。</li>
+  <li><strong>不相關攻擊（BUJ 的長相）：</strong>CH2 開、頻率設一個跟資料<strong>無整數關係</strong>的值（例如 730 kHz）。預測：耦合噪聲跟資料不同步，落點在眼圖上「到處都是」——上下軌<strong>均勻增厚一圈</strong>、交叉點胖一圈。這就是 Day 28 說的 BUJ：與自身 pattern 不相關、但有界（幅度封頂在耦合係數 × 攻擊擺幅，上週實測 k 值直接拿來預測）。</li>
+  <li><strong>相關攻擊（DJ 的長相）：</strong>CH2 改成資料速率的<strong>整數倍或同頻</strong>（例如同 500 kHz，若兩通道可同步鎖相更好）。預測：噪聲每次都打在眼圖的<strong>同一個位置</strong>——不再是均勻增厚，而是軌跡上長出「固定的疙瘩」或邊沿的固定偏移——同一股耦合，鎖了相就從「霧」變「痣」。<strong>這格 A/B 是 Day 28 家族樹最直觀的註腳：相關性決定它記哪個科目，也決定它在眼圖上的長相。</strong></li>
+  <li>順手記：BUJ 擋的軌跡增厚量 ÷ 攻擊擺幅 ≈ 上週量的耦合係數 k 嗎？對上就是兩週實驗互相背書。</li>
+</ol>
+
+<h2>6. 實驗 5（約 20 分）：抓儀器說謊——trigger jitter 底噪的自首實驗（今天最值錢）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：讓儀器量它自己</span>
+  <p>PT2 Ch.4 原文：用示波器 persistence 量 jitter「雖能提供粗略量測，但非常不準確、且受觸發不穩定所苦」。今天不背這句話，我們<strong>量給自己看</strong>。招數：BNC 三通把同一個訊號分成兩路——CH1 當觸發、CH2 當被告。兩路是<strong>同一個訊號</strong>，理論上 CH2 的邊沿該永遠出現在同一位置、細得像刀；實際上它有寬度——<strong>那個寬度全是示波器自己的（觸發電路手震＋通道雜訊＋時基誤差），跟訊號一點關係都沒有</strong>。量出這個底噪，以後所有 jitter 讀值先跟它「平方相減」，扣掉儀器的謊再說話。</p>
+</div>
+
+<ol>
+  <li><strong>接法：</strong>產生器 CH1（500 kHz 方波、邊沿最快）→ BNC 三通 → 兩條等長 BNC 線分進示波器 CH1、CH2（50 Ω 直入或同款探棒皆可，兩路務必同款）。CH1 觸發、電平 1.5 V。</li>
+  <li><strong>量底噪：</strong>persistence 疊 CH2 在觸發點附近的邊沿 1 分鐘，游標量糊寬 pk-pk；有自動統計就開「edge 位置／delay 的 σ」量測讀 rms 值。記為 <strong>σ<sub>儀器</sub></strong>。典型量級：入門數位示波器的觸發 jitter 在<strong>數十 ps 到 ns 級</strong>（機型差異大，「量級」）——跟你待會要量的訊號 jitter 比一比，很多時候<strong>根本同一個量級</strong>，這就是 PT2 說「非常不準確」的定量版。</li>
+  <li><strong>看謊變大：</strong>把時基延遲調到觸發後 10、100、1000 個週期，各量一次 CH2 糊寬。糊寬 vs 延遲的曲線 = 產生器的累積 jitter（醉漢走路，√N 成長趨勢）＋時基誤差——把實驗 1 步驟 2 那條曲線的成因拆帳。</li>
+  <li><strong>扣帳演練：</strong>回到實驗 3 的 PRBS/duty 眼圖，量交叉點糊寬讀值 σ<sub>讀</sub>，套 σ<sub>訊號</sub> = √(σ²<sub>讀</sub> − σ²<sub>儀器</sub>)。若 σ<sub>儀器</sub> 超過 σ<sub>讀</sub> 的三分之一，在記錄表寫上「<strong>此讀值受儀器污染，僅供 A/B 相對比較</strong>」——這一行字就是量測素養（現代正規做法：即時示波器單次長擷取＋jitter 分解軟體，完全繞開重複觸發，Day 28 講過，2002 年 TIA 建議的現代上修版）。</li>
+</ol>
+
+<h2>7. 實驗 6（約 15 分）：換觸發／換接法看眼圖變臉——哪張才是真面目？</h2>
+<p>同一個訊號，四個旋鈕各轉一下，persistence 各疊 30 秒，四張截圖並排：</p>
+<ol>
+  <li><strong>觸發電平搬家：</strong>從擺幅中點（斜率最陡處）搬到接近頂部（斜率平緩處）。預測：<strong>整張圖變糊</strong>——觸發時刻的不確定性 ≈ 雜訊電壓 ÷ 邊沿斜率（σ<sub>t</sub> = v<sub>n</sub>/slew rate），在斜率小的地方觸發，同樣的電壓雜訊換算成更多的時間手震，而且這筆帳<strong>加在畫面上每一條軌跡上</strong>。結論：觸發永遠掛在最陡的地方。</li>
+  <li><strong>觸發斜率切換：</strong>上升沿改下降沿觸發——若訊號有 DCD（duty ≠ 50%），眼圖的交叉點位置會<strong>平移</strong>；兩張圖對照可把 DCD 從其他 jitter 裡分出來（Day 28 家族樹：DCD 用眼圖看最明顯，PT2 Ch.4）。</li>
+  <li><strong>BW Limit 開關：</strong>開 20 MHz 限制看快邊沿——邊沿變慢、過衝消失、「眼看起來更乾淨」。<strong>更乾淨 = 更假</strong>：t<sub>DISPLAY</sub> 公式裡 t<sub>SCOPE</sub> 被人為加大，把訊號的真實行為濾掉了。什麼時候反而該開？量低頻 ripple、想壓掉頻外雜訊做相對比較時——工具無罪，記帳要誠實。</li>
+  <li><strong>地線長短 A/B（PT2 Ch.11 現場對帳）：</strong>探棒改用那條約 3 吋的鱷魚夾長地線量快邊沿——邊沿變慢、還可能多出<strong>振鈴</strong>（地線電感 ≈ 150 nH 量級與探棒電容的 LC 諧振，t<sub>GROUND</sub> ≈ 3.4·√(LC) ≈ 2.9 ns 量級，PT2 Ch.11 算例）；換回短地針，振鈴消失。<strong>螢幕上那圈振鈴是量測造出來的，板子上根本沒有</strong>——FA 時多少人追殺過這隻不存在的鬼。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">實驗 5／6：儀器的謊從哪來、怎麼量、怎麼扣（PT2 Ch.4 警告＋Ch.11 公式實地版）</text>
+  <!-- top: tee experiment -->
+  <rect x="40" y="40" width="330" height="190" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="205" y="62" font-size="11" font-weight="bold" fill="#7c3aed" text-anchor="middle">BNC 三通自首實驗：同一訊號、兩路分身</text>
+  <rect x="56" y="78" width="86" height="38" rx="6" fill="#fff" stroke="#374151" stroke-width="1.6"/>
+  <text x="99" y="94" text-anchor="middle" font-size="9.5" fill="#374151">產生器</text>
+  <text x="99" y="108" text-anchor="middle" font-size="8.5" fill="#6b7280">500 kHz 方波</text>
+  <line x1="142" y1="97" x2="188" y2="97" stroke="#374151" stroke-width="2"/>
+  <circle cx="196" cy="97" r="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.6"/>
+  <text x="196" y="82" text-anchor="middle" font-size="8.5" fill="#b45309">三通</text>
+  <path d="M204,93 L268,74" stroke="#0e7490" stroke-width="2" fill="none"/>
+  <path d="M204,101 L268,120" stroke="#7c3aed" stroke-width="2" fill="none"/>
+  <text x="292" y="76" font-size="9" fill="#0e7490">CH1（觸發基準）</text>
+  <text x="292" y="124" font-size="9" fill="#7c3aed">CH2（被告）</text>
+  <text x="205" y="150" text-anchor="middle" font-size="9" fill="#374151">兩路 = 同一訊號 → CH2 邊沿理論上零糊寬</text>
+  <text x="205" y="167" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#dc2626">實際的糊寬 = 100% 儀器自己的手震 σ_儀器</text>
+  <text x="205" y="190" text-anchor="middle" font-size="9.5" fill="#0f4c5c" font-weight="bold">扣帳：σ_訊號 = √(σ²_讀值 − σ²_儀器)</text>
+  <text x="205" y="207" text-anchor="middle" font-size="8.5" fill="#6b7280">σ_儀器 &gt; 讀值的 1/3 → 讀值只可做 A/B 相對比較</text>
+  <!-- top right: blur vs delay -->
+  <rect x="392" y="40" width="330" height="190" rx="10" fill="#0b1220"/>
+  <text x="557" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">離觸發越遠越糊：假乾淨與醉漢走路</text>
+  <g fill="none" stroke-width="2">
+    <path d="M425,200 L425,96" stroke="#4ade80"/>
+    <path d="M520,200 L514,110 M520,200 L526,110" stroke="#22d3ee"/>
+    <path d="M636,200 L616,124 M636,200 L656,124" stroke="#f472b6"/>
+  </g>
+  <text x="425" y="215" text-anchor="middle" font-size="8.5" fill="#4ade80">觸發點：刀刃</text>
+  <text x="425" y="226" text-anchor="middle" font-size="8" fill="#86efac">（對齊造的假乾淨）</text>
+  <text x="520" y="215" text-anchor="middle" font-size="8.5" fill="#22d3ee">+10 週期：微糊</text>
+  <text x="636" y="215" text-anchor="middle" font-size="8.5" fill="#f9a8d4">+1000 週期：一片霧</text>
+  <text x="557" y="86" text-anchor="middle" font-size="8.5" fill="#94a3b8">糊寬 = 訊號累積 jitter（√N 醉漢走路）＋儀器觸發手震＋時基誤差</text>
+  <!-- bottom left: slew trigger -->
+  <rect x="40" y="246" width="330" height="204" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="205" y="268" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">觸發電平位置 = 雜訊換 jitter 的匯率</text>
+  <path d="M70,420 C120,418 150,380 178,330 C198,296 222,282 300,278" fill="none" stroke="#0e7490" stroke-width="2.4"/>
+  <line x1="70" y1="356" x2="320" y2="356" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="5 3"/>
+  <text x="328" y="360" font-size="8.5" fill="#16a34a">中點：最陡</text>
+  <line x1="70" y1="288" x2="320" y2="288" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="5 3"/>
+  <text x="328" y="292" font-size="8.5" fill="#dc2626">近頂：平緩</text>
+  <g stroke="#374151" stroke-width="1">
+    <line x1="176" y1="348" x2="176" y2="364"/><line x1="187" y1="348" x2="187" y2="364"/>
+    <line x1="236" y1="280" x2="236" y2="296"/><line x1="284" y1="280" x2="284" y2="296"/>
+  </g>
+  <text x="182" y="380" text-anchor="middle" font-size="8.5" fill="#16a34a">Δt 小</text>
+  <text x="260" y="312" text-anchor="middle" font-size="8.5" fill="#dc2626">同樣的電壓雜訊 → Δt 大</text>
+  <text x="205" y="404" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#0f4c5c">σ_t = v_n ÷ (dV/dt)：觸發永遠掛最陡處</text>
+  <text x="205" y="440" text-anchor="middle" font-size="8.5" fill="#6b7280">同一條公式也解釋：邊沿被損耗磨鈍後 jitter 自動變大（Day 26 伏筆）</text>
+  <!-- bottom right: ch11 -->
+  <rect x="392" y="246" width="330" height="204" rx="10" fill="#fffbeb" stroke="#ca8a04"/>
+  <text x="557" y="268" text-anchor="middle" font-size="11" font-weight="bold" fill="#854d0e">PT2 Ch.11：螢幕邊沿 = 四個人的合成</text>
+  <text x="557" y="294" text-anchor="middle" font-size="10" fill="#374151">t_DISPLAY = √(t²_訊號＋t²_探棒＋t²_示波器＋t²_地線)</text>
+  <text x="557" y="322" text-anchor="middle" font-size="9" fill="#374151">書中算例：1 ns 真邊沿＋400 MHz 示波器/探棒（各 840 ps）</text>
+  <text x="557" y="338" text-anchor="middle" font-size="9" fill="#374151">＋3 吋地線（150 nH＋5 pF → 2.9 ns）→ 螢幕顯示 3.3 ns</text>
+  <text x="557" y="362" text-anchor="middle" font-size="9" fill="#854d0e">換算：可辨識邊沿 ≈ 0.338/f₃dB（1 GHz 機 ≈ 340 ps）</text>
+  <text x="557" y="378" text-anchor="middle" font-size="9" fill="#854d0e">重複波形頻寬 ≥ 3× 基頻；取樣率 ≥ 4:1（10:1 佳）</text>
+  <text x="557" y="404" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#b91c1c">長地線的振鈴是量測造的鬼——板上沒有</text>
+  <text x="557" y="428" text-anchor="middle" font-size="8.5" fill="#6b7280">（2002 年數字；現代 MIPI ps 級邊沿需 GHz 級示波器＋主動探棒，原則不變）</text>
+</svg>
+<figcaption>圖 2：儀器誠信四格漫畫。左上：BNC 三通讓儀器量自己的手震（σ<sub>儀器</sub>），之後所有讀值用平方相減扣帳。右上：persistence 的天生性格——觸發點假乾淨、離觸發越遠越糊。左下：觸發電平放在斜率小處，電壓雜訊以 1/(dV/dt) 的匯率兌換成時間手震。右下：Perfect Timing II Ch.11 的 t<sub>DISPLAY</sub> 合成公式與 3 吋地線 = 2.9 ns 的著名算例。</figcaption>
+</figure>
+
+<h2>8. 量測記錄表（拍照存檔，週日測驗會用到）</h2>
+<table>
+  <tr><th>#</th><th>項目</th><th>理論預測</th><th>實測值</th><th>備註</th></tr>
+  <tr><td>1</td><td>乾淨方波：觸發點／+50 週期的糊寬</td><td>觸發點 ≈ 刀刃（假乾淨）</td><td></td><td>離觸發距離要註記</td></tr>
+  <tr><td>2</td><td>RC 通道 100 kHz vs 500 kHz 擺幅比</td><td>≈ 99% vs ≈ 63%（1−e<sup>−UI/τ</sup>）</td><td></td><td>τ 用實測 RC</td></tr>
+  <tr><td>3</td><td>PRBS（或 duty 階梯）分身條數與交叉點散寬</td><td>散寬 = DDJ pk-pk</td><td></td><td>clock pattern 時應合併</td></tr>
+  <tr><td>4</td><td>duty 20% vs 80% 的 t<sub>cross</sub> 差</td><td>公式算值（練習 1）</td><td></td><td>對到兩成內 = 成功</td></tr>
+  <tr><td>5</td><td>鄰道攻擊：不鎖頻的增厚量 ÷ 攻擊擺幅</td><td>≈ 上週耦合係數 k</td><td></td><td>BUJ：均勻霧</td></tr>
+  <tr><td>6</td><td>鄰道攻擊：鎖頻後噪聲的長相</td><td>固定位置的痣（DJ 化）</td><td></td><td>相關性 = 科目分家</td></tr>
+  <tr><td>7</td><td>三通實驗：σ<sub>儀器</sub>（觸發點糊寬）</td><td>數十 ps～ns 級（機型而異）</td><td></td><td>全天讀值的地板</td></tr>
+  <tr><td>8</td><td>糊寬 vs 延遲（10/100/1000 週期）</td><td>√N 趨勢成長</td><td></td><td>醉漢走路</td></tr>
+  <tr><td>9</td><td>觸發電平中點 vs 近頂的糊寬比</td><td>≈ 斜率反比</td><td></td><td>σ_t = v_n/slew</td></tr>
+  <tr><td>10</td><td>長地線 vs 短地針：邊沿與振鈴</td><td>長地線更慢＋振鈴（Ch.11）</td><td></td><td>量測造的鬼</td></tr>
+</table>
+<p>第 4、7 兩列是今天的靈魂：一列證明你能<strong>預測</strong> ISI、一列證明你知道<strong>儀器的地板</strong>在哪。都拿下的話，在備註欄寫「量測素養 ✓」。</p>
+
+<h2>9. 實務案例：今天的手感值多少錢</h2>
+<ul>
+  <li><strong>NB 主機板：</strong>驗證報告上一張眼圖，你現在會先問三件事：①觸發／參考時鐘是什麼（自觸發？外部 clock？CDR 恢復時鐘？）——同一訊號、三種對齊，三張不同的臉；②量測系統的 jitter 底噪多少、有沒有從讀值扣掉（σ 平方相減）；③探棒接法（地線多長、主動還是被動）——Ch.11 的 t<sub>DISPLAY</sub> 帳算過沒有。這三問就是「會按儀器的人」與「懂量測的人」的分界線。</li>
+  <li><strong>鏡頭模組：</strong>MIPI 眼圖規範量測（週 13 正課）用的是專用 D-PHY 分析方案，但 bring-up 現場常常只有一台普通示波器——今天的技能全數適用：persistence 疊 LP 模式的慢邊沿、用 duty/pattern A/B 判斷眼窄是 ISI（flex 太長/太細）還是 jitter（時鐘髒）、用三通實驗確認「量到的糊」有幾成是儀器。<strong>模組廠治具與整機量出的眼圖對不上時，第一個要對齊的往往不是 DUT，是兩邊的量測系統</strong>——觸發方式、探棒、接地一項項對，Day 28 練習 5 的 bench/system A/B 才有意義。</li>
+  <li><strong>面試：</strong>「How do you measure jitter?」多數人背儀器名字。你可以講今天的故事：怎麼用三通量出儀器底噪、為什麼觸發點附近的乾淨是假的、讀值怎麼平方相減、以及什麼情況下 persistence 讀值只能當相對比較用——這是動過手的人才有的答案。</li>
+</ul>
+
+<h2>10. 動手練習（實驗數據分析）</h2>
+<p>用今天的實測值作答（沒做完就用理論值），算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（ISI 對帳全流程）：RC 通道 τ = 1 µs、方波 0→3 V、500 kHz（週期 2 µs）、閾值 1.5 V。假設高電平穩態充到 3 V（簡化）。(a) duty 20%（低電平時間 1.6 µs）時，上升沿起跑點 V<sub>起</sub> 是多少？(b) duty 80%（低電平時間 0.4 µs）時呢？(c) 兩條軌跡過 1.5 V 的時刻各是多少？時刻差（= 這兩條分身的 DDJ）是多少？(d) 若把資料速率再加倍（τ 相對變長），這個 DDJ 會變大還是變小？為什麼「損耗越重、ISI 越兇」？</summary>
+<p><strong>解：</strong>(a) 放電 1.6 µs：V<sub>起</sub> = 3·e<sup>−1.6/1</sup> = 3×0.202 ≈ <strong>0.61 V</strong>。(b) 放電 0.4 µs：V<sub>起</sub> = 3·e<sup>−0.4/1</sup> = 3×0.670 ≈ <strong>2.01 V</strong>——起跑點差了 1.4 V！(c) t<sub>cross</sub> = τ·ln[(3−V<sub>起</sub>)/(3−1.5)]：duty 20% → ln(2.39/1.5) = ln 1.59 ≈ <strong>0.47 µs</strong>；duty 80% → ln(0.99/1.5) = ln 0.66 ≈ <strong>−0.41 µs</strong>——負值的意思是它「起跑時已經在閾值之上」（2.01 V &gt; 1.5 V），這條軌跡的上升沿根本不再穿越閾值、或在放電段尾端才穿越——實驗上你會看到它的交叉行為跟別條完全不同（這正是重度 ISI 會直接吃掉整個轉態的示範）。取一條中間的 duty 50%（放電 1 µs → V<sub>起</sub> ≈ 1.10 V）來算：ln(1.90/1.5) ≈ 0.236 → t<sub>cross</sub> ≈ 0.24 µs，與 duty 20% 的差 ≈ <strong>0.23 µs</strong>——UI 的兩成以上，游標量得清清楚楚。(d) 更兇。速率加倍後 UI/τ 變小，一個 UI 內充放電更不完全，起跑點的散布範圍更大 → t<sub>cross</sub> 散得更開。通式：<strong>ISI 的兇殘程度由「通道記憶長度 τ 相對於 UI」決定</strong>——板上翻譯：損耗越重（等效頻寬越低）或速率越高，眼圖的水平分身越散，這就是 Day 26「同一塊板、速率翻倍就翻車」的時域機制。</p>
+</details>
+
+<details>
+<summary>練習 2（儀器扣帳）：三通實驗量得 σ<sub>儀器</sub> = 22 ps（rms）。之後量某時脈的邊沿，讀值 σ<sub>讀</sub> = 30 ps。(a) 訊號真實的 σ 是多少？(b) 若另一台機器量同一訊號讀到 σ = 21 ps，該懷疑什麼？(c) 推導「儀器底噪 ≤ 讀值 1/3 則污染 &lt; 6%」這條經驗法則。(d) 為什麼扣帳用平方相減，而不是直接相減？</summary>
+<p><strong>解：</strong>(a) σ<sub>訊號</sub> = √(30² − 22²) = √(900−484) = √416 ≈ <strong>20 ps</strong>——讀值 30 裡有整整三分之一的「寬度」是儀器貢獻的，直接報 30 就是把儀器的手震算到 DUT 頭上。(b) 讀值 21 ps <strong>小於</strong>這台機器該有的底噪下限？不可能量出比底噪還小的合成值（√(σ²+22²) ≥ 22）——先懷疑：那台機器的底噪其實更低（機器不同、底噪要各自量）、或量測定義不同（rms vs pk-pk、離觸發距離不同、樣本數不同）。<strong>跨機器比 jitter，先對齊量測條件，再各扣各的底噪。</strong>(c) 設 σ<sub>儀器</sub> = σ<sub>訊號</sub>/3：讀值 = √(σ² + σ²/9) = σ·√(10/9) ≈ 1.054σ——高估約 5.4%，工程上可接受；底噪一旦到訊號的一半，高估 12%；同量級時高估 41%。(d) 因為訊號 jitter 與儀器 jitter 是<strong>獨立隨機源</strong>——獨立高斯的合成規則是變異數相加（Day 28 的 RSS），所以逆運算是變異數相減。直接線性相減（30−22=8）會嚴重低估：獨立源不會每次都同向疊加，線性減法把「偶爾同向」當成「永遠同向」扣，方向錯了。</p>
+</details>
+
+<details>
+<summary>練習 3（Ch.11 對帳）：你要量一個 2 ns 邊沿。手上：200 MHz 示波器＋200 MHz 探棒＋3 吋鱷魚夾地線（依 PT2 算例取 t<sub>GROUND</sub> ≈ 2.9 ns）。(a) 螢幕會顯示幾 ns？誤差幾成？(b) 換短地針（t<sub>GROUND</sub> 忽略不計）後顯示多少？(c) 若目標是「顯示誤差 &lt; 5%」，這套 200 MHz 系統最慢能量的邊沿是多少？(d) 2002 年的這套算式搬到現代 camera 案場，哪些數字要上修？</summary>
+<p><strong>解：</strong>(a) t<sub>SCOPE</sub> = t<sub>PROBE</sub> = 0.338/0.2 GHz = 1.69 ns。t<sub>DISPLAY</sub> = √(2² + 1.69² + 1.69² + 2.9²) = √(4+2.86+2.86+8.41) = √18.1 ≈ <strong>4.3 ns</strong>——高估超過一倍，這個數字報出去就是事故。(b) √(4+2.86+2.86) = √9.7 ≈ <strong>3.1 ns</strong>——仍高估 56%：地線只是最大戶，示波器與探棒本身也不夠快。(c) 誤差 &lt; 5% 需要 √(t²<sub>s</sub>+2×1.69²)/t<sub>s</sub> ≤ 1.05 → t²<sub>s</sub> ≥ 5.72/0.1025 → t<sub>s</sub> ≥ <strong>約 7.5 ns</strong>——200 MHz 系統只配量 7.5 ns 以上的邊沿（好記法：儀器合成邊沿要比訊號快 3 倍以上）。(d) 上修三處：①現代 D-PHY/C-PHY 邊沿在百 ps 級以下 → 示波器要 GHz 級起跳、配主動差動探棒（輸入電容 &lt;1 pF 級）；②鱷魚夾地線在這種頻率是完全不能出現的東西——探點要有原生接地（探針同軸接地環/焊入式探點）；③0.338 這個換算係數依機器響應（高斯 vs 平頂）在 0.34～0.45 之間浮動，看儀器手冊。<strong>但公式本身一個字不用改</strong>——平方合成的物理五十年不變。</p>
+</details>
+
+<details>
+<summary>練習 4（觸發匯率）：邊沿在擺幅中點的斜率是 0.5 V/µs，接近頂部只剩 0.1 V/µs。系統雜訊 5 mV rms。(a) 兩個觸發位置各自貢獻多少觸發 jitter（rms）？(b) 這筆 jitter 會出現在畫面的哪裡——觸發那一沿，還是其他所有沿？(c) 用這條公式解釋：為什麼「損耗把邊沿磨鈍」之後，就算時鐘本身沒變髒，接收端量到的 jitter 也自動變大？(d) camera 場景：LP 模式的慢邊沿 vs HS 模式的快邊沿，哪個對同樣的電壓雜訊更「敏感」？</summary>
+<p><strong>解：</strong>(a) σ<sub>t</sub> = v<sub>n</sub>/(dV/dt)：中點 5 mV ÷ 0.5 V/µs = <strong>10 ns</strong>；近頂 5 mV ÷ 0.1 V/µs = <strong>50 ns</strong>——搬個觸發位置，手震差五倍（本題用 µs/mV 級數字配合今天的桌上實驗，板上是同式換 ps/GHz 單位）。(b) <strong>其他所有沿。</strong>觸發那一沿被強制對齊（假乾淨），觸發時刻的不確定性讓「整條時間軸」相對訊號抖動——所以糊出現在離觸發點有距離的每一個地方。這就是為什麼實驗 6 換觸發電平時「整張圖」變糊。(c) 雜訊過閾值的時刻不確定性 = v<sub>n</sub>/slew——邊沿被損耗磨鈍 = slew 變小 = <strong>同樣的電壓雜訊換到更多的時間抖動</strong>。這是「幅度域問題自動變時域問題」的匯率公式：損耗（Day 25/26）、雜訊（垂直的）與 jitter（水平的）在接收端的判決點上是同一筆帳的兩種記法。(d) LP 模式邊沿慢（規範裡是刻意放慢的，量級 ns 級）→ 對電壓雜訊的時間匯率更差；但 LP 的 UI 也長得多，抖幾 ns 無傷大雅。真正的殺手是 HS 的 ps 級 UI 配上「被 flex 損耗磨鈍的邊沿」——UI 縮小與 slew 變差兩頭夾擊，這就是週 13 要正面處理的戰場。</p>
+</details>
+
+<details>
+<summary>練習 5（綜合 FA 判讀）：同事給你一張「MIPI clock lane 眼圖交叉點很糊」的截圖求救。你注意到：量測用被動探棒＋約 8 cm 鱷魚夾地線、自觸發在訊號上、persistence 疊了 10 分鐘、示波器是入門級 200 MHz 機型。列出你按順序要做的四個「先審儀器」動作，各自對應今天哪個實驗；全部排除後，下一步的「審訊號」A/B 是什麼？</summary>
+<p><strong>解：</strong>①<strong>三通量底噪</strong>（實驗 5）：這台機器的觸發 jitter 地板多少？糊寬跟地板同量級的話，這張圖只證明了儀器的存在。②<strong>查頻寬帳</strong>（實驗 6-3／練習 3）：MIPI clock 的邊沿速度 vs 0.338/200 MHz ≈ 1.7 ns——若邊沿比這快，糊與鈍都可能是 t<sub>DISPLAY</sub> 造的，這台機器根本不配量它（誠實回報「需借 GHz 級示波器＋主動探棒」）。③<strong>地線 A/B</strong>（實驗 6-4）：8 cm 鱷魚夾換短地針重疊一次——振鈴或糊少一圈的話，之前的圖作廢。④<strong>觸發審查</strong>（實驗 6-1／實驗 1）：觸發電平在不在最陡處？糊寬是在離觸發多遠的地方讀的？自觸發下觸發沿假乾淨、遠處混觸發手震——換到固定延遲位置、統一條件重量。全部排除後的審訊號 A/B（Day 27/28 的套路）：<strong>pattern A/B</strong>（送 clock pattern 本來就該乾淨——真 clock lane 沒有 ISI，若糊依舊，嫌疑指向 jitter 而非 ISI）＋<strong>鄰道 idle A/B</strong>（關資料 lane 看消腫 → BUJ/串擾）＋<strong>電源 A/B</strong>（外部乾淨電源餵 PLL，PT2 Ch.4 診斷第 2 步）。心法一句話：<strong>先讓儀器自證清白，再審訊號</strong>——順序反了，你會拿著儀器的手震去 debug 一塊無辜的板子。</p>
+</details>
+
+<h2>11. 面試怎麼考</h2>
+<p>量測素養是 camera HW 面試的照妖鏡——會背 jitter 定義的人很多，知道「讀值裡有多少是儀器」的人很少。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "If all you have is a basic oscilloscope — no BERT, no jitter-decomposition software — how would you assess jitter on a clock, and how much would you trust the number?"</summary>
+<p><strong>參考答案骨架：</strong>I'd use persistence mode as a poor man's eye diagram, but with three disciplines. First, characterize the instrument before the signal: split the same clock through a BNC tee into two channels, trigger on one, measure the edge blur on the other. Since both channels carry the identical signal, any blur is the scope's own trigger jitter and channel noise — that's my measurement floor. Second, be deliberate about where I read: the edge at the trigger point always looks razor sharp because the scope aligns every acquisition to it — that's an artifact, not signal quality. I read at a fixed, documented delay from the trigger, and I keep the trigger level at the steepest part of the edge, because trigger uncertainty is voltage noise divided by slew rate. Third, correct the number: signal and instrument jitter are independent, so they add in quadrature — the true sigma is the square root of the measured sigma squared minus the floor squared. If the floor is more than about a third of the reading, I stop reporting absolute numbers and only use the setup for A/B comparisons, which remain valid because the instrument error is common to both. And I'd flag the known limitation upfront: scope-persistence jitter measurement is rough — the classic guidance is to use dedicated jitter-analysis instruments, today that means a real-time scope with jitter decomposition doing single-shot long captures, which sidesteps repetitive-trigger contamination entirely. So: I can get a defensible relative answer and a floor-corrected estimate on a basic scope, but for a spec-compliance number I'd escalate to proper equipment.</p>
+<p><strong>加分點：</strong>「characterize the instrument before the signal」開場定調；三通自量底噪是動過手的證據；quadrature subtraction＋1/3 rule 給出定量判準；「A/B remains valid」顯示知道粗工具的正確用途；主動報告工具極限並指路正規做法——資深的誠實。</p>
+</details>
+
+<details>
+<summary>Q2: "During bring-up, a camera flex's data eye looks marginal on the bench scope. How do you tell whether the closure is real — ISI from the channel, crosstalk, jitter — or an artifact of the measurement setup?"</summary>
+<p><strong>參考答案骨架：</strong>I'd run two interrogations in order: first the instrument, then the signal. Instrument first, because every hour spent debugging a measurement artifact is wasted: check the bandwidth budget — displayed rise time is the root-sum-square of the signal, probe, scope, and ground-lead contributions, so a long ground clip alone can add nanosecond-class slowdown and even ringing that doesn't exist on the board; switch to a short ground spring or a proper coax attachment and re-capture. Then measure the scope's own trigger-jitter floor with a tee-split of the same signal, and verify where the eye is being read relative to the trigger, since the trigger edge is artificially clean. Once the setup is cleared, the signal interrogation is a set of cheap A/B experiments that separate the mechanisms by their signatures. Pattern A/B: switch the source to a clock-like pattern — ISI needs pattern history, so if the multiple edge traces collapse into one, the closure is channel bandwidth, pointing at flex length, trace width, or stackup; if the blur survives on a fixed pattern, it's jitter, pointing upstream at the clock and supplies. Aggressor A/B: idle the neighboring lanes and the actuator drivers — if the eye fattens back up, it's coupling; and whether the noise smears uniformly or sits at fixed positions in the eye tells me if the aggressor is uncorrelated or harmonically related to my data rate, which narrows the suspect list fast. Each experiment is minutes on the bench, and together they route the fix to completely different owners — layout, clock tree, or system integration — so I want the classification airtight before anyone starts respinning anything.</p>
+<p><strong>加分點：</strong>「instrument first, then signal」的順序哲學；RSS 頻寬帳與地線鬼故事（Ch.11 素材）；pattern A/B 與 aggressor A/B 各自的判別簽名（分身合併 = ISI、均勻霧 vs 固定痣 = 相關性分科）；收尾把 FA 結論接到「不同 owner、不同修法」的系統視角。</p>
+</details>
+
+<h2>12. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：persistence 疊眼的原理與兩條天生限制？</p>
+  <p class="a">A1：原理＝<strong>對齊（觸發）→ 疊加 → 統計</strong>（色階亮度 = 出現次數直方圖）——窮人的眼圖。限制：①對齊基準是觸發沿而非理想時鐘 → <strong>觸發點永遠假乾淨</strong>（對齊造的）、離觸發越遠越糊（訊號累積 jitter＋儀器觸發手震一起入鏡）→ 讀值必須註明「離觸發 N 週期」；②只能看、不能分解 RJ/DJ——PT2 Ch.4：persistence 量 jitter「粗略且非常不準確、受觸發不穩定所苦」（現代正解：即時示波器單次長擷取＋jitter 分解軟體）。但 A/B 同條件相對比較永遠成立。</p>
+  <p class="q">Q2：桌上怎麼用一顆 R 一顆 C 定量重現 ISI？</p>
+  <p class="a">A2：RC 低通當「頻寬不足」通道（PT2 Ch.4：ISI 頻域觀點 = pulse spreading）。關鍵式：V(t) = V<sub>終</sub>＋(V<sub>起</sub>−V<sub>終</sub>)e<sup>−t/τ</sup>——<strong>邊沿起跑點 V<sub>起</sub> 由前面 pattern 的充放電歷史決定，起跑點不同 → 過閾值時刻不同 = DDJ</strong>。驗證二法：①PRBS＋位元時鐘觸發 → 真眼圖、上下軌裂多條；②duty 階梯法（20→80% 手動掃、persistence 留軌）→ 分身一次長一條，t<sub>cross</sub> = τ·ln[(V<sub>終</sub>−V<sub>起</sub>)/(V<sub>終</sub>−V<sub>th</sub>)] 算時刻差跟游標對帳。A/B 靈魂：切回 clock pattern 分身<strong>合併</strong>——ISI 需要 pattern 歷史。</p>
+  <p class="q">Q3：怎麼量出示波器自己的 jitter 底噪？讀值怎麼扣帳？</p>
+  <p class="a">A3：<strong>BNC 三通</strong>把同一訊號分給 CH1（觸發）與 CH2（被告）——同一訊號理論零糊寬，CH2 實際糊寬 = 100% 儀器手震 σ<sub>儀器</sub>（觸發電路＋通道雜訊＋時基）。扣帳：獨立源變異數相加的逆運算——<strong>σ<sub>訊號</sub> = √(σ²<sub>讀</sub> − σ²<sub>儀器</sub>)</strong>（線性相減是錯的）。經驗法則：底噪 ≤ 讀值 1/3 → 污染 &lt;6% 可接受；同量級 → 高估 41%，讀值只可做 A/B 相對比較。跨機器比 jitter：先對齊條件、各扣各的底噪。</p>
+  <p class="q">Q4：PT2 Ch.11 的 t_DISPLAY 公式與著名算例？</p>
+  <p class="a">A4：<strong>t<sub>DISPLAY</sub> = √(t²<sub>SIGNAL</sub>＋t²<sub>PROBE</sub>＋t²<sub>SCOPE</sub>＋t²<sub>GROUND</sub>)</strong>——螢幕邊沿是四人合成。換算：可辨識邊沿 ≈ 0.338/f<sub>3dB</sub>（1 GHz 機 ≈ 340 ps）；重複波形頻寬 ≥3× 基頻；取樣率:頻寬 ≥4:1（10:1 佳）。算例：1 ns 真邊沿＋400 MHz 示波器/探棒（各 840 ps）＋3 吋地線（150 nH＋5 pF → t<sub>GROUND</sub>≈2.9 ns）→ 顯示 <strong>3.3 ns</strong>。長地線的振鈴是量測造的鬼。現代上修：ps 級邊沿需 GHz 示波器＋主動探棒（&lt;1 pF）＋原生接地探點——公式不變。</p>
+  <p class="q">Q5：觸發電平位置為什麼影響整張眼圖？串擾在眼圖上「相關 vs 不相關」的長相差異？</p>
+  <p class="a">A5：觸發時刻不確定性 <strong>σ<sub>t</sub> = v<sub>n</sub>/(dV/dt)</strong>——斜率是電壓雜訊兌換時間抖動的匯率，觸發要掛最陡處；這筆手震加在「觸發沿以外的所有位置」（觸發沿被強制對齊）。同一公式解釋：損耗磨鈍邊沿 → slew↓ → 同樣雜訊換更多 jitter（幅度域問題自動變時域問題）。串擾長相：攻擊源與資料<strong>不相關</strong>（頻率無整數關係）→ 噪聲均勻塗滿眼圖 = 霧（BUJ）；<strong>鎖頻相關</strong> → 噪聲固定位置 = 痣（DJ 化）——相關性決定記帳科目也決定長相。</p>
+</div>
+
+<h2>13. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 30（週六新觀念課，純閱讀不需儀器）：損耗與眼圖收官——通道殺成這樣，為什麼系統還能跑？均衡（EQ）的直覺與損耗預算的整合</strong></p>
+  <p>這一週我們把眼睛弄閉了三次：skin effect、tan δ、ISI。但現實裡 10 Gb/s 的訊號天天跑過比我們的 RC 更爛的通道——因為發射端和接收端都在「作弊」：發射端把高頻預先加料（pre-emphasis/de-emphasis）、接收端把被吃掉的頻率補回來（CTLE 的直覺版）。明天用這一週學過的頻域語言把「均衡」一次講通——它不是魔法，是拿雜訊預算去贖回頻寬的交易；然後把損耗、串擾、jitter 三本帳整合成一張「通道預算表」，替下週的 S 參數量測週鋪路。今天的記錄表拍照存檔，週日 20 題測驗（第 5 週總驗收）見。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 29 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

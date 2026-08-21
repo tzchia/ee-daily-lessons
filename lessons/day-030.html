@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 30｜均衡（EQ）——通道殺成這樣，系統為什麼還能跑？拿雜訊預算贖回頻寬的交易，與三本帳合成一張通道預算表</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 30 天（週六新觀念課・純閱讀不需儀器）</div>
+  <h1>Day 30：均衡（EQ）——通道殺成這樣，系統為什麼還能跑？拿雜訊預算贖回頻寬的交易，與三本帳合成一張通道預算表</h1>
+  <div class="meta">2026-08-22（六）｜預估學習時間：90 分鐘｜難度：★★★☆☆（觀念課，沒有儀器也沒有新數學——用這一週學過的頻域語言，把工業界最重要的兩個「作弊器」一次講通）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>第 5 週我們把眼睛弄閉了三次：skin effect（Day 25）、tan δ（Day 26）、ISI（Day 27/29）。今天回答那個懸了一整週的問題——<strong>現實裡 10 Gb/s 的訊號天天跑過比我們的 RC 更爛的通道，為什麼沒死？</strong>讀完你要能夠：</p>
+  <ol>
+    <li>用一句話說出均衡（equalization, EQ）的本質：<strong>通道的損耗是「確定性的、可預測的」失真，凡是確定性的就可以預先反著做回來</strong>——EQ 救得了 ISI，救不了隨機雜訊</li>
+    <li>講清楚發射端的 <strong>pre-emphasis／de-emphasis</strong>：轉態位元加重、連續位元減輕，等於在發射前先把「通道會偏食」這件事反著補償掉；並知道兩者的差別與為什麼工業界常用 de-emphasis</li>
+    <li>講清楚接收端的 <strong>CTLE</strong>（連續時間線性等化器）直覺版：一個「增益蹺蹺板」——低頻壓、高頻抬，用一個 zero 去抵通道的 pole；並知道它的代價：<strong>雜訊和串擾不分敵我一起被放大</strong></li>
+    <li>建立「<strong>拿雜訊預算贖回頻寬</strong>」的交易框架：EQ 不是白吃的午餐，它把水平方向的 ISI 問題換成垂直方向的雜訊問題——帳還是要付，只是換一個科目付</li>
+    <li>把損耗、串擾、jitter 三本帳整合成一張<strong>通道預算表</strong>（eye/timing budget）：確定性的線性相加、隨機的 RSS 再乘倍數，並從 Perfect Timing II Ch.3 的實測故事學到「worst-case 直加會把預算算爆」的教訓——替下週 S 參數量測週鋪路</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：這一週，我們親手把眼睛弄閉了</h2>
+<p>Day 25/26 用頻域語言證明通道是個「偏食的低通」：skin effect 吃 √f、tan δ 吃 f，頻率越高吃越兇。Day 27 說這種偏食在時域的長相叫 ISI——邊沿的起跑點被歷史 pattern 綁架，眼皮長出分身。Day 28 把 jitter 拆成家族樹：隨機的 RJ 用 σ 記帳、確定性的 DJ 用 pk-pk 記帳，合帳用 RSS。Day 29 你（將要）在公司親手用一顆 RC 把這一切疊上示波器。今天是收官：既然通道的病這麼清楚，<strong>藥呢？</strong>藥有兩帖，一帖在發射端、一帖在接收端，統稱均衡（EQ）。這堂課不需要任何新數學——你這一週學的頻域語言剛好夠用。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在講什麼（公式看不懂的人只讀這格也夠）</span>
+  <p>把通道想成一副「偏食的耳朵」：低音全收、高音打折。你要隔著這副耳朵講話給人聽，有兩招。<strong>第一招（發射端）：說話前先自己把高音的部分喊大聲一點</strong>——像對重聽的長輩講話會刻意加重子音（「ㄙ」「ㄊ」這些高頻音），因為你知道那些會被他的耳朵吃掉；等耳朵吃完打折，聽到的剛好是正常音量。這叫 pre-emphasis（預強調）。<strong>第二招（接收端）：戴助聽器</strong>——助聽器不是把所有聲音變大，是「專門把高音抬起來」的音響 EQ 旋鈕；通道吃掉多少高頻，它就補回多少。這叫 CTLE。但助聽器有個天生缺陷：<strong>它分不出高音裡哪些是人話、哪些是背景噪音——一起放大</strong>。所以 EQ 是一場交易：你用「垂直方向的雜訊變大」去贖回「水平方向的眼睛張開」。最後一節我們把這一週的三個敵人（損耗、串擾、jitter）寫成一張家庭收支表——每人領多少預算、超支了找誰——這張表就是所有高速介面規格書的骨架。記住三句話就及格：「<strong>確定性的失真才救得回來、EQ 不分敵我、預算表確定性直加＋隨機 RSS</strong>」。</p>
+</div>
+
+<h2>1. 核心洞見：為什麼損耗「救得回來」，雜訊救不回來</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：可逆與不可逆</span>
+  <p>把一疊鈔票摺成紙飛機——可以攤平復原，因為「怎麼摺的」有規則可循，反著做就好。把同一疊鈔票燒掉——復原不了，因為燒是隨機的破壞，沒有「反著燒」這種操作。通道損耗是摺紙：它對每個頻率打的折扣是<strong>固定的、可量的、每次都一樣的</strong>（今天量 S21 是這條曲線，明天量還是這條——下週的主角）。雜訊是火：每一次都不一樣，沒有規則可以反著做。<strong>EQ 的全部原理就一句話：把通道的折扣表拿來，反著開一張「補償表」。</strong></p>
+</div>
+
+<p>講正式一點：通道是一個 <strong>LTI（線性非時變）系統</strong>——它對訊號做的事完全由頻率響應 H(f) 描述（Day 25/26 的語言：|H(f)| 隨頻率下降、相位也在偏）。LTI 的失真是<strong>確定性的（deterministic）</strong>：同樣的輸入永遠得到同樣的輸出。所以原則上只要串接一個「反通道」E(f)，讓 E(f)·H(f) ≈ 1（在我們關心的頻帶內平坦），失真就被抵消——ISI 消失、分身合併、眼睛張開。</p>
+
+<div class="formula">通道：H(f)（低通，|H| 隨 f 下降）<br>均衡器：E(f) ≈ 1/H(f)（在關心的頻帶內）<br>合成：E(f)·H(f) ≈ 平坦 → ISI ≈ 0<br>但雜訊 n 在通道之後才加入：輸出 = E·(H·x + n) = x + E·n　←　<strong>雜訊被 E 放大了</strong></div>
+<p><em>白話翻譯：第一到三行是「反著摺回來」——通道吃掉的高頻，均衡器等量補回，合起來像一條透明的線。第四行是今天最重要的一行帳：雜訊是在通道「之後」（接收端附近）混進來的，它沒被通道打折，卻要跟著訊號一起過均衡器的高頻放大——<strong>訊號回到原狀，雜訊卻被放大了</strong>。這就是「拿雜訊預算贖回頻寬」的數學出處。公式看不懂沒關係，記住：EQ 補的是通道吃掉的，但也順手把通道之後才混進來的髒東西一起養大。</em></p>
+
+<div class="card pitfall">
+  <span class="label">先把界線畫清楚：EQ 救得了誰、救不了誰</span>
+  <p><strong>救得了：</strong>ISI／DDJ（損耗造成的分身——確定性、pattern 相關，Day 27）、通道帶來的邊沿磨鈍（slew 變差→jitter 匯率變差那條帳，Day 29 練習 4，邊沿救回來、匯率就救回來）。<strong>救不了：</strong>RJ（隨機，無規則可反做）、接收端熱雜訊（在 EQ 之後或跟著被放大）、串擾（它不是「我的訊號被通道打折」，是「別人的訊號闖進來」——CTLE 甚至會把它放大，見第 4 節）。<strong>面試最愛考這條界線</strong>：把「EQ 能不能解決 jitter」丟給你，正解是拆開答——DDJ/ISI 那部分能、RJ 那部分不能，而且 CTLE 還可能讓高頻雜訊換算出更多 jitter。</p>
+</div>
+
+<h2>2. 第一帖藥：發射端 pre-emphasis／de-emphasis——說話前先把子音喊大聲</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：對重聽長輩講話的技巧</span>
+  <p>回想 Day 27 的賽跑比喻：ISI 的根源是「連續同位元讓電壓爬到很遠的地方，下一個轉態要從很遠的起跑點追回來」。發射端的解法簡單粗暴：<strong>轉態的那一個位元，用全力打；連續重複的位元，故意收力。</strong>為什麼收力？因為連續位元本來就會讓電壓越爬越遠——你收力，它就爬不遠，下一個轉態的起跑點就不會被拖後腿。從頻域看是同一件事的另一面：轉態多 = 高頻成分，重複多 = 低頻成分；「轉態加重、重複收力」翻譯成頻域就是<strong>高頻加料、低頻打折——剛好跟通道的偏食反著來</strong>。</p>
+</div>
+
+<h3>2.1 機制：看著自己剛送出的位元決定這一位的力道</h3>
+<p>實作上發射端根本不用做傅立葉——它只要「記得上一個位元」：這一位跟上一位<strong>不同</strong>（轉態位，transition bit）→ 全擺幅輸出 V<sub>a</sub>；這一位跟上一位<strong>相同</strong>（重複位）→ 縮小擺幅輸出 V<sub>b</sub>（V<sub>b</sub> &lt; V<sub>a</sub>）。這其實是一個最簡單的 2-tap FIR 濾波器（本位減掉一小份前一位），但直覺上就是「轉態大力、重複收力」八個字。兩個名詞的差別只在<strong>參考點</strong>：</p>
+<ul>
+  <li><strong>De-emphasis（去強調）：</strong>轉態位維持全擺幅，把<strong>重複位往下壓</strong>。峰值電壓不變、平均功率下降。工業界常用——例如 PCIe 規範的發射端就是用 de-emphasis 定義的：Gen1 為 −3.5 dB，Gen2 增加 −6 dB 檔位（dB 值 = 20·log₁₀(V<sub>b</sub>/V<sub>a</sub>)，−6 dB 即重複位擺幅約為轉態位的一半）。</li>
+  <li><strong>Pre-emphasis（預強調）：</strong>重複位維持原擺幅，把<strong>轉態位往上抬</strong>。頻譜形狀跟 de-emphasis 等價（差一個整體增益），但峰值電壓變大——受電源軌和 driver 能力限制，所以在「峰值受限」的世界裡大家多半選 de-emphasis。兩個詞在口語中常混用，面試時能講出「差別在參考點與峰值/平均功率」就是加分。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：TX de-emphasis——轉態大力、重複收力，把通道的偏食反著補回來</text>
+  <!-- top: waveform without EQ -->
+  <rect x="36" y="40" width="340" height="210" rx="10" fill="#0b1220"/>
+  <text x="206" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">沒有 EQ：pattern 1 1 1 0 1 0 0 1</text>
+  <text x="206" y="78" text-anchor="middle" font-size="9" fill="#94a3b8">發射波形（上）→ 過爛通道後（下）</text>
+  <!-- tx ideal -->
+  <path d="M56,120 L146,120 L146,150 L176,150 L176,120 L206,120 L206,150 L266,150 L266,120 L296,120" fill="none" stroke="#22d3ee" stroke-width="2"/>
+  <text x="330" y="128" font-size="8.5" fill="#22d3ee">TX：全部同力</text>
+  <!-- rx: ISI -->
+  <path d="M56,196 C76,196 100,192 146,191 C160,191 166,226 176,228 C186,226 196,200 206,199 C216,201 224,232 246,234 L266,235 C280,233 288,201 296,199" fill="none" stroke="#f472b6" stroke-width="2"/>
+  <text x="330" y="200" font-size="8.5" fill="#f9a8d4">RX：長 1 爬太遠</text>
+  <text x="330" y="212" font-size="8.5" fill="#f9a8d4">轉態追不回來</text>
+  <text x="206" y="245" text-anchor="middle" font-size="8.5" fill="#f9a8d4">起跑點被歷史綁架 = ISI 分身（Day 27/29）</text>
+  <!-- top right: with de-emphasis -->
+  <rect x="392" y="40" width="340" height="210" rx="10" fill="#0b1220"/>
+  <text x="562" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">加 de-emphasis：同一個 pattern</text>
+  <text x="562" y="78" text-anchor="middle" font-size="9" fill="#94a3b8">轉態位全擺幅、重複位收力（壓低）</text>
+  <!-- tx de-emphasized: bit1 full, bits2-3 reduced, bit4(0) full transition, bit5(1) full, bit6(0) full, bit7(0 repeat) reduced, bit8(1) full -->
+  <path d="M412,116 L442,116 L442,128 L502,128 L502,150 L532,150 L532,116 L562,116 L562,150 L592,150 L592,138 L622,138 L622,116 L652,116" fill="none" stroke="#4ade80" stroke-width="2"/>
+  <text x="672" y="122" font-size="8.5" fill="#4ade80">轉態位：全力</text>
+  <text x="672" y="134" font-size="8.5" fill="#86efac">重複位：收力</text>
+  <!-- rx: clean -->
+  <path d="M412,196 C430,196 446,197 472,198 C486,198 492,226 502,228 C512,226 520,200 532,199 C544,201 550,230 562,231 C574,229 580,201 592,200 C604,200 610,228 622,229 C632,227 640,199 652,198" fill="none" stroke="#4ade80" stroke-width="2"/>
+  <text x="672" y="200" font-size="8.5" fill="#86efac">RX：起跑點</text>
+  <text x="672" y="212" font-size="8.5" fill="#86efac">全部拉齊</text>
+  <text x="562" y="245" text-anchor="middle" font-size="8.5" fill="#86efac">通道吃完打折，剛好是平的 → 分身合併、眼睛張開</text>
+  <!-- bottom: frequency view -->
+  <rect x="36" y="266" width="696" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="384" y="290" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">同一件事的頻域長相：TX 頻譜 × 通道 = 平坦</text>
+  <!-- axes -->
+  <line x1="80" y1="460" x2="700" y2="460" stroke="#64748b" stroke-width="1.4"/>
+  <line x1="80" y1="460" x2="80" y2="310" stroke="#64748b" stroke-width="1.4"/>
+  <text x="700" y="478" text-anchor="end" font-size="9" fill="#64748b">頻率 →（到 Nyquist = 位元率/2）</text>
+  <text x="66" y="316" text-anchor="end" font-size="9" fill="#64748b">增益(dB)</text>
+  <!-- channel rolloff -->
+  <path d="M80,340 C220,344 340,360 480,398 C560,420 640,444 690,455" fill="none" stroke="#f472b6" stroke-width="2.4"/>
+  <text x="600" y="415" font-size="9.5" fill="#db2777" font-weight="bold">通道 H(f)：偏食的低通（skin √f＋tanδ f）</text>
+  <!-- TX de-emph spectrum: low freq suppressed, high freq full -->
+  <path d="M80,412 C220,410 340,398 480,368 C560,352 640,336 690,330" fill="none" stroke="#0e7490" stroke-width="2.4" stroke-dasharray="7 4"/>
+  <text x="160" y="432" font-size="9.5" fill="#0e7490" font-weight="bold">TX de-emphasis：低頻壓下去、高頻不動</text>
+  <!-- composite flat -->
+  <path d="M80,378 C260,380 460,381 690,382" fill="none" stroke="#16a34a" stroke-width="2.6"/>
+  <text x="384" y="372" text-anchor="middle" font-size="10" fill="#16a34a" font-weight="bold">合成 ≈ 平坦 → 無偏食 = 無 ISI</text>
+  <text x="384" y="498" text-anchor="middle" font-size="9" fill="#6b7280">代價藏在這張圖裡：合成平坦線的高度比通道的低頻增益「矮一截」——整體擺幅變小了（用眼高換眼寬）</text>
+</svg>
+<figcaption>圖 1：上排時域——同一個 pattern，右邊的發射端在重複位收力，讓電壓不爬過頭，通道打折後每個轉態的起跑點自動拉齊。下排頻域——de-emphasis 的頻譜（低頻壓、高頻平）跟通道的偏食（低頻平、高頻掉）相乘剛好變平坦。注意合成線的高度：比不做 EQ 時的低頻擺幅矮——<strong>de-emphasis 不是把高頻變大，是把低頻犧牲到跟高頻一樣慘，換取「大家一樣」</strong>。</figcaption>
+</figure>
+
+<div class="card takeaway">
+  <span class="label">De-emphasis 的帳要誠實記</span>
+  <p>圖 1 下排那句話值得再講一次：發射端受電源軌限制，峰值就那麼高，所以 de-emphasis 實際上是「<strong>把低頻壓下來遷就高頻</strong>」——合成響應平坦了，但整體高度（＝接收端拿到的擺幅）變矮。−6 dB 的 de-emphasis 意味著長串重複位元時接收端只拿到約一半的差動擺幅——<strong>眼高換眼寬</strong>。擺幅變小 = 對雜訊的裕度變小 = 又是那筆「拿雜訊預算贖回頻寬」的交易，只是這次在發射端先付。</p>
+</div>
+
+<h2>3. 第二帖藥：接收端 CTLE——助聽器的蹺蹺板</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：音響上的 EQ 旋鈕</span>
+  <p>CTLE（Continuous-Time Linear Equalizer，連續時間線性等化器）就是接收端的助聽器：一個「低頻壓、高頻抬」的類比濾波器，增益曲線像蹺蹺板——左邊（低頻）沉下去、右邊（高頻）翹起來，翹起的量剛好補通道掉下去的量。它為什麼做得到？回想 Day 29 的 RC 爛通道：一顆 RC 是「一個 pole」——增益從 f<sub>3dB</sub> 開始以固定斜率下滑。CTLE 的招數是<strong>放一個 zero 在同一個頻率</strong>——zero 是 pole 的鏡像，讓增益從那個頻率開始以同樣斜率上爬。pole 下滑、zero 上爬，兩相抵消，合成平坦。真實通道不是單一 pole，但「用 zero 抵 pole」的直覺完全成立——CTLE 的可調參數（peaking 量，常見量級為幾 dB 到十幾 dB）就是在調「蹺蹺板翹多高」。</p>
+</div>
+
+<div class="formula">最簡 CTLE：E(f) = (1 + jf/f<sub>z</sub>) / (1 + jf/f<sub>p</sub>)，　f<sub>z</sub> &lt; f<sub>p</sub><br>把 zero 放在通道的 pole 上（f<sub>z</sub> = f<sub>3dB,通道</sub>）→ 通道的下滑被抵消<br>高頻增益 / 低頻增益 = f<sub>p</sub>/f<sub>z</sub>（= peaking 倍數）<br>代價：頻帶 f<sub>z</sub>～f<sub>p</sub> 之間的<strong>雜訊與串擾</strong>同樣被放大約 f<sub>p</sub>/f<sub>z</sub> 倍</div>
+<p><em>白話翻譯：第一行是蹺蹺板的數學版——f<sub>z</sub>（zero）是「開始上翹的頻率」、f<sub>p</sub>（pole）是「翹到頂、不再翹的頻率」。第二行：把上翹起點對準通道開始下滑的位置，一上一下抵消。第三行：翹了多高？兩個頻率的比值就是倍數（比值 10 = 20 dB peaking）。第四行是帳單：這段頻帶裡的所有東西——訊號、雜訊、隔壁道耦過來的串擾——通通翹同樣的倍數。<strong>公式跳過沒關係，記住蹺蹺板和「不分敵我」就好。</strong></em></p>
+
+<h3>3.1 CTLE 不分敵我——這是它跟 TX EQ 最重要的差別</h3>
+<p>比較兩帖藥的「副作用說明書」，差異在<strong>下手的位置</strong>：</p>
+<ul>
+  <li><strong>TX de-emphasis 在源頭動手</strong>：它調整的是「還沒進通道的乾淨訊號」，此時雜訊、串擾都還沒混進來——所以它不放大任何髒東西。副作用是前面說的擺幅犧牲，以及一個常被忽略的：<strong>發射端高頻成分相對變強，對鄰道的攻擊力也變強</strong>（Day 24 說過串擾耦合偏愛高頻/快邊沿——你為了自己這條 lane 好而加重高頻，隔壁 lane 收到的串擾就變兇）。單看一條 lane 是解藥，看整把 bus 是外部性。</li>
+  <li><strong>RX CTLE 在末端動手</strong>：訊號走完全程才補償，此時雜訊（接收端熱雜訊、電源雜訊）和串擾（沿路耦進來的）已經混在裡面——蹺蹺板一翹，<strong>全部一起放大</strong>。所以 CTLE 開太兇的典型症狀：眼圖水平方向打開了（ISI 分身合併），垂直方向反而變毛（雜訊增厚）——調 EQ 調到「水平換垂直」的甜蜜點，是接收端 tuning 的日常。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：進階閱讀（一分鐘版 DFE，知道名字就好）</span>
+  <p>有沒有「只放大訊號、不放大雜訊」的等化器？有——<strong>DFE（判決回授等化器）</strong>：它不碰進來的類比波形，而是等每個位元「判決完」之後，用<strong>已經確定的 0/1</strong> 回頭把這個位元會拖給後面的尾巴（Day 27 的殘影）算出來、從後續訊號裡扣掉。因為它扣的是「乾淨的判決結果算出來的量」，雜訊不會被放大——代價是：判決錯一個位元，扣錯的帳會禍延後面好幾位（錯誤傳播），而且它是數位回路，速度與功耗都貴。現代 SerDes 的標準配置就是三帖合用：TX FIR＋RX CTLE＋DFE，各付各擅長的帳。今天記住名字和「不放大雜訊、但會錯誤傳播」這句就夠，正課到週 13 MIPI 再深入。</p>
+</div>
+
+<h2>4. 交易框架：EQ 是拿雜訊預算贖回頻寬</h2>
+<p>把這一節當成今天的「數學推導」——但推的不是式子，是<strong>一筆交易的損益表</strong>：</p>
+<table>
+  <tr><th>科目</th><th>沒有 EQ</th><th>有 EQ 之後</th><th>誰付的錢</th></tr>
+  <tr><td>水平：ISI/DDJ（眼寬）</td><td>分身散開、眼寬被吃掉</td><td>分身合併、眼寬贖回</td><td>——（這是買到的東西）</td></tr>
+  <tr><td>垂直：擺幅（眼高）</td><td>低頻 pattern 全擺幅</td><td>TX de-emphasis 把長串位元的擺幅壓低（−6 dB ≈ 一半）</td><td>發射端付</td></tr>
+  <tr><td>垂直：雜訊</td><td>接收端雜訊原樣</td><td>CTLE 把 f<sub>z</sub>～f<sub>p</sub> 頻帶的雜訊放大 f<sub>p</sub>/f<sub>z</sub> 倍</td><td>接收端付</td></tr>
+  <tr><td>鄰道：串擾</td><td>原樣</td><td>TX 高頻加重 → 攻擊力變強；RX CTLE → 收到的串擾被放大</td><td>整把 bus 一起付</td></tr>
+  <tr><td>隨機 jitter（RJ）</td><td>原樣</td><td><strong>不變</strong>（隨機的救不了）；但邊沿變陡 → 雜訊換 jitter 的匯率變好（Day 29 練習 4），這部分間接受益</td><td>——</td></tr>
+</table>
+<p>看懂這張表，你就懂了為什麼 EQ 不能無限開：<strong>每一格「贖回」的旁邊都有一格「付出」</strong>。通道爛到某個程度後，把 CTLE 開滿也只是讓雜訊淹掉贖回來的眼寬——這時唯一的解是回頭修通道（換板材、縮短走線、加 retimer），這就是為什麼 SI 工程師的第一志願永遠是「把通道做好」，EQ 是第二志願。</p>
+
+<h2>5. 三本帳合成一張表：通道預算表（channel/eye budget）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：家庭收支表</span>
+  <p>一個 UI（一個位元的時間）就是全家一個月的收入，固定 100%。家裡每個人都要花錢：發射端的 jitter 要一份、通道的 ISI 要一份、串擾要一份、隨機 jitter 要一份、接收端本身「看得清楚一個位元」需要的最小窗口（aperture）要一大份。<strong>全部加起來必須小於 100%，剩下的叫 margin（裕度）</strong>。超支 = 眼睛閉上 = 系統翻車。所有高速介面的規格書（PCIe、USB、MIPI）本質上都是這張表——規格書規定每個人「最多能花多少」，你設計板子就是在保證你負責的那幾格不超支。記帳規則只有兩條，都是 Day 28 教過的：<strong>確定性的（DJ 家族）用 pk-pk 直加；隨機的（RJ）用 σ 記帳、最後乘上目標 BER 對應的倍數</strong>（BER 10⁻¹² 約乘 14）。</p>
+</div>
+
+<h3>5.1 一張典型的 eye budget 長這樣</h3>
+<p>以一條 1 Gb/s 的鏈路為例（UI = 1 ns，數字為教學示意的合理量級，非特定規格）：</p>
+<table>
+  <tr><th>項目</th><th>類型</th><th>記帳法</th><th>占 UI</th></tr>
+  <tr><td>發射端 DJ（DCD、pattern 相關…）</td><td>確定性</td><td>pk-pk 直加</td><td>0.10 UI</td></tr>
+  <tr><td>通道 ISI/DDJ（損耗，EQ 補償後的殘餘）</td><td>確定性</td><td>pk-pk 直加</td><td>0.25 UI</td></tr>
+  <tr><td>串擾造成的 jitter（BUJ，保守當確定性記）</td><td>有界</td><td>pk-pk 直加</td><td>0.05 UI</td></tr>
+  <tr><td>RJ（σ = 10 ps）</td><td>隨機</td><td>14 × σ（BER 10⁻¹²，約）</td><td>0.14 UI</td></tr>
+  <tr><td>接收端 aperture（setup/hold 的合體＋取樣時鐘誤差）</td><td>規格</td><td>直加</td><td>0.30 UI</td></tr>
+  <tr><td><strong>合計</strong></td><td></td><td></td><td><strong>0.84 UI</strong></td></tr>
+  <tr><td><strong>Margin</strong></td><td></td><td></td><td><strong>0.16 UI</strong></td></tr>
+</table>
+<p>三個讀表重點：①<strong>RJ 那行的 14 倍</strong>——隨機 jitter 沒有邊界，只能問「要多少倍 σ 才能把出錯機率壓到目標 BER」；10⁻¹² 對應約 14σ（雙邊各約 7σ，Day 28 的高斯尾巴）。②<strong>ISI 那行寫的是「EQ 補償後的殘餘」</strong>——EQ 的功勞就記在這格變小；沒有 EQ 的話這格可能自己就超過 0.5 UI，全表直接爆掉，這就是「通道殺成這樣系統還能跑」的帳面證據。③<strong>margin 不是越大越好，是「夠且可證明」</strong>——margin 太大通常代表你為不需要的性能付了成本（更好的板材、更貴的 retimer）。</p>
+
+<h3>5.2 Perfect Timing II Ch.3 的教訓：worst-case 直加會把預算算爆</h3>
+<p>這張表最陰險的坑在「怎麼加」。Perfect Timing II Ch.3 講 timing budget（時鐘版的同一張表：t<sub>CLK-to-Q</sub>＋t<sub>FLIGHT</sub>＋t<sub>LOGIC</sub>＋t<sub>SETUP</sub>／t<sub>HOLD</sub>，再加上時鐘自己的 jitter 與 skew），並做了一個誠實到罕見的實驗：拿一棵真實的時鐘樹（25 MHz 振盪器 → 時鐘產生器 → 兩顆 100 MHz ZDB＋兩顆 50 MHz ZDB），先用<strong>資料手冊的 worst-case 數字直加</strong>算出時序窗口 = <strong>2.0 ns</strong>；然後把整棵樹做出來<strong>實測</strong>——最晚時鐘 +571 ps、最早時鐘 −346 ps，實測窗口只有 <strong>917 ps</strong>（Perfect Timing II Ch.3）。<strong>手冊直加比現實悲觀了一倍以上。</strong>為什麼？因為每個手冊數字（jitter、skew、delay）各自內含 guard band，直加等於把所有人的保險疊在一起買——書中稱之為「compounding of guard bands（保護帶的複利疊加）」。</p>
+<p>書中給的解方是當年的新參數 <strong>TTB（Total Timing Budget）</strong>：廠商把 jitter、skew、delay 在全溫度/電壓/頻率/製程範圍內<strong>一起特性化成一個保證窗口</strong>，避免逐項 guard band 疊加——書中算例：傳統三項直加 1.5 ns → TTB 全頻段 1.3 ns → 固定在 133 MHz 工作時的專屬 TTB 只有 <strong>0.696 ns</strong>，對 7.5 ns 的週期而言拿回超過 800 ps 的裕度（Perfect Timing II Ch.3）。<strong>以現代標準需上修：</strong>2002 年的舞台是 100–133 MHz 時鐘與 ns 級窗口，現代高速 SerDes 是 GHz 與 ps 級，且業界後來走向統計法（如 dual-Dirac 模型：DJ 直加、RJ 用 σ 乘 BER 倍數——就是我們 5.1 那張表的記法）而非單一廠商參數；但教訓一字不改：<strong>「逐項 worst-case 直加」永遠過度悲觀，「實測」與「統計合成」才是預算表的正道</strong>——這也正是下週要學 S 參數量測的理由：預算表裡「通道」那幾格，要靠量測填進真實數字。</p>
+
+<figure>
+<svg viewBox="0 0 760 540" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：通道預算表——一個 UI 怎麼分帳，以及 PT2 Ch.3 的「直加 vs 實測」教訓</text>
+  <!-- UI budget stacked bar -->
+  <rect x="36" y="44" width="696" height="230" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="384" y="68" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">eye budget：UI = 100%，人人來分（1 Gb/s 示意）</text>
+  <!-- full UI bar -->
+  <rect x="70" y="90" width="620" height="44" rx="6" fill="#fff" stroke="#94a3b8"/>
+  <!-- segments: TX DJ 10%, ISI 25%, XT 5%, RJ 14%, aperture 30%, margin 16% -->
+  <rect x="70" y="90" width="62" height="44" fill="#fda4af"/>
+  <rect x="132" y="90" width="155" height="44" fill="#f472b6"/>
+  <rect x="287" y="90" width="31" height="44" fill="#c4b5fd"/>
+  <rect x="318" y="90" width="87" height="44" fill="#fbbf24"/>
+  <rect x="405" y="90" width="186" height="44" fill="#93c5fd"/>
+  <rect x="591" y="90" width="99" height="44" fill="#4ade80"/>
+  <text x="101" y="114" text-anchor="middle" font-size="8" fill="#7f1d1d">TX DJ</text>
+  <text x="101" y="126" text-anchor="middle" font-size="8" fill="#7f1d1d">0.10</text>
+  <text x="209" y="114" text-anchor="middle" font-size="8.5" fill="#831843">通道 ISI 殘餘 0.25</text>
+  <text x="209" y="126" text-anchor="middle" font-size="7.5" fill="#831843">（EQ 的功勞記在這格變小）</text>
+  <text x="302" y="114" text-anchor="middle" font-size="7.5" fill="#4c1d95">XT</text>
+  <text x="302" y="126" text-anchor="middle" font-size="7.5" fill="#4c1d95">.05</text>
+  <text x="361" y="114" text-anchor="middle" font-size="8" fill="#78350f">RJ 14σ</text>
+  <text x="361" y="126" text-anchor="middle" font-size="8" fill="#78350f">0.14</text>
+  <text x="498" y="114" text-anchor="middle" font-size="8.5" fill="#1e3a8a">RX aperture 0.30</text>
+  <text x="640" y="114" text-anchor="middle" font-size="8.5" fill="#14532d" font-weight="bold">margin</text>
+  <text x="640" y="126" text-anchor="middle" font-size="8.5" fill="#14532d" font-weight="bold">0.16</text>
+  <text x="384" y="158" text-anchor="middle" font-size="9.5" fill="#374151">記帳規則（Day 28 的老朋友）：<tspan font-weight="bold" fill="#be185d">確定性 DJ → pk-pk 直加</tspan>　｜　<tspan font-weight="bold" fill="#b45309">隨機 RJ → σ × 14（BER 10⁻¹²，約）</tspan></text>
+  <!-- no EQ comparison bar -->
+  <rect x="70" y="176" width="620" height="30" rx="6" fill="#fff" stroke="#94a3b8"/>
+  <rect x="70" y="176" width="62" height="30" fill="#fda4af"/>
+  <rect x="132" y="176" width="372" height="30" fill="#f472b6"/>
+  <rect x="504" y="176" width="31" height="30" fill="#c4b5fd"/>
+  <rect x="535" y="176" width="87" height="30" fill="#fbbf24"/>
+  <rect x="622" y="176" width="68" height="30" fill="#93c5fd"/>
+  <text x="318" y="195" text-anchor="middle" font-size="8.5" fill="#831843" font-weight="bold">沒有 EQ：ISI 自己吃掉 0.6 UI</text>
+  <text x="656" y="195" text-anchor="middle" font-size="7.5" fill="#1e3a8a">aperture 塞不下</text>
+  <text x="384" y="226" text-anchor="middle" font-size="9.5" fill="#b91c1c" font-weight="bold">合計 &gt; 1 UI = 預算爆表 = 眼睛閉上——「系統還能跑」的功臣就是 EQ 把粉紅色那格砍小</text>
+  <text x="384" y="250" text-anchor="middle" font-size="8.5" fill="#6b7280">（數字為教學示意量級；真實介面各項配額以該規格書為準——下週 S 參數量測就是在替「通道」那格填真數字）</text>
+  <!-- PT2 Ch3 story -->
+  <rect x="36" y="290" width="340" height="230" rx="10" fill="#fffbeb" stroke="#ca8a04"/>
+  <text x="206" y="314" text-anchor="middle" font-size="11" font-weight="bold" fill="#854d0e">PT2 Ch.3 實驗：手冊直加 vs 實測</text>
+  <!-- calc window -->
+  <rect x="66" y="334" width="280" height="30" rx="4" fill="#fecaca" stroke="#dc2626"/>
+  <text x="206" y="354" text-anchor="middle" font-size="9.5" fill="#7f1d1d" font-weight="bold">手冊 worst-case 直加：窗口 2.0 ns</text>
+  <!-- measured window -->
+  <rect x="66" y="376" width="128" height="30" rx="4" fill="#bbf7d0" stroke="#16a34a"/>
+  <text x="130" y="396" text-anchor="middle" font-size="9.5" fill="#14532d" font-weight="bold">實測：917 ps</text>
+  <text x="212" y="396" font-size="8.5" fill="#374151">（+571 / −346 ps）</text>
+  <text x="206" y="428" text-anchor="middle" font-size="9" fill="#b91c1c" font-weight="bold">悲觀一倍以上：guard band 的複利疊加</text>
+  <text x="206" y="452" text-anchor="middle" font-size="8.5" fill="#374151">解方 TTB：全條件一起特性化成一個保證窗口</text>
+  <text x="206" y="470" text-anchor="middle" font-size="8.5" fill="#374151">直加 1.5 ns → TTB 1.3 ns → @133 MHz 僅 0.696 ns</text>
+  <text x="206" y="494" text-anchor="middle" font-size="8" fill="#6b7280">（2002 年 ns 級舞台；現代 ps 級改用統計法，教訓不變：</text>
+  <text x="206" y="508" text-anchor="middle" font-size="8" fill="#6b7280">逐項 worst-case 直加永遠過度悲觀）</text>
+  <!-- trade summary -->
+  <rect x="392" y="290" width="340" height="230" rx="10" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="562" y="314" text-anchor="middle" font-size="11" font-weight="bold" fill="#0f4c5c">EQ 交易損益表（一眼版）</text>
+  <text x="412" y="342" font-size="9.5" fill="#16a34a" font-weight="bold">買到：</text>
+  <text x="462" y="342" font-size="9.5" fill="#374151">眼寬（ISI/DDJ 那格變小）</text>
+  <text x="412" y="368" font-size="9.5" fill="#dc2626" font-weight="bold">付出：</text>
+  <text x="462" y="368" font-size="9.5" fill="#374151">TX：長串位元擺幅 ↓（眼高換眼寬）</text>
+  <text x="462" y="386" font-size="9.5" fill="#374151">RX：雜訊＋串擾放大 f_p/f_z 倍</text>
+  <text x="462" y="404" font-size="9.5" fill="#374151">bus：TX 高頻加重 → 鄰道攻擊力 ↑</text>
+  <text x="412" y="432" font-size="9.5" fill="#7c3aed" font-weight="bold">救不了：</text>
+  <text x="472" y="432" font-size="9.5" fill="#374151">RJ（隨機無規則可反做）</text>
+  <text x="562" y="462" text-anchor="middle" font-size="9.5" fill="#0f4c5c" font-weight="bold">通道爛到 EQ 開滿也救不回來時：</text>
+  <text x="562" y="480" text-anchor="middle" font-size="9.5" fill="#0f4c5c">修通道（板材/長度）或加 retimer——</text>
+  <text x="562" y="498" text-anchor="middle" font-size="9.5" fill="#0f4c5c">EQ 永遠是第二志願，好通道是第一志願</text>
+</svg>
+<figcaption>圖 2：上——eye budget 的分帳長條圖：確定性直加、RJ 乘 14σ，全部塞進一個 UI，剩的是 margin；第二條是「沒有 EQ」的慘案：ISI 一格就吃掉大半。左下——Perfect Timing II Ch.3 的實測故事：手冊 worst-case 直加 2.0 ns、實做出來量只有 917 ps，guard band 複利疊加讓紙上預算比現實悲觀一倍；TTB 用「全條件一次特性化」把 1.5 ns 收斂到 0.696 ns。右下——EQ 交易的一眼損益表。</figcaption>
+</figure>
+
+<h2>6. 實務案例：這些觀念在你的板子上長什麼樣</h2>
+<ul>
+  <li><strong>NB 主機板——redriver 與 retimer 的選擇題：</strong>筆電裡 USB/DP/PCIe 走線動輒跨過整塊主機板加上一條 FPC，通道預算常常不夠。板廠的兩個標準解你一定見過：<strong>redriver</strong>（本質就是一顆獨立封裝的 CTLE＋輸出驅動——純類比、便宜、低延遲，但「不分敵我」的原罪全帶著：jitter 不會被重置，它只是把預算表裡「ISI」那格搬小、把「雜訊」那格搬大）；<strong>retimer</strong>（內含 CDR，把資料重新取樣再發——jitter 預算<strong>整張重開</strong>，等於把一條長鏈路砍成兩條短鏈路各自記帳，代價是貴、耗電、有延遲、還要跟協定握手）。面試被問「什麼時候用哪個」，用今天的預算表語言答：<strong>預算只超支在確定性那幾格（ISI）→ redriver 夠；隨機那格（RJ 累積）也超支 → 只有 retimer 救得了</strong>，因為 EQ 救不了隨機。</li>
+  <li><strong>鏡頭模組——MIPI 為什麼「幾乎」不談 EQ：</strong>camera flex 短（量級 5–15 cm），D-PHY 的速率檔位設計上就是讓這種短通道<strong>不需要 EQ 也能收</strong>——這是 MIPI 與 PCIe 哲學的差異：與其加 EQ，不如把通道規格管住（這就是規格書裡那些 flex 阻抗、插損上限的由來，週 13 正課）。但兩個趨勢正在把 EQ 推進 camera 世界：①解析度/幀率上去後速率往 4 Gb/s 級以上走，較新版 D-PHY 在高速率檔位開始納入接收端等化的規範概念（量級與細節週 13 講，這裡先掛號）；②AR 眼鏡這類產品的 flex 又長又細又要繞鉸鏈——通道爛到傳統「管通道」哲學撐不住，就輪到今天這套交易框架上場。你面 Google AR 職缺時，這條趨勢就是你的談資。</li>
+  <li><strong>FA 現場——「EQ 調到會動」不等於「EQ 調對」：</strong>bring-up 時常見的危險操作：眼圖 marginal，把 CTLE/de-emphasis 檔位掃一遍，找到一組會過的就收工。今天的框架告訴你為什麼危險：EQ 檔位是在「水平換垂直」的曲線上滑動，<strong>在實驗室常溫下剛好會過的點，可能垂直裕度已經見底</strong>——高溫（雜訊上升、通道損耗變大）或換一片板（製程角落）就翻車。正確做法是把掃出來的每一檔都記眼高＋眼寬（或 BER bathtub，下週講），選「兩個方向都有裕度」的檔位，而不是「剛好會過」的檔位。</li>
+</ul>
+
+<h2>7. 動手練習（今天動筆不動儀器）</h2>
+<p>四題全部用這一週的既有知識就能算，算完再展開詳解。</p>
+
+<details>
+<summary>練習 1（用 CTLE 救 Day 29 的爛通道）：Day 29 的 RC 通道 f<sub>3dB</sub> ≈ 159 kHz（τ = 1 µs）。你要在接收端加一個最簡 CTLE：E(f) = (1+jf/f<sub>z</sub>)/(1+jf/f<sub>p</sub>)。(a) f<sub>z</sub> 應該放在哪？為什麼？(b) 若想把合成頻寬推到約 1.59 MHz，f<sub>p</sub> 放哪？合成後的系統像什麼？(c) 這顆 CTLE 的高頻雜訊增益是多少倍（幾 dB）？(d) 若接收端在 CTLE 之前的雜訊是 5 mV rms（頻帶內平坦、簡化假設全部落在被放大的頻帶），加 EQ 前後，用 Day 29 的觸發匯率公式 σ_t = v_n/slew 說明 jitter 是變好還是變壞——考慮邊沿變陡與雜訊變大兩個方向。</summary>
+<p><strong>解：</strong>(a) <strong>f<sub>z</sub> = 159 kHz，正對通道的 pole。</strong>zero 的上爬斜率（+20 dB/decade）恰好抵消 pole 的下滑斜率（−20 dB/decade）——「用 zero 抵 pole」。(b) <strong>f<sub>p</sub> = 1.59 MHz。</strong>抵消後，合成系統 = 一個 pole 在 1.59 MHz 的新低通——等效於「把通道頻寬推高 10 倍」，τ 從 1 µs 變 0.1 µs，原本 1 Mb/s（UI = 1τ，重損耗）的資料現在是 UI = 10τ<sub>新</sub>，ISI 幾乎消失。(c) 高頻增益/低頻增益 = f<sub>p</sub>/f<sub>z</sub> = <strong>10 倍 = 20 dB</strong>——159 kHz 到 1.59 MHz 之間的雜訊與串擾照單全放大。(d) 兩個方向拉扯：雜訊 5 mV →最壞情況約 50 mV（×10）；但邊沿 slew 也變陡了——RC 通道 10–90% 邊沿約 2.2τ，從 2.2 µs 變 0.22 µs，slew 快約 10 倍。σ_t = v_n/slew：分子 ×10、分母 ×10，<strong>第一階近似打平</strong>。但這是「雜訊全部落在被放大頻帶」的最壞假設；實際上雜訊只有一部分頻譜落在 f<sub>z</sub>～f<sub>p</sub> 之間，放大不足 10 倍，而 slew 的改善是實打實的——所以通常淨效果是變好，<strong>但好的幅度遠小於「眼寬贖回」給人的直覺</strong>，這就是甜蜜點存在的原因：f<sub>p</sub>/f<sub>z</sub> 再往上開，雜訊放大逐漸吃掉所有紅利。</p>
+</details>
+
+<details>
+<summary>練習 2（de-emphasis 的帳）：某發射端差動全擺幅 1.0 V（轉態位）。(a) 開 −3.5 dB de-emphasis 後，重複位的擺幅是多少？(b) 開 −6 dB 呢？(c) 通道越爛應該選越深的 de-emphasis——但「越深越好」在哪裡破功？用「長串重複位元期間的接收擺幅」與「接收端雜訊 20 mV rms、判決需要約 ±7σ 裕度」粗算：−6 dB 檔在通道另外再吃掉 14 dB（約 5 倍）的情況下，長串位元的接收擺幅剩多少？夠不夠判決？</summary>
+<p><strong>解：</strong>(a) −3.5 dB → V<sub>b</sub>/V<sub>a</sub> = 10^(−3.5/20) ≈ 0.67 → 重複位約 <strong>0.67 V</strong>。（b) −6 dB → 10^(−6/20) ≈ 0.50 → 約 <strong>0.50 V</strong>（「−6 dB ≈ 一半」值得背）。(c) 長串重複位期間接收擺幅 ≈ 0.50 V ÷ 5 ≈ <strong>0.10 V = 100 mV</strong>（差動）。判決需要的雜訊裕度：±7σ = ±140 mV——<strong>100 mV &lt; 140 mV，不夠，BER 撐不到 10⁻¹²</strong>。破功的機制看清楚了：de-emphasis 把低頻（長串位元）的能量犧牲掉換平坦，通道再爛下去，犧牲完剩下的絕對擺幅低於雜訊判決線——<strong>水平方向贖回來的眼寬，垂直方向賠光了</strong>。這時要嘛降 de-emphasis 深度改靠 RX EQ 分擔、要嘛修通道。順帶一提：這正是規格書把 de-emphasis 做成「檔位」而非固定值的原因——不同長度的通道要配不同深度，太深跟太淺一樣會翻車。</p>
+</details>
+
+<details>
+<summary>練習 3（預算表實戰）：一條 2 Gb/s 鏈路（UI = 500 ps）。已知：TX DJ = 40 ps pk-pk；通道 ISI 殘餘（EQ 後）= 90 ps pk-pk；串擾 BUJ = 25 ps pk-pk（保守直加）；RJ σ = 8 ps；RX aperture = 150 ps。目標 BER 10⁻¹²（RJ 乘約 14）。(a) 這張表合計多少？margin 剩多少（ps 與 %UI）？(b) 若行銷要求同一條通道跑 4 Gb/s（UI = 250 ps），假設各項 ps 數字不變（實際上 ISI 會更糟——先用不變當樂觀下限），表還過得了嗎？(c) 承 (b)，工程上三個最有力的挽救選項是什麼？各動了表上哪一格？(d) 為什麼「各項 ps 數字不變」是樂觀假設？哪一格在速率翻倍時惡化得最兇、為什麼？</summary>
+<p><strong>解：</strong>(a) DJ 直加：40+90+25 = 155 ps；RJ：14×8 = 112 ps；aperture 150 ps。合計 155+112+150 = <strong>417 ps</strong>，margin = 500−417 = <strong>83 ps ≈ 17% UI</strong>——健康。(b) 合計仍是 417 ps，但 UI 只有 250 ps → <strong>超支 167 ps，直接爆表</strong>，連 aperture 自己（150 ps）都占掉 60% UI。(c) 三個選項對表上格子：①<strong>更強的 EQ（TX FIR 加 tap、CTLE 加深、上 DFE）</strong>→ 砍「ISI 殘餘」那格（但雜訊帳變差，可能反映在等效 RJ/眼高上）；②<strong>換更好的 RX（SerDes 世代升級）</strong>→ 砍「aperture」那格（現代 RX 的 aperture 占 UI 比例隨世代下降，量級請查該 IP 規格）；③<strong>加 retimer 拆鏈路</strong>→ 整張表砍成兩張半程的表各自結算，RJ 累積歸零重記。(d) 最兇的是 <strong>ISI 殘餘</strong>：UI 減半，同一條通道的「τ 相對 UI」惡化（Day 29 練習 1(d) 的結論），且 Nyquist 頻率翻倍——skin/tanδ 在更高頻吃得更兇（√f 與 f 都是增函數），插損 dB 數上升 → pulse spreading 跨更多 UI。ps 不變的假設違反了這一週學的所有損耗物理，所以 (b) 的「爆表」還是低估的。</p>
+</details>
+
+<details>
+<summary>練習 4（PT2 Ch.3 判讀）：Perfect Timing II Ch.3 的時鐘樹實驗：手冊 worst-case 直加窗口 2.0 ns、實測 917 ps。(a) 用「guard band 複利」以外的統計語言解釋為什麼直加過度悲觀——哪些成分本質上不會同時到達最壞？(b) TTB 的定義是什麼？它為什麼能比逐項直加小？(c) 書中 TTB 從 1.5 ns（直加）→ 1.3 ns（全頻段 TTB）→ 0.696 ns（固定 133 MHz 的 TTB）——最後這步的省法跟前兩步有什麼本質不同？(d) 把這個教訓翻譯到 5.1 的 eye budget：哪幾行如果用「pk-pk 直加」記其實過度保守？現代預算表怎麼處理？</summary>
+<p><strong>解：</strong>(a) 直加隱含「所有隨機量同時取到自己的極值」——但 jitter 是高斯隨機變數、不同元件的 jitter 互相獨立：兩個獨立高斯同時站上各自 ±極值的機率是各自機率的乘積，天文數字般地小。獨立隨機量的正確合成是 <strong>RSS（變異數相加）</strong>：√(σ₁²+σ₂²) 遠小於 σ₁+σ₂（Day 28/29 的老朋友，換個場景再登場）。至於 skew/delay 這類「同一顆晶片內相關」的量才適合直加。(b) 書中定義：TTB 是「該元件任何輸出時鐘的所有轉態、相對其輸入參考時鐘，保證落在其中的最大窗口」，涵蓋手冊全部溫度/電壓/頻率/輸入邊沿範圍與製程變異（Perfect Timing II Ch.3）。它比直加小的原因：廠商<strong>一次特性化整體行為</strong>——jitter、skew、delay 在真實晶片上不會同時最壞，一起量就自動把「不會同時發生」的重疊扣掉，不必每項各留一份保險。(c) 前兩步是「把重疊的保險合併」；最後一步本質不同——它是<strong>拿掉一個自由度</strong>：F（頻率變異）從變數變成常數（系統固定跑 133 MHz），窗口從 1.3 ns 縮到 0.696 ns，省超過 800 ps。工程含義：<strong>規格越貼近你的實際工作點，預算越準</strong>——這也是為什麼現代 IBIS-AMI／規格書會給「per data rate」的參數。(d) eye budget 裡 <strong>RJ 絕不能 pk-pk 直加</strong>（無界，直加沒有意義）——現代做法就是 5.1 表的 dual-Dirac 式記法：DJ 家族 pk-pk 直加（有界、可能同時最壞）、RJ 記 σ 乘 BER 倍數；更進一步的 BUJ（串擾）嚴格說有界但非同時最壞，保守記直加、精算時用統計摺積——下週講 bathtub curve 時會看到這整套記帳法的量測版。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>EQ 與 budget 是 camera/SerDes 面試的「觀念深度探測器」——背名詞的人講不出交易框架，動過手的人一開口就是損益表。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "The eye at the receiver is completely closed, yet the link runs error-free. Explain how transmitter de-emphasis and receiver CTLE make that possible, and what each of them costs you."</summary>
+<p><strong>參考答案骨架：</strong>The channel is an LTI low-pass — skin effect and dielectric loss attenuate high frequencies more than low. That distortion is deterministic: the same input always produces the same output, which means it's invertible in principle. Equalization is exactly that inversion, split across the two ends. At the transmitter, de-emphasis: drive transition bits at full swing and deliberately attenuate repeated bits. In the time domain, that stops the voltage from wandering far during long runs, so every edge starts from the same point — the root cause of ISI removed at the source. In the frequency domain, it's a high-pass shaping that pre-compensates the channel's low-pass. The cost: since the peak voltage is rail-limited, de-emphasis actually lowers the low-frequency content down to match the high — you pay with received swing, roughly half at minus 6 dB, so you trade eye height for eye width. Also, boosting relative high-frequency content makes you a worse crosstalk aggressor to neighboring lanes. At the receiver, CTLE: a zero-pole filter whose rising gain cancels the channel's roll-off — a zero placed on the channel pole. Its cost is fundamental: it sits after the channel, so noise and coupled crosstalk arrive already mixed into the signal and get amplified by the same peaking, roughly the pole-to-zero frequency ratio. That's why I frame EQ as buying back eye width with the noise budget. And the boundary matters: EQ only recovers deterministic impairments — ISI, DDJ. Random jitter has no pattern to invert, so it passes through untouched; if the budget is blown on the random side, no amount of EQ helps — that's when you fix the channel or insert a retimer, which resets the jitter budget by re-sampling through a CDR.</p>
+<p><strong>加分點：</strong>「deterministic hence invertible」一句話定調；de-emphasis 講出「壓低頻遷就高頻」而非「抬高頻」（顯示真懂峰值受限）；CTLE 的 f<sub>p</sub>/f<sub>z</sub> 雜訊帳；主動畫出 EQ 的能力邊界（RJ 救不了）並給 retimer 作為 escape hatch。</p>
+</details>
+
+<details>
+<summary>Q2: "Walk me through constructing a timing or eye budget for a high-speed link. How do you combine the different contributors, and what's the classic mistake?"</summary>
+<p><strong>參考答案骨架：</strong>Start from one UI as the total budget and list every consumer: transmitter deterministic jitter, residual ISI after equalization, crosstalk-induced bounded jitter, random jitter, and the receiver's sampling aperture. The combination rule depends on the statistics of each term. Deterministic, bounded terms — DCD, ISI, crosstalk — add linearly peak-to-peak, because they're bounded and can plausibly align worst-case. Random jitter is unbounded and Gaussian, so it's characterized by sigma and multiplied by a factor set by the target BER — about fourteen sigma total for ten-to-the-minus-twelve. Sum everything, subtract from the UI, and what remains is margin — which should be positive with headroom across temperature and process, not just on one golden board at room temperature. The classic mistake is worst-casing everything and adding linearly, including the random terms. There's a well-documented example from a Cypress clock-design guide: a real clock tree budgeted from datasheet worst-case numbers gave a 2-nanosecond window, but the fabricated system measured 917 picoseconds — the naive sum was pessimistic by more than two-to-one, because every datasheet number carries its own guard band and independent random contributors never hit their extremes simultaneously. The fix then was a single characterized total-budget parameter; the modern equivalent is the statistical dual-Dirac approach — linear for deterministic, RSS-and-scale for random — plus filling the channel rows with measured S-parameters instead of datasheet pessimism. Over-budgeting isn't conservative engineering, it's paying real money — better laminates, retimers you didn't need — for margin that was never at risk.</p>
+<p><strong>加分點：</strong>「combination rule depends on the statistics of each term」是整題的題眼；14σ／BER 10⁻¹² 的量化；主動引用 2.0 ns vs 917 ps 的實測故事（有出處的工程故事極少人講得出）；收尾把「過度保守」翻譯成成本語言——資深工程師的視角。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：均衡（EQ）的本質一句話？它救得了誰、救不了誰？</p>
+  <p class="a">A1：通道是 LTI，其失真（損耗/ISI）<strong>確定性、可預測 → 可以反著做回來</strong>（E(f)·H(f)≈平坦）——EQ 就是通道的反函數。救得了：ISI/DDJ、邊沿磨鈍（連帶改善雜訊→jitter 匯率）。救不了：<strong>RJ（隨機無規則可反做）</strong>、接收端雜訊（反被 CTLE 放大）、串擾（別人的訊號，不是自己的失真——CTLE 也把它放大）。EQ 開滿仍不過 → 修通道或加 retimer（CDR 重取樣、jitter 預算重開）。</p>
+  <p class="q">Q2：TX pre-emphasis 與 de-emphasis 的機制與差別？各付什麼代價？</p>
+  <p class="a">A2：機制＝<strong>轉態位全力、重複位收力</strong>（最簡 2-tap FIR），時域上讓每個邊沿起跑點拉齊（拔掉 ISI 根源）、頻域上高頻相對加重反補通道偏食。差別在參考點：<strong>de-emphasis 壓低重複位（峰值不變、平均功率降）；pre-emphasis 抬高轉態位（峰值變大）</strong>——峰值受限世界常用 de-emphasis（PCIe：Gen1 −3.5 dB、Gen2 增 −6 dB 檔；−6 dB ≈ 重複位剩一半）。代價：長串位元接收擺幅縮水（<strong>眼高換眼寬</strong>）＋高頻加重使鄰道串擾攻擊力變強。</p>
+  <p class="q">Q3：CTLE 的直覺、數學與致命副作用？</p>
+  <p class="a">A3：直覺＝增益蹺蹺板（低頻壓、高頻抬）；數學＝<strong>E(f)=(1+jf/f<sub>z</sub>)/(1+jf/f<sub>p</sub>)，zero 放在通道 pole 上對消</strong>，peaking 倍數 = f<sub>p</sub>/f<sub>z</sub>（10 倍=20 dB）。副作用：CTLE 在通道之後動手，<strong>雜訊與串擾已混入、不分敵我一起放大 f<sub>p</sub>/f<sub>z</sub> 倍</strong>——症狀：眼寬打開、眼高變毛。對照 TX EQ 在源頭動手不放大髒東西；DFE 用已判決位元扣拖尾、不放大雜訊但有錯誤傳播。調 EQ = 在「水平換垂直」曲線上找兩方向都有裕度的甜蜜點，不是找「剛好會過」。</p>
+  <p class="q">Q4：eye/timing budget 的記帳規則？RJ 為什麼乘 14？</p>
+  <p class="a">A4：一個 UI = 100% 預算，消費者：TX DJ、通道 ISI 殘餘（EQ 功勞記在此格變小）、串擾 BUJ、RJ、RX aperture，剩餘 = margin。規則：<strong>確定性/有界（DJ 家族）→ pk-pk 直加；隨機（RJ）→ σ × BER 倍數</strong>——RJ 無界不能記 pk-pk，BER 10⁻¹² 對應約 <strong>14σ</strong>（雙邊各約 7σ 的高斯尾巴）。速率翻倍時惡化最兇的是 ISI 格（τ/UI 惡化＋Nyquist 上移、插損更深）。</p>
+  <p class="q">Q5：PT2 Ch.3 的「直加 vs 實測」故事與教訓？</p>
+  <p class="a">A5：真實時鐘樹（時鐘產生器＋兩級 ZDB）用手冊 worst-case 直加算出窗口 <strong>2.0 ns</strong>，實測只有 <strong>917 ps</strong>（最晚 +571/最早 −346 ps）——直加悲觀一倍以上，因為每個手冊數字自帶 guard band（複利疊加）且獨立隨機量不會同時最壞（正解是 RSS）。書中解方 TTB＝全條件一次特性化的保證窗口：直加 1.5 ns → TTB 1.3 ns → <strong>固定 133 MHz 時 0.696 ns</strong>（拿掉頻率自由度，省 800+ ps）（Perfect Timing II Ch.3）。現代上修：ns 級 → ps 級、統計法（dual-Dirac：DJ 直加＋RJ×14σ）＋實測 S 參數填表；教訓不變：<strong>逐項 worst-case 直加永遠過度悲觀，過度保守是花真錢買不存在的風險</strong>。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 31（週日複習日）：第 5 週總驗收——20 題自我測驗附詳解</strong></p>
+  <p>損耗與眼圖週收官考：skin effect 的 √f 與 tan δ 的 f、眼圖解剖學、jitter 家族樹與三種量法、PLL 串接的 jitter 累積、Day 29 實驗記錄表的 ISI 對帳與 σ<sub>儀器</sub> 扣帳（記錄表拍照的同學拿出來對）、加上今天的 EQ 交易框架與預算表記帳規則。20 題涵蓋計算、判讀、FA 情境三種題型，附完整詳解。考完這份，Phase 1 只剩最後一週——下週進 SI 量測週：高速探棒、示波器頻寬選擇、S 參數入門，還有 Perfect Timing II 裡跟你的 NB 老本行直接對口的 Ch.16 Motherboard Clock Validation。把週末的 Anki 清完，明天見。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 30 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

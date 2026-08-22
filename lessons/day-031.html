@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 31｜第 5 週複習與 20 題自我測驗（損耗與眼圖週總驗收）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 5 週・第 31 天（週日複習日）</div>
+  <h1>Day 31：第 5 週複習與 20 題自我測驗</h1>
+  <div class="meta">2026-08-23（日）｜預估時間：90 分鐘（作答 50 分＋對詳解 40 分）｜範圍：Day 25–30（損耗與眼圖週：skin effect、tan δ、眼圖解剖學、jitter 記帳與累積、量測誠信實驗、EQ 與通道預算表）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標與規則</span>
+  <p>損耗與眼圖週收官驗收。這一週你學的不是六個零散主題，是<strong>一條完整的故事線</strong>：通道會抽稅（Day 25/26 兩種稅）→ 稅的後果全寫在眼睛上（Day 27 眼圖）→ 眼睛閉合的水平帳叫 jitter、要分科記帳（Day 28）→ 量眼睛之前先確認儀器沒說謊（Day 29）→ 最後用 EQ 贖回眼寬、用預算表結算全案（Day 30）。這 20 題把六天縫成一張作戰地圖——縫得起來，下週的量測週你會發現每台儀器要量的正是這張表上的格子。規則：</p>
+  <ol>
+    <li><strong>先刷一輪 Day 25–30 的 Anki 卡</strong>（10 分鐘），再開始作答</li>
+    <li>拿紙筆，<strong>先寫下自己的答案再展開詳解</strong>——面試考的是「自己寫得出來」，不是「看得懂」</li>
+    <li>計算題全部手算；<strong>把 Day 29 的量測記錄表照片翻出來</strong>，Part D 直接用你自己量的數字出題（週五實驗沒做完的，用題目括號內的示範值作答，並排下週平日午休補做）</li>
+    <li>每題 1 分，答對標準是「詳解裡的粗體重點你都有講到」；最後對照文末評分表決定要不要回頭重讀</li>
+  </ol>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：這週的五句靈魂，先默背再開考</span>
+  <p>①「<strong>銅抽 √f 的稅、板材抽 f 的稅</strong>」——銅是路肩隨頻率變窄的幾何效應，板材是每搖一次抽一次的按次計費；頻率夠高之後主犯必換人（交叉點 f<sub>x</sub>）。②「<strong>眼圖是統計圖，不是波形</strong>」——它是百萬個 UI 對齊疊出來的熱度圖，報眼高眼寬不附樣本數或 BER 等於沒報。③「<strong>DJ 有兇手、有上限，直加；RJ 沒兇手、沒上限，報 σ 再乘 14</strong>」——記帳規則由統計性質決定，不由方便決定。④「<strong>先讓儀器自證清白，再審訊號</strong>」——觸發點的乾淨是對齊造的假象，讀值要用 σ<sub>訊號</sub> = √(σ²<sub>讀</sub> − σ²<sub>儀器</sub>) 扣帳。⑤「<strong>確定性的失真救得回來，隨機的救不回來</strong>」——EQ 是拿雜訊預算贖回頻寬的交易，每格「贖回」旁邊都有一格「付出」。這五句貫穿全卷 20 題，也貫穿你之後每一張眼圖報告。</p>
+</div>
+
+<h2>0. 考前 3 分鐘速查表（作答時請蓋住）</h2>
+<table>
+  <tr><th>公式 / 數字</th><th>意義</th><th>出處</th></tr>
+  <tr><td>δ ≈ 66 µm ÷ √f(MHz)：1 GHz → 約 2.1 µm；α<sub>cond</sub> ∝ √f</td><td>skin depth 手感式；銅箔 1 oz ≈ 35 µm、½ oz ≈ 17 µm</td><td>Day 25</td></tr>
+  <tr><td>α<sub>diel</sub> ≈ 91·f(GHz)·tan δ·√ε<sub>eff</sub> dB/m；FR4 ≈ 0.3 dB/10 cm/GHz；α<sub>diel</sub> ∝ f、與幾何無關</td><td>介質損手感式；f<sub>x</sub>（兩稅交叉）≈ 2 GHz 量級（隨幾何/板材移動）</td><td>Day 26</td></tr>
+  <tr><td>UI = 1/位元率；眼寬(@BER) ≈ UI − DJ<sub>pp</sub> − 14×RJ<sub>rms</sub>（BER 10⁻¹²，約）</td><td>眼圖五官與 BER 眼；四病指紋：反射咬缺口/串擾加眼皮/損耗瞇眼/ISI 裂分身</td><td>Day 27</td></tr>
+  <tr><td>TJ = DJ<sub>pp</sub>＋14×RJ<sub>rms</sub>；DJ（DCD/DDJ/SJ/BUJ）直加；RJ 取 RSS；三種量法差在參考點</td><td>jitter 家族樹（PT2 Ch.4）；串接 PLL 盡量 ≤3 顆（PT2 Ch.13）</td><td>Day 28</td></tr>
+  <tr><td>t<sub>cross</sub> = τ·ln[(V<sub>終</sub>−V<sub>起</sub>)/(V<sub>終</sub>−V<sub>th</sub>)]；σ<sub>訊號</sub> = √(σ²<sub>讀</sub>−σ²<sub>儀器</sub>)；σ<sub>t</sub> = v<sub>n</sub>/slew</td><td>ISI 對帳／儀器扣帳（1/3 規則）／觸發匯率；t<sub>DISPLAY</sub> 四人平方合成（PT2 Ch.11）</td><td>Day 29</td></tr>
+  <tr><td>de-emphasis −6 dB ≈ 重複位剩一半；CTLE peaking = f<sub>p</sub>/f<sub>z</sub>（雜訊同倍放大）；預算表：DJ 直加＋RJ×14σ</td><td>EQ 交易框架；PT2 Ch.3：手冊直加 2.0 ns vs 實測 917 ps</td><td>Day 30</td></tr>
+</table>
+
+<h2>Part A｜觀念題（Q1–Q6）</h2>
+
+<p><strong>Q1.</strong> 通道的兩種稅：(a) 導體損為什麼是 √f、介質損為什麼是 f？各講出物理機制（不是背指數）。(b) 兩個公式各依賴哪些幾何/材料參數？這個差異在「換板材 vs 改線寬」的決策上意味著什麼？(c) 交叉點 f<sub>x</sub> 是什麼？它為什麼不是自然常數？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>導體損 √f</strong>：高頻電流被自感效應擠到導體表面，皮厚 δ ∝ 1/√f（δ ≈ 66 µm/√f(MHz)）——導電截面積隨 √f 縮水、電阻隨 √f 上升，是<strong>幾何效應</strong>（路肩變窄）。<strong>介質損 f</strong>：tan δ 是「電場每來回搖一個週期，抽走固定比例的能量」——每次抽的比例一樣、每秒搖的次數 ∝ f，所以稅 ∝ f，是<strong>按次計費</strong>（Day 25/26）。(b) 導體損含 w（線寬）、Z₀、銅厚——<strong>對幾何敏感</strong>；介質損公式裡「沒有 w、沒有 t、沒有 Z₀」，只有 tan δ 與 ε<sub>eff</sub>——<strong>對走線幾何完全無感</strong>。決策含義：導體損超支 → 加寬線、改疊構有效；介質損超支 → 改幾何白忙，<strong>只有換板材（降 tan δ）或縮短走線</strong>。(c) f<sub>x</sub> = 兩條稅線等高的頻率（Day 26 那條 0.15 mm FR4 微帶線約 2.2 GHz 量級）：以下銅主犯、以上板材主犯。不是常數——線越窄導體損越高 f<sub>x</sub> 上移；換低損板材介質線變平 f<sub>x</sub> 大幅上移（此時瓶頸回到銅，所以低損板料要配低粗糙度銅箔，錢才不會白花一半）。</p>
+</details>
+
+<p><strong>Q2.</strong> 眼圖的解剖學：(a) 「眼圖是統計圖不是波形」——這句話的精確含義？它導出哪條報告紀律？(b) 五官點名：眼高、眼寬、交叉點（兩個健康指標）、mask 各自的工程意義？(c) 「過 mask = 通道沒問題」錯在哪？(d) 交叉點高度偏離擺幅 50%，讀出什麼病？PT2 Ch.4 對這個病說過哪句話？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 眼圖 = 波形以 UI 為週期摺疊後的<strong>二維直方圖</strong>（亮度 = 出現次數）：同一條通道疊 10⁷ 個 UI 和 10⁹ 個 UI 的眼「不一樣大」——RJ 無界，疊越久越稀有的極端越現身、邊界往內縮。紀律：<strong>報眼高眼寬必附「疊了多少 UI／目標 BER」</strong>，否則數字沒有意義（Day 27）。(b) <strong>眼高</strong>＝電壓餘裕（擺幅 − 損耗 − 串擾 − 反射殘波 − 雜訊，對應收端最小輸入擺幅）；<strong>眼寬</strong>＝時間餘裕（UI − 總 jitter，收端取樣時刻的容許誤差）；<strong>交叉點</strong>：水平胖瘦 = jitter 分布（示波器 jitter 量測本質是統計這坨直方圖）、垂直高度 = duty 對稱性；<strong>mask</strong>＝規範替收端畫的最低限度空地——沒有軌跡踩進去，收端保證接得住。(c) mask 只保證底線：帶著反射缺口、串擾眼皮照樣可以壓線過 mask——量產放大 corner 就翻車。<strong>眼圖是健檢不是免死金牌，margin 要另外報</strong>。(d) DCD（duty cycle distortion）：0/1 脈寬不等，上升/下降沿系統性錯開，交叉點偏離 50% 甚至水平分裂兩坨。PT2 Ch.4：這種失真「<strong>用眼圖看最明顯</strong>」——交叉點高度是發射端健康度的免費探針（Day 27/28）。</p>
+</details>
+
+<p><strong>Q3.</strong> 四大病種指紋鑑別：(a) 反射、串擾、損耗、ISI 各在眼圖上留下什麼指紋？各對應前幾週哪堂課？(b) ISI 的「分身」與 RJ 的「霧」統計本質差在哪？(c) FA 應用：眼窄，你按順序做哪兩個 A/B 實驗把 ISI 與串擾與 jitter 分開？各自的判別簽名？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>反射</strong>＝狙擊手：殘波固定延遲後回來，在<strong>固定位置</strong>咬缺口/長贅肉（位置 = 2×到不連續點的飛行時間——TDR 讀法反過來用，週 3）；<strong>串擾</strong>＝流氓團夥：鄰道 pattern 不相關、隨時來，上下軌<strong>整條增厚</strong>像腫眼皮（週 4）；<strong>損耗</strong>＝慢性病：高頻被抽稅、<strong>邊沿變慢＋擺幅縮小，整隻眼均勻瞇起來</strong>（Day 25/26）；<strong>ISI</strong>＝精神分裂：邊沿位置隨歷史 pattern 分成有限幾種，交叉點裂成<strong>幾條分得開的軌跡</strong>（Day 27/29）。(b) ISI 是「有限種 pattern → 有限條邊沿」——<strong>有界、可數（DJ）</strong>；RJ 是無數微小因素疊加的<strong>連續高斯霧，無界</strong>，越外越淡沒有絕對邊界——這個長相差異就是 DJ/RJ 記帳規則的視覺版。(c) ①<strong>pattern A/B</strong>：改送 clock pattern——ISI 需要 pattern 歷史，分身合併 → 病因是通道頻寬（查 flex 長度/板材）；糊不變 → 是 jitter，往上游時鐘/電源查。②<strong>鄰道 idle A/B</strong>：關掉 aggressor（含 VCM/OIS 驅動）——眼皮消腫 → 串擾；再看噪聲是均勻霧（不相關 BUJ）還是固定位置的痣（鎖頻 DJ 化），相關性直接縮小嫌疑名單（Day 27/29 的套路）。</p>
+</details>
+
+<p><strong>Q4.</strong> jitter 記帳法：(a) 畫出家族樹：TJ 拆兩枝、DJ 拆四枝，各枝的合併規則？(b) 為什麼 RJ 絕不能報裸的 pk-pk？「14×σ」的 14 從哪來？(c) 三種量法（cycle-to-cycle／period／long-term）差在哪？datasheet 上「c2c 50 ps (max)」與「period 3 ps (RMS)」能直接比嗎？(d) 下游有 PLL 的系統要盯哪一種？為什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) TJ = <strong>DJ + RJ</strong>。DJ 四子科目：<strong>DCD</strong>（duty 失真）、<strong>DDJ/ISI</strong>（資料相關）、<strong>SJ</strong>（弦波式）、<strong>BUJ</strong>（不相關有界，串擾是大戶）——各取 pk-pk <strong>線性直加</strong>（有界、最壞情況真的會對齊）；RJ 多源用 <strong>RSS</strong>（獨立高斯不會同時最壞，變異數相加）；最後 <strong>TJ(@BER 10⁻¹²) ≈ DJ<sub>pp</sub> + 14×RJ<sub>rms</sub></strong>（Day 28）。(b) RJ 高斯<strong>無界</strong>——pk-pk 是「這次量測的最大減最小」，樣本翻倍就變大，<strong>沒有真值</strong>；只有 σ 穩定。14 = 目標 BER 10⁻¹² 對應的雙邊約 ±7σ 高斯尾巴（PT2 Ch.4 用 ±6σ 慣例並註明界限 14σ——2002 年 clock 世界夠用，現代 serial link 14σ 是入場券，此為「以現代標準需上修」的標準案例）。(c) 差在<strong>參考點</strong>：c2c 跟上一週期比、period 跟理想時刻表比、long-term 跟 N 週期後的時刻表比。<strong>不能直接比</strong>——一個是 max（pk-pk 類最壞值）、一個是 RMS（1σ），統計語言不同；且 PT2 警告各家 c2c 定義不統一，datasheet 不註明統計方式的 jitter 規格等於沒寫。(d) 盯 <strong>cycle-to-cycle</strong>：PT2 原文「PLL 可能無法追蹤這種高頻 jitter」——相鄰週期的突變穿透成輸出誤差；long-term 慢漂移反而被環路吸收（Day 28）。</p>
+</details>
+
+<p><strong>Q5.</strong> PLL 的雙重人格與串接：(a) jitter transfer／generation／peaking 三個詞各是什麼？一顆 PLL 是淨化器還是污染源由什麼決定？(b) PT2 Ch.13 串接實測給了哪兩組數據（三顆／五顆）？五顆時直方圖為什麼裂成雙峰？(c) 三條串接設計守則？(d) SSC（展頻時脈）與下游 PLL 的互動要注意什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>transfer</strong>＝把輸入端雜訊頻譜傳到輸出的固有特性（loop bandwidth 內跟得上就傳下去、以外濾掉）；<strong>generation</strong>＝自己的 VCO/電源雜訊加的新料；<strong>peaking</strong>＝loop bandwidth 附近的「回音區」，頻帶內增益 &gt;0 dB（PT2 實例：loop BW 約 2.5 MHz、帶內放大 0 到近 2 dB）——濾掉的比自己加的多就是淨化器，反之是污染源（PT2 Ch.13）。(b) 串三顆 zero-delay buffer：c2c jitter <strong>37 ps → 68 ps</strong>；串五顆：<strong>低頻 phase noise 增益疊到近 30 dB</strong>、輸出 pk-pk 71 ps 且直方圖<strong>裂成雙峰</strong>——輸入相位雜訊大到 PLL 追不動、只能 best-effort tracking，輸出與輸入出現系統性偏移（tracking skew）。c2c 只小漲、long-term 被大幅放大——正對應「追得上慢的（並傳遞放大）、追不上快的（並濾掉）」。(c) ①<strong>串接一般不超過三顆</strong>（要更多就取得各顆 transfer curve、把會衰減的排進鏈路）；②<strong>避免串接 transfer curve 相似的 PLL</strong>（peaking 頻段重疊逐級指數成長）；③輸入參考髒時<strong>第一顆就放 jitter-attenuating PLL</strong>，別讓髒東西一路傳播；loop bandwidth 是最關鍵參數，拿不到曲線就實測短期＋長期 jitter（PT2 Ch.13）。(d) 下游 PLL 的 loop bandwidth 必須<strong>顯著高於展頻調變速率</strong>（現代常見約 30–33 kHz 量級、down-spread 約 0.5%，記量級即可），否則調變被濾掉或造成 tracking skew；反向守則：「不要把展頻餵給需要低雜訊的目的地」——camera 的 MCLK 選源時這條是紅線（Day 28，週 9 SSC 正課再深化）。</p>
+</details>
+
+<p><strong>Q6.</strong> EQ 的本質與界線：(a) 一句話說出「為什麼損耗救得回來、雜訊救不回來」，並用 E·(H·x+n) 那行帳說明代價。(b) de-emphasis 與 pre-emphasis 差在哪？工業界為什麼常用前者？(c) CTLE 與 TX EQ 的「副作用說明書」差異的根源是什麼？(d) redriver 與 retimer 用預算表語言怎麼選？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 通道是 <strong>LTI 系統，失真確定性、可預測 → 原則上可逆</strong>（串接 E(f) ≈ 1/H(f)，E·H ≈ 平坦，ISI 消失）；雜訊隨機、無規則可反做。代價那行帳：雜訊在通道<strong>之後</strong>混入——輸出 = E·(H·x + n) = x + <strong>E·n</strong>：訊號復原了，雜訊卻被均衡器的高頻增益放大——「拿雜訊預算贖回頻寬」的數學出處（Day 30）。(b) 機制都是「轉態位全力、重複位收力」（最簡 2-tap FIR），差在<strong>參考點</strong>：de-emphasis 壓低重複位（峰值不變、平均功率降）、pre-emphasis 抬高轉態位（峰值變大）。發射端受電源軌限制、峰值就那麼高，所以「峰值受限」的世界選 de-emphasis（PCIe：Gen1 −3.5 dB、Gen2 增 −6 dB 檔；−6 dB ≈ 重複位剩一半）。(c) 根源是<strong>下手的位置</strong>：TX 在源頭動手，調的是還沒進通道的乾淨訊號，不放大髒東西（副作用是擺幅犧牲＋高頻加重讓鄰道串擾攻擊力變強）；RX CTLE 在末端動手，雜訊與串擾已混入，蹺蹺板一翹<strong>不分敵我放大 f<sub>p</sub>/f<sub>z</sub> 倍</strong>——症狀：眼寬打開、眼高變毛。(d) 預算表只超支在<strong>確定性那幾格（ISI）→ redriver 夠</strong>（本質是一顆 CTLE 顆粒，jitter 不重置）；<strong>隨機那格（RJ 累積）也超支 → 只有 retimer</strong>（CDR 重取樣，整張預算表砍成兩張半程各自結算）——因為 EQ 救不了隨機（Day 30）。</p>
+</details>
+
+<h2>Part B｜計算題（Q7–Q12）</h2>
+
+<p><strong>Q7.</strong> skin depth 手感實戰：某 MIPI lane 跑 5 Gb/s（Nyquist = 2.5 GHz）。(a) 2.5 GHz 時銅的 skin depth？(b) 走線用 ½ oz 銅箔（約 17 µm）——這個頻率下電流實際用了銅箔的幾分之一？R<sub>AC</sub>/R<sub>DC</sub> 大約幾倍（微帶線簡化為單面導電）？(c) 有人提議「銅箔加厚一倍來降高頻損耗」——有效嗎？為什麼？正確的方向是哪兩個？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) δ ≈ 66/√2500 = 66/50 = <strong>約 1.3 µm</strong>。(b) 1.3/17 ≈ <strong>不到 8%</strong>——92% 的銅是裝飾品；R<sub>AC</sub>/R<sub>DC</sub> ≈ t/δ ≈ 17/1.3 ≈ <strong>約 13 倍</strong>（單面導電簡化）。(c) <strong>幾乎無效</strong>——高頻電流只走表面 δ 那層皮，皮以下的銅再厚也沒電流；加厚只降 DC/低頻電阻（對 PDN 有用，對高頻損耗沒用）。正確方向：①<strong>加寬 w</strong>（R<sub>AC</sub> ≈ ρℓ/(w·δ)，皮的「寬度」才是高頻電流的截面）——但動 w 要重配 Z₀；②<strong>降表面粗糙度</strong>（電流走皮，皮的路徑長短由表面形貌決定——低損板料配低粗糙度銅箔的原因，Day 25/26）。</p>
+</details>
+
+<p><strong>Q8.</strong> 損耗預算實戰：15 cm 的 FR4 微帶線（tan δ ≈ 0.02，手感係數沿 Day 25/26：α<sub>cond</sub> ≈ 0.47·√f(GHz) dB/10cm、α<sub>diel</sub> ≈ 0.32·f(GHz) dB/10cm），鏈路跑 8 Gb/s（Nyquist 4 GHz）。(a) Nyquist 頻率上兩種損耗各幾 dB？合計？誰是主犯？(b) 換 tan δ ≈ 0.002 的低損板材，介質損變多少？此時瓶頸是誰？(c) 這 15 cm 若換成短 5 cm 的 flex 路徑，合計損耗變多少？從這題讀出 camera 通道「管通道不加 EQ」哲學的物理底氣。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 導體損：0.47×√4 = 0.94 dB/10cm → ×1.5 = <strong>約 1.4 dB</strong>；介質損：0.32×4 = 1.28 dB/10cm → ×1.5 = <strong>約 1.9 dB</strong>；合計 <strong>約 3.3 dB @ 4 GHz</strong>。主犯是<strong>介質損</strong>——4 GHz 已在 f<sub>x</sub>（約 2.2 GHz）之上，板材的天下（Day 26）。(b) 介質損 ÷10 → 約 0.19 dB：合計掉到約 1.6 dB，<strong>瓶頸回到銅</strong>（f<sub>x</sub> 大幅上移）——所以低損板料一定要配低粗糙度銅箔，不然錢白花一半。(c) 長度 ÷3 → 合計約 <strong>1.1 dB</strong>——兩種損耗都 ∝ 長度，短通道是最便宜的 EQ。這就是 MIPI 哲學的底氣：<strong>flex 短（5–15 cm 量級）＋速率檔位設計讓插損天生在收端能吃的範圍內</strong>，與其加 EQ 不如把通道規格管住（Day 30；阻抗/插損上限的規範細節週 13）。</p>
+</details>
+
+<p><strong>Q9.</strong> ISI 對帳（Day 29 公式換新數字再考一次）：RC 爛通道 τ = 1 µs、方波 0→3 V、閾值 1.5 V，高電平穩態簡化為充滿 3 V。某上升沿之前，(甲) 低電平停留了 3 µs；(乙) 只停留了 1 µs。(a) 兩情況的起跑點 V<sub>起</sub> 各是多少？(b) 各自的 t<sub>cross</sub>？兩條分身的時刻差（DDJ）是多少？(c) 若停留時間短到 0.4 µs，會發生什麼怪事？(d) 用「τ 相對 UI」一句話說出 ISI 兇殘度的通式。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 放電 3 µs：V<sub>起</sub> = 3·e<sup>−3</sup> ≈ <strong>0.15 V</strong>（幾乎放光）；放電 1 µs：V<sub>起</sub> = 3·e<sup>−1</sup> ≈ <strong>1.10 V</strong>——起跑點差近 1 V。(b) t<sub>cross</sub> = τ·ln[(3−V<sub>起</sub>)/(3−1.5)]：甲 → ln(2.85/1.5) = ln 1.90 ≈ <strong>0.64 µs</strong>；乙 → ln(1.90/1.5) = ln 1.27 ≈ <strong>0.24 µs</strong>。DDJ ≈ <strong>0.40 µs</strong>——UI 等級的散布，游標量得清清楚楚。(c) 放電 0.4 µs → V<sub>起</sub> = 3·e<sup>−0.4</sup> ≈ 2.01 V <strong>&gt; 1.5 V 閾值</strong>——這條軌跡起跑時已在閾值之上，上升沿根本不再穿越閾值：<strong>重度 ISI 直接吃掉整個轉態</strong>（Day 29 練習 1 親手看過的怪象）。(d) <strong>ISI 的兇殘度由「通道記憶長度 τ 相對於 UI」決定</strong>——損耗越重（等效頻寬越低）或速率越高，起跑點散布越大、分身越散——「同一塊板、速率翻倍就翻車」的時域機制。</p>
+</details>
+
+<p><strong>Q10.</strong> jitter 記帳實戰：某 2.5 Gb/s 鏈路（UI = 400 ps）量得：DCD 12 ps、DDJ 30 ps、SJ 8 ps、BUJ 10 ps（皆 pk-pk）；RJ 有兩個獨立源：σ₁ = 3 ps、σ₂ = 4 ps。(a) DJ<sub>pp</sub>、RJ<sub>rms</sub>、TJ(@BER 10⁻¹²) 各多少？眼寬剩多少（ps 與 UI）？(b) 同事把 RJ 兩源「直加成 7 ps」再乘 14——多扣了多少預算？另一位把 DJ 四項用 RSS 合——為什麼這是造假不是精算？(c) 若鏈路升到 5 Gb/s（UI = 200 ps）而各項不變（樂觀假設），眼寬剩多少？哪一項實際上會惡化得最兇？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) DJ<sub>pp</sub> = 12+30+8+10 = <strong>60 ps</strong>（直加）；RJ<sub>rms</sub> = √(9+16) = <strong>5 ps</strong>（RSS）；TJ = 60 + 14×5 = <strong>130 ps</strong>；眼寬 ≈ 400−130 = <strong>270 ps ≈ 0.68 UI</strong>。(b) 直加 7 ps ×14 = 98 ps → TJ 灌水到 158 ps，<strong>多扣 28 ps</strong>——獨立高斯不會同時最壞，直加不是保險是錯帳，會逼團隊砍不該砍的東西。DJ 用 RSS 是造假：<strong>DJ 不是隨機的</strong>，DCD 與 ISI 與串擾的最壞情況真的會在某個 pattern/某個時刻對齊——把有界確定量當隨機量攤薄，等於假裝最壞情況不存在（Day 28 誤解二）。(c) 眼寬 ≈ 200−130 = <strong>70 ps ≈ 0.35 UI</strong>——從健康掉到危險邊緣。實際惡化最兇的是 <strong>DDJ/ISI</strong>：UI 減半讓 τ/UI 惡化、Nyquist 翻倍讓插損更深（√f 與 f 都是增函數）、pulse spreading 跨更多 UI——「各項不變」違反這一週學的所有損耗物理（Day 30 練習 3 同款陷阱）。</p>
+</details>
+
+<p><strong>Q11.</strong> EQ 的兩帖藥算帳：(a) CTLE 把 zero 放 500 MHz、pole 放 4 GHz——peaking 幾倍幾 dB？這段頻帶裡的雜訊與串擾怎麼樣？(b) TX 差動全擺幅 800 mV、開 −6 dB de-emphasis：長串重複位元的發射擺幅剩多少？(c) 承 (b)，通道在低頻段再吃 12 dB（×0.25）：長串位元的接收擺幅剩多少？若接收端雜訊 σ = 6 mV、判決需約 ±7σ 裕度——過不過？差多少？(d) 這筆帳超支時的三個選項，各動了哪格？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) f<sub>p</sub>/f<sub>z</sub> = 4000/500 = <strong>8 倍 ≈ 18 dB</strong>——500 MHz 到 4 GHz 之間的雜訊與串擾<strong>照單全放大 8 倍</strong>（不分敵我，Day 30）。(b) −6 dB → ×0.5 → <strong>400 mV</strong>。(c) 400×0.25 = <strong>100 mV</strong>；需要 ±7σ = ±42 mV → 差動眼需 ≥ 84 mV——100 mV &gt; 84 mV，<strong>勉強過，margin 只剩 16 mV</strong>：常溫金板剛好過的數字，高溫（雜訊↑、損耗↑）或製程角落就見底——這就是「EQ 調到會過 ≠ 調對」的帳面版。(d) ①降 de-emphasis 深度、改由 RX CTLE 分擔 → 眼高格回血、雜訊格惡化；②修通道（縮短/換板材）→ ISI 格與擺幅格同時回血，唯一沒有副作用的選項（永遠的第一志願）；③上 DFE → 補 ISI 不放大雜訊，代價是錯誤傳播與功耗（Day 30）。</p>
+</details>
+
+<p><strong>Q12.</strong> 通道預算表實戰：4 Gb/s 鏈路（UI = 250 ps）。TX DJ = 20 ps、ISI 殘餘（EQ 後）= 45 ps、串擾 BUJ = 15 ps（皆 pk-pk 直加）；RJ σ = 5 ps；RX aperture = 90 ps；目標 BER 10⁻¹²。(a) 合計與 margin（ps 與 %UI）？這條鏈路健康嗎？(b) 系統廠要求全溫度範圍再保 5% UI 的裕度——現在的表過得了嗎？最有效的一格是哪格、用什麼手段？(c) 若 FA 發現 RJ σ 實際是 9 ps（時鐘樹串了太多級 buffer）——表變怎樣？這時 redriver 有用嗎？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) DJ 直加：20+45+15 = 80 ps；RJ：14×5 = 70 ps；aperture 90 ps → 合計 <strong>240 ps</strong>，margin = <strong>10 ps = 4% UI</strong>——技術上為正，但屬「常溫剛好過」等級，不健康。(b) 5% UI = 12.5 ps &gt; 10 ps → <strong>過不了</strong>。最有效的是 <strong>ISI 殘餘那格（45 ps，確定性支出最大戶）</strong>：手段＝更強的 EQ（TX FIR 加 tap／CTLE 加深／上 DFE）或修通道——每砍 10 ps 直接進 margin；相比之下 aperture 要換 RX 世代、RJ 要動時鐘樹，都是大工程。(c) RJ 項變 14×9 = 126 ps → 合計 296 ps，<strong>超支 46 ps 爆表</strong>。redriver <strong>沒用</strong>——它是 CTLE 顆粒，只救確定性的 ISI 格、jitter 不重置；RJ 超支只有兩條路：<strong>修時鐘樹（減少串接級數、換低 jitter 源——Day 28 的 PT2 Ch.13 守則）或加 retimer</strong>（CDR 把 jitter 預算重開）（Day 30）。</p>
+</details>
+
+<h2>Part C｜讀圖題（Q13–Q15）</h2>
+
+<p><strong>Q13.</strong> 下圖是某 2 Gb/s 鏈路（UI = 500 ps，板內 v ≈ 15 cm/ns）接收端眼圖的示意。請讀出：(a) 這隻眼得了哪種病？指紋證據？(b) 缺口在邊沿後約 1.2 ns 處——不連續點離量測點多遠？(c) 這隻眼若剛好壓線過 mask，可以收工嗎？(d) 開出下一步的兩個動作。</p>
+
+<figure>
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q13：接收端眼圖（示意，顯示 2 UI；縱軸電壓、橫軸時間）</text>
+  <rect x="60" y="40" width="640" height="240" rx="10" fill="#0b1220"/>
+  <!-- eye traces: two crossings, rails -->
+  <!-- upper rail -->
+  <path d="M100,90 C160,88 220,88 300,90 C380,92 460,90 540,89 C600,88 640,89 670,90" fill="none" stroke="#22d3ee" stroke-width="2"/>
+  <path d="M100,100 C160,98 220,97 300,99 C380,101 460,99 540,98 C600,97 640,98 670,99" fill="none" stroke="#22d3ee" stroke-width="1.4" opacity="0.7"/>
+  <!-- lower rail -->
+  <path d="M100,230 C160,232 220,232 300,230 C380,228 460,230 540,231 C600,232 640,231 670,230" fill="none" stroke="#22d3ee" stroke-width="2"/>
+  <path d="M100,220 C160,222 220,223 300,221 C380,219 460,221 540,222 C600,223 640,222 670,221" fill="none" stroke="#22d3ee" stroke-width="1.4" opacity="0.7"/>
+  <!-- rising/falling edges crossing at x=180 and x=560 -->
+  <path d="M100,230 C140,225 160,120 180,160 C200,200 220,95 260,90" fill="none" stroke="#22d3ee" stroke-width="1.8" opacity="0.9"/>
+  <path d="M100,90 C140,95 160,200 180,160 C200,120 220,225 260,230" fill="none" stroke="#22d3ee" stroke-width="1.8" opacity="0.9"/>
+  <path d="M480,230 C520,225 540,120 560,160 C580,200 600,95 640,90" fill="none" stroke="#22d3ee" stroke-width="1.8" opacity="0.9"/>
+  <path d="M480,90 C520,95 540,200 560,160 C580,120 600,225 640,230" fill="none" stroke="#22d3ee" stroke-width="1.8" opacity="0.9"/>
+  <!-- reflection notch: dip on upper rail at fixed position (x ≈ 400, i.e. 1.2ns after edge at 180) -->
+  <path d="M370,90 C385,92 392,128 402,130 C412,128 420,93 435,90" fill="none" stroke="#f472b6" stroke-width="2.4"/>
+  <path d="M370,99 C385,101 392,134 402,136 C412,134 420,102 435,99" fill="none" stroke="#f472b6" stroke-width="1.6" opacity="0.8"/>
+  <text x="402" y="152" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#f9a8d4">固定位置的缺口（每次都在邊沿後約 1.2 ns）</text>
+  <!-- annotations -->
+  <line x1="180" y1="60" x2="180" y2="270" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="402" y1="60" x2="402" y2="270" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="180" y1="66" x2="402" y2="66" stroke="#fbbf24" stroke-width="1.6"/>
+  <text x="291" y="60" text-anchor="middle" font-size="10" font-weight="bold" fill="#fbbf24">邊沿 → 缺口：約 1.2 ns</text>
+  <text x="180" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">交叉點</text>
+  <text x="560" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">交叉點</text>
+  <text x="380" y="312" text-anchor="middle" font-size="9" fill="#6b7280">邊沿斜率正常、上下軌厚度正常、交叉點乾淨——只有那個缺口每次都咬在同一位置</text>
+</svg>
+<figcaption>圖 1：眼圖判讀考題——注意「缺口的位置固定」這個關鍵指紋，以及其他部位（邊沿斜率、軌厚、交叉點）都健康。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>反射</strong>——指紋：缺口出現在<strong>固定位置</strong>（狙擊手，殘波固定延遲後回來補一刀），且邊沿斜率正常（排除損耗）、上下軌沒有整條增厚（排除串擾）、交叉點沒有裂分身（排除 ISI）（Day 27 四病鑑別）。(b) 缺口延遲 = <strong>2×飛行時間</strong> → TOF = 0.6 ns → 距離 = 0.6 ns × 15 cm/ns = <strong>約 9 cm</strong>——拿去跟 layout 對帳：9 cm 處有沒有 via、connector、stub 或阻抗突變（週 3 TDR 讀法反過來用）。(c) <strong>不能收工</strong>——mask 只保證底線；帶著明顯反射缺口壓線過 mask，量產放大溫度/製程 corner 就翻車。眼圖是健檢不是免死金牌，<strong>margin 要另外報</strong>。(d) ①<strong>TDR（或 TDR 模式的示波器）從量測點打進去</strong>，在 9 cm 處找阻抗不連續、確認元凶（via stub？connector？）；②按週 2/3 的藥方處理：修端接、縮 stub、背鑽或換 launch——修完重疊眼圖驗證缺口消失且 margin 回血。</p>
+</details>
+
+<p><strong>Q14.</strong> 某 lane 眼圖交叉點的時間直方圖如下：雙峰、峰間距約 36 ps、每個峰各自近似高斯（σ ≈ 4 ps）。(a) 從這張圖直接讀出 DJ 與 RJ 的估計值？TJ(@BER 10⁻¹²) 約多少？(b) UI = 400 ps 時，眼寬(@BER) 約多少？(c) 三個 A/B 實驗（鄰道 idle／改自己的 pattern／gate 在 actuator 動作期間）各驗證哪個嫌疑犯？(d) 若三個 A/B 都不動——雙峰還在——下一個嫌疑犯是誰？用什麼工具抓？</p>
+
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">Q14：交叉點時間直方圖（橫軸：交叉時刻；縱軸：出現次數）</text>
+  <line x1="80" y1="240" x2="680" y2="240" stroke="#374151" stroke-width="1.5"/>
+  <!-- bimodal -->
+  <path d="M120,240 Q180,240 230,234 Q270,226 295,130 Q315,70 335,130 Q360,226 380,236 Q390,238 400,236 Q420,226 445,130 Q465,70 485,130 Q510,226 550,234 Q600,240 660,240" fill="none" stroke="#dc2626" stroke-width="2.4"/>
+  <line x1="315" y1="62" x2="315" y2="252" stroke="#7c3aed" stroke-width="1.1" stroke-dasharray="4 3"/>
+  <line x1="465" y1="62" x2="465" y2="252" stroke="#7c3aed" stroke-width="1.1" stroke-dasharray="4 3"/>
+  <line x1="315" y1="262" x2="465" y2="262" stroke="#7c3aed" stroke-width="1.6"/>
+  <line x1="315" y1="257" x2="315" y2="267" stroke="#7c3aed" stroke-width="1.6"/>
+  <line x1="465" y1="257" x2="465" y2="267" stroke="#7c3aed" stroke-width="1.6"/>
+  <text x="390" y="282" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#7c3aed">峰間距 ≈ 36 ps；單峰寬度 σ ≈ 4 ps（各自近似高斯）</text>
+  <text x="380" y="52" text-anchor="middle" font-size="9.5" fill="#6b7280">PT2 Ch.4：DJ 與 RJ 疊加形成 bimodal 分布——峰距讀 DJ、單峰寬度讀 RJ</text>
+</svg>
+<figcaption>圖 2：拆帳的第一眼證據——雙峰直方圖。每個峰自己還是一個小高斯（PT2 Ch.4 原文觀念）。</figcaption>
+</figure>
+
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>峰間距 ≈ DJ<sub>pp</sub> ≈ 36 ps</strong>（雙 Dirac 的間距，讀 DJ）；<strong>單峰寬度 ≈ RJ：σ ≈ 4 ps</strong>。TJ ≈ 36 + 14×4 = <strong>約 92 ps</strong>。(b) 眼寬 ≈ 400 − 92 = <strong>約 308 ps ≈ 0.77 UI</strong>。(c) ①<strong>鄰道 idle 塌單峰 → 串擾</strong>（BUJ/crosstalk-induced，Day 24 Q14 同款推理）；②<strong>改自己的 pattern（clock pattern）塌單峰 → ISI/DDJ</strong>（分身需要 pattern 歷史）；③<strong>gate 在 VCM/OIS 動作期間才出現 → 不相關有界 DJ</strong>（actuator 驅動耦合——camera 模組的招牌嫌疑犯，週 15 正課）。(d) 剩下的確定性嫌疑犯是 <strong>SJ（週期性 jitter）</strong>——典型來源：電源開關頻率的漣波調變、SSC 調變殘留、鄰近時鐘的 spur。工具：<strong>對 jitter 做頻譜（jitter spectrum／TIE FFT）</strong>——週期性兇手在頻譜上是一根尖 spur，頻率直接指認來源（開關頻率？33 kHz 展頻？某顆時鐘？）；示波器的 jitter 分解軟體或 phase noise 分析是正規做法（Day 28）。</p>
+</details>
+
+<p><strong>Q15.</strong> FA 情境判讀（不用圖，用表）：bring-up 一條 marginal 的鏈路，你把 RX CTLE 五個檔位各掃一次，記下眼高與眼寬。規格要求：眼高 ≥ 100 mV、眼寬 ≥ 0.60 UI。</p>
+<table>
+  <tr><th>CTLE 檔位</th><th>peaking</th><th>眼高</th><th>眼寬</th></tr>
+  <tr><td>A</td><td>0 dB</td><td>180 mV</td><td>0.55 UI</td></tr>
+  <tr><td>B</td><td>3 dB</td><td>170 mV</td><td>0.62 UI</td></tr>
+  <tr><td>C</td><td>6 dB</td><td>150 mV</td><td>0.66 UI</td></tr>
+  <tr><td>D</td><td>9 dB</td><td>120 mV</td><td>0.68 UI</td></tr>
+  <tr><td>E</td><td>12 dB</td><td>80 mV</td><td>0.69 UI</td></tr>
+</table>
+<p>(a) 哪些檔位「會過」？該選哪檔？理由？(b) 為什麼 D 檔危險、E 檔直接出局？機制？(c) 從 C→D→E 眼寬增益遞減（+0.02、+0.01 UI）——用 Day 30 的交易框架解釋這個遞減。(d) 選完檔位之後、收工之前，還缺哪兩個動作？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) B、C、D 三檔都壓過規格線。選 <strong>C</strong>——它是<strong>兩個方向裕度最平衡</strong>的檔位（眼高 +50 mV、眼寬 +0.06 UI），不是「剛好會過」的檔位。「EQ 調到會過 ≠ 調對」（Day 30 FA 案例）。(b) CTLE 檔位是在「水平換垂直」曲線上滑動：D 檔眼高只剩 +20 mV 裕度——<strong>高溫時雜訊上升＋通道損耗變大，垂直方向先見底</strong>；換一片製程角落的板可能直接 fail。E 檔的機制：peaking 開到 12 dB，<strong>ISI 早已補完、多開的增益全數餵給雜訊與串擾</strong>——眼寬幾乎不再賺（+0.01 UI）、眼高賠掉 40 mV，垂直方向破規格出局。(c) 交易框架：EQ 能贖回的只有<strong>確定性的 ISI</strong>——通道的 pole 被 zero 抵消完之後，「可贖回資產」就見底了；再加 peaking 只是把 f<sub>z</sub>～f<sub>p</sub> 頻帶的雜訊放大更多倍——<strong>買到的邊際眼寬遞減、付出的眼高線性增加</strong>，甜蜜點因此存在（Day 30 練習 1(d) 的同一條曲線）。(d) ①<strong>溫度/電壓 corner 重掃</strong>：至少高溫一輪，確認 C 檔在最壞條件下兩軸都有裕度（更完整是 bathtub curve／BER 掃描——下週正課）；②<strong>把掃檔記錄寫進報告</strong>（每檔眼高眼寬＋選檔理由）——下一個接手的人才知道這個檔位是「證明過的」不是「碰運氣的」。</p>
+</details>
+
+<h2>Part D｜實驗數據對照題（Q16–Q17）——拿出你的 Day 29 記錄表</h2>
+
+<p><strong>Q16.</strong> 對照記錄表<strong>第 4 列</strong>（duty 20% vs 80% 的 t<sub>cross</sub> 差；沒做實驗的用 Day 29 練習 1 示範值：τ = 1 µs、0→3 V、閾值 1.5 V、500 kHz）。(a) duty 20%（放電 1.6 µs）與 duty 50%（放電 1 µs）的理論 t<sub>cross</sub> 各多少？差多少？你的實測對到兩成內了嗎？(b) 實測與理論的偏差，最可能來自哪三個來源？(c) duty 80% 那條軌跡在示波器上的行為為什麼「跟別條完全不同」？(d) 這一列的工程意義一句話——它證明了你會什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) duty 20%：V<sub>起</sub> = 3e<sup>−1.6</sup> ≈ 0.61 V → t<sub>cross</sub> = ln(2.39/1.5) ≈ <strong>0.47 µs</strong>；duty 50%：V<sub>起</sub> = 3e<sup>−1</sup> ≈ 1.10 V → t<sub>cross</sub> = ln(1.90/1.5) ≈ <strong>0.24 µs</strong>；差 ≈ <strong>0.23 µs</strong>——UI 的兩成以上，游標量得出來。對到兩成內＝成功（記錄表備註欄的標準）。(b) ①<strong>穩態簡化不成立</strong>：高電平時間有限，實際充不滿 3 V，V<sub>終</sub> 比 3 V 低 → 理論值系統性偏移；②<strong>τ 的實測誤差</strong>：R、C 標稱值各有 5–10% 公差，τ 用實測（63% 爬升時間）而非標稱；③<strong>閾值/游標讀值誤差</strong>：1.5 V 游標放的位置與示波器的電壓刻度誤差。(c) duty 80%（放電只有 0.4 µs）→ V<sub>起</sub> = 3e<sup>−0.4</sup> ≈ <strong>2.01 V &gt; 1.5 V 閾值</strong>——起跑時已在閾值之上，上升沿<strong>不再穿越閾值</strong>（或在放電段尾端才穿越）：重度 ISI 直接吃掉整個轉態的活體示範。(d) 一句話：<strong>你能用公式「預測」ISI，而不是只會「看到」ISI</strong>——jitter 從現象變成可對帳的物理量，這是 FA 工程師與按鍵盤工程師的分界線。</p>
+</details>
+
+<p><strong>Q17.</strong> 對照記錄表<strong>第 7、8、9 列</strong>（示範值：三通實驗 σ<sub>儀器</sub> = 22 ps；某時脈邊沿讀值 σ<sub>讀</sub> = 30 ps；糊寬隨延遲 10/100/1000 週期成 √N 成長；觸發電平中點 vs 近頂的糊寬比 ≈ 斜率反比）。(a) 訊號真實的 σ？為什麼用平方相減而不是直接相減？(b) 1/3 規則的內容與推導？σ<sub>儀器</sub> 超標時讀值還剩什麼用途？(c) 第 8 列的 √N 成長說明這筆 jitter 屬於哪一科？第 9 列驗證哪條公式、對「損耗磨鈍邊沿」的推論是什麼？(d) 把這三列合起來，翻譯成驗收眼圖報告時的「三問」。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) σ<sub>訊號</sub> = √(30²−22²) = √416 ≈ <strong>20 ps</strong>——讀值裡整整三分之一的寬度是儀器貢獻的。平方相減的原因：訊號與儀器 jitter 是<strong>獨立隨機源</strong>，合成規則是變異數相加（RSS），逆運算自然是變異數相減；線性相減（30−22 = 8）把「偶爾同向」當「永遠同向」扣，嚴重低估（Day 29 練習 2）。(b) <strong>σ<sub>儀器</sub> ≤ 讀值的 1/3 → 污染 &lt; 6%</strong>：設 σ<sub>儀器</sub> = σ<sub>訊號</sub>/3，讀值 = σ·√(1+1/9) ≈ 1.054σ，高估約 5.4% 可接受；到一半時高估 12%、同量級時高估 41%。超標時讀值<strong>只可做 A/B 相對比較</strong>（儀器誤差兩邊共通）——記錄表寫上「此讀值受儀器污染」那行字就是量測素養。(c) √N 成長 = <strong>隨機遊走（醉漢走路）＝ RJ 的簽名</strong>——每週期一筆獨立的小誤差，累積 N 週期後 σ ∝ √N（DJ 是有界的，不會這樣長）。第 9 列驗證 <strong>σ<sub>t</sub> = v<sub>n</sub>/slew</strong>（觸發匯率）：推論——損耗磨鈍邊沿 = slew 變小 = <strong>同樣的電壓雜訊換到更多時間抖動</strong>，就算時鐘本身沒變髒，接收端量到的 jitter 也自動變大（幅度域問題自動變時域問題）。(d) 驗收三問：①<strong>觸發/參考是什麼</strong>（自觸發？外部 clock？CDR？——同一訊號三種對齊三張臉）；②<strong>量測系統底噪多少、扣了沒</strong>（σ 平方相減）；③<strong>探棒接法</strong>（地線多長、主動/被動——Ch.11 的 t<sub>DISPLAY</sub> 帳算過沒有）。這三問就是「會按儀器的人」與「懂量測的人」的分界線（Day 29）。</p>
+</details>
+
+<h2>Part E｜延伸題：Perfect Timing II（Q18–Q20）</h2>
+<div class="card intuition">
+  <span class="label">白話版：為什麼是這三題</span>
+  <p>本週織入的《Perfect Timing II》（Cypress, 2002）橫跨 Ch.4「Clock Jitter」（家族樹與高斯統計）、Ch.13「Cascading PLLs」（串接實測）、Ch.11「Probing」（t<sub>DISPLAY</sub>）與 Ch.3「Timing Budget」（Day 30 首次深引）。這三題把書中數據當面試題重演：背景知識都在題目裡，考的是你能不能<strong>用本週的工具把數字生出來</strong>，並且知道 2002 年的數據哪些要以現代標準重新校訂——「引用經典＋標註年代適用性」在面試是非常值錢的說話方式。</p>
+</div>
+
+<p><strong>Q18.</strong> PT2 Ch.4 的統計功課：(a) RJ 的來源與統計性質，書中怎麼描述？為什麼直方圖的尾巴「看起來有固定值」其實是假象？(b) 書中 ±6σ 慣例 vs 現代 14σ——各對應什麼涵蓋率/BER？這條上修的邏輯是什麼？(c) DJ 的定義原話裡點名了哪些兇手？本週哪幾天分別是哪個兇手的機制課？(d) 「DJ 與 RJ 疊加形成 bimodal/multi-modal 分布，每個峰各自是一個高斯」——這句話怎麼變成 Q14 那套讀圖法？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) RJ 來自「大量自然界的獨立因素」（thermal noise、輻射、半導體晶格結構等<strong>無法個別分辨的成分</strong>）——高斯分布、<strong>無界</strong>。尾巴假象：PT2 原文提醒直方圖尾巴「沒有延伸到無限遠、有固定值，是因為<strong>樣本數有限</strong>」——樣本翻倍 pk-pk 就變大，所以 pk-pk 沒有真值，永遠報 σ＋樣本數（或 BER）。(b) ±6σ 涵蓋約 99.9999999%（2002 年 clock 世界的工程慣例，書中同時註明實務界限「不超過 14σ」）；現代 serial link 以 BER 定 TJ：<strong>10⁻¹² 對應約 14σ（±7σ）</strong>。上修邏輯：clock 錯一拍可能被下游容忍，serial data 錯一位就是 BER 事件——合約從「大概涵蓋」升級成「一兆分之一」，保護帶自然從 6σ 拉到 14σ（Day 27/28）。(c) 原話：DJ「non-random and bounded... can be traced to a specific source」，兇手點名 <strong>signal noise、crosstalk、power supplies</strong>——crosstalk 是週 4 整週、ISI/損耗是本週 Day 25–27/29、電源雜訊掛號週 7–8 PDN。(d) 讀圖法：<strong>峰間距讀 DJ</strong>（有界確定量把分布推成兩坨）、<strong>單峰寬度讀 RJ</strong>（每坨自己的高斯 σ）——一張直方圖同時拆出兩本帳，Q14(a) 的 36 ps＋4 ps 就是這句原文的實戰版。</p>
+</details>
+
+<p><strong>Q19.</strong> PT2 Ch.13 實測數據判讀：(a) 三顆 ZDB 串接，c2c 從 37 → 68 ps——為什麼不是 3×37？中間發生了什麼？(b) 第五顆輸出：低頻 phase noise 增益近 30 dB、pk-pk 71 ps、直方圖裂雙峰——「c2c 只小漲、long-term 大漲」對應 PLL 的什麼性格？(c) 把 Ch.13 三守則翻譯到 camera 場景：sensor 的 MCLK 路徑（SoC PLL → clock buffer → sensor 內部 PLL）你會查哪三件事？(d) 2002 年的哪些條件要標註上修？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 因為每級的貢獻是<strong>部分傳遞＋自生＋peaking</strong> 的合成，不是全額轉存：loop bandwidth 外的高頻被各級濾掉（c2c 屬高頻類，各級其實在幫忙濾）、但各級又自己加料＋在 peaking 頻段放大——淨結果是次線性成長（37→68 ps 不到兩倍）。若各級 transfer curve 相似、peaking 頻段重疊，成長會惡化成逐級指數——這正是守則②的由來。(b) 對應「<strong>追得上慢的、追不上快的</strong>」：PLL 天生能追（並傳遞、疊加）低頻/long-term 成分——串五級後低頻增益疊到近 30 dB、long-term 爆炸；高頻/c2c 成分各級追不上（被濾）所以只小漲。雙峰 = 輸入相位雜訊大到追不動，best-effort tracking 產生系統性偏移（tracking skew）——分布不再高斯。(c) ①<strong>數鏈上有幾顆 PLL</strong>（SoC 內部倍頻＋外部 buffer 若是 ZDB 內含 PLL＋sensor 內部 PLL——超過三顆就要警惕，守則①）；②<strong>MCLK 源頭乾不乾淨、有沒有展頻</strong>（sensor PLL 是低雜訊需求目的地——「不要把展頻餵給需要低雜訊的設計」；參考髒就在第一級放 jitter-attenuating 方案，守則③）；③<strong>拿不拿得到 transfer curve／loop bandwidth</strong>——拿不到就實測 MCLK 與 sensor 輸出的短期＋長期 jitter（書中原話：無論如何都建議做 jitter 量測）。(d) 上修三處：2002 年舞台是 25–133 MHz 時鐘與 ns/ps 交界的量級，現代 camera MCLK 常見約 19.2/24 MHz 但 sensor 內部 PLL 倍到 GHz 級；量測主力從 TIA 換成即時示波器 jitter 分解＋phase noise 分析儀；loop bandwidth 當年是廠商機密、現代 datasheet/IBIS-AMI 提供意願高得多——<strong>方法論（數 PLL、看 transfer curve、量兩種 jitter）一字不改</strong>。</p>
+</details>
+
+<p><strong>Q20.</strong> PT2 Ch.3 的預算表哲學（Day 30 的收官複習）：(a) 時鐘樹實驗的兩個數字（手冊直加 vs 實測）？悲觀的機制叫什麼？(b) 用統計語言說明哪些成分「本質上不會同時最壞」、哪些「真的會」——由此導出現代 dual-Dirac 記法的兩條規則。(c) TTB 三步收斂（1.5 → 1.3 → 0.696 ns @133 MHz）中，最後一步的省法本質是什麼？工程含義？(d) 把 Ch.3 的教訓與 Ch.11 的 t<sub>DISPLAY</sub> 合成一句「預算表的填表紀律」——並說出它為什麼正好是下週 S 參數量測週的開場白。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 手冊 worst-case 直加：窗口 <strong>2.0 ns</strong>；整棵樹做出來實測：<strong>917 ps</strong>（最晚 +571／最早 −346 ps）——紙上比現實悲觀一倍以上（Perfect Timing II Ch.3）。機制叫「<strong>guard band compounding（保護帶的複利疊加）</strong>」：每個手冊數字自帶保險，直加等於把所有人的保險疊在一起買。(b) <strong>不會同時最壞</strong>：獨立的隨機量（各元件的 jitter）——兩個獨立高斯同時站上各自極值的機率是機率的乘積，天文數字般小，正確合成是 RSS；<strong>真的會</strong>：有界確定量（DCD、ISI、同晶片內相關的 skew/delay）——最壞 pattern 存在且會發生。導出規則：<strong>DJ 家族 pk-pk 直加、RJ 報 σ 乘 BER 倍數（10⁻¹² 約 14）</strong>——5.1 那張 eye budget 的記帳法就是 dual-Dirac 的現代版。(c) 前兩步是「把重疊的保險合併」（全條件一次特性化）；最後一步本質不同——<strong>拿掉一個自由度</strong>：頻率從變數變常數（系統固定 133 MHz），窗口 1.3 → 0.696 ns、對 7.5 ns 週期拿回 800+ ps。工程含義：<strong>規格越貼近實際工作點，預算越準</strong>——現代規格書給 per-data-rate 參數、IBIS-AMI 給 per-rate 模型的理由。(d) 填表紀律：「<strong>預算表裡每一格都要用『量測的、扣過儀器帳的、貼近工作點的』數字填，而不是手冊 worst-case 直加</strong>」——Ch.3 管「怎麼加」（統計合成）、Ch.11 管「填進去的數字乾不乾淨」（t<sub>DISPLAY</sub>／σ 扣帳）。而預算表裡「通道」那幾格（插損、ISI 殘餘）目前還是估的——<strong>把它們變成實測數字的工具就是 S 參數</strong>，這正是明天開始的量測週要發的武器。過度保守不是美德：是花真錢（更貴板材、不需要的 retimer）買不存在的風險（Day 30）。</p>
+</details>
+
+<h2>評分與行動</h2>
+<div class="card takeaway">
+  <span class="label">評分表</span>
+  <ul>
+    <li><strong>17–20 分</strong>：損耗與眼圖這關過了——你已能把「兩種稅 → 眼圖指紋 → jitter 記帳 → 量測誠信 → EQ 交易 → 預算表」講成一條完整的故事線，這正是 camera/SerDes 面試 SI 深挖題的滿分骨架。錯的題做成 Anki 卡，明天放心進量測週。</li>
+    <li><strong>13–16 分</strong>：過關。把錯題對應的課回去重讀（速查表右欄有出處）；特別注意 Part C——面試給的永遠是眼圖、直方圖和掃檔表，不是公式；「固定缺口=反射、雙峰=DJ、掃檔選雙向裕度」這三條推理鏈要練到反射。</li>
+    <li><strong>9–12 分</strong>：Day 28（記帳法）與 Day 30（EQ 與預算表）各花一小時重讀——前者是所有 jitter 對話的語法、後者是下週每台儀器要量的那張表；明晚重考本卷 Part B、C。</li>
+    <li><strong>&lt; 9 分</strong>：停下來。下週的探棒、示波器頻寬、S 參數全部蓋在「損耗頻域語言」與「RJ/DJ 統計」上。Day 25–30 完整重讀、Anki 全刷，寧可慢兩天。</li>
+  </ul>
+  <p>另提醒：Day 29 的量測誠信實驗若還沒做（或記錄表有空格），<strong>下週找一天午休帶去公司補做</strong>——Part D 只能用示範值作答的話，「ISI 對帳」和「儀器扣帳」這兩格的手感你還沒親手摸過；下週探棒課會直接在這套治具上加戲。Phase 1 只剩最後一週——量測週結束就進 PI/EMI，把 SI 的地基踩實。</p>
+</div>
+
+<h2>今日 Anki 卡片（第 5 週總結卡）</h2>
+<div class="anki">
+  <p class="q">Q1：第 5 週的一句話總綱？</p>
+  <p class="a">A1：通道抽兩種稅——<strong>銅 √f（皮變薄的幾何效應）、板材 f（每週期抽固定比例）</strong>，交叉點 f<sub>x</sub> 約 2 GHz 量級（隨幾何/板材移動）；稅的後果全寫在<strong>眼圖</strong>上（統計圖非波形，報數字必附 BER/樣本數）；水平帳叫 jitter，<strong>DJ 直加、RJ 取 RSS 再 ×14σ(@BER 10⁻¹²)</strong>；量之前先讓儀器自證清白（σ<sub>訊號</sub> = √(σ²<sub>讀</sub>−σ²<sub>儀器</sub>)）；最後用 EQ 贖回眼寬（代價是雜訊帳）、用預算表結案（確定性直加＋隨機統計）。</p>
+  <p class="q">Q2：第 5 週五個必背數字？</p>
+  <p class="a">A2：①skin depth <strong>δ ≈ 66 µm/√f(MHz)</strong>（1 GHz → 約 2.1 µm，比 ½ oz 銅箔 17 µm 薄一個量級）；②FR4 介質損 <strong>約 0.3 dB/10 cm/GHz</strong>（與幾何無關）；③BER 10⁻¹² → RJ 有效 pk-pk ≈ <strong>14×σ</strong>；④de-emphasis <strong>−6 dB ≈ 重複位剩一半</strong>（PCIe Gen1 −3.5/Gen2 −6 dB）；⑤PT2 Ch.3：手冊直加 <strong>2.0 ns vs 實測 917 ps</strong>——guard band 複利、直加永遠過度悲觀。</p>
+  <p class="q">Q3：眼圖四病指紋與第一刀 A/B？</p>
+  <p class="a">A3：<strong>反射</strong>＝固定位置咬缺口（延遲 = 2×TOF 反推距離，TDR 讀法反用）；<strong>串擾</strong>＝上下軌整條增厚（鄰道 idle 消腫；均勻霧=不相關 BUJ、固定痣=鎖頻 DJ）；<strong>損耗</strong>＝邊沿變慢＋整眼均勻瞇（隨線長/速率單調）；<strong>ISI</strong>＝交叉點裂成有限幾條分身（clock pattern 一送就合併——需要 pattern 歷史）。分身（有界可數=DJ）vs 高斯霧（無界=RJ）是記帳規則的視覺版。</p>
+  <p class="q">Q4：jitter 記帳三步與量測誠信三問？</p>
+  <p class="a">A4：記帳三步：①各枝分開量（各有專屬 A/B）→ ②RJ 取 RSS、DJ（DCD/DDJ/SJ/BUJ）pk-pk 直加 → ③TJ = DJ<sub>pp</sub>＋14×RJ<sub>rms</sub>，眼寬 ≈ UI−TJ。誠信三問：①觸發/參考是什麼（觸發點假乾淨、同訊號三種對齊三張臉）；②底噪多少扣了沒（平方相減；底噪 ≤ 讀值 1/3 → 污染 &lt;6%，超標只做 A/B）；③探棒接法（t<sub>DISPLAY</sub> 四人平方合成、長地線是量測造的鬼——PT2 Ch.11）。</p>
+  <p class="q">Q5：EQ 交易與 redriver/retimer 的選擇邏輯？</p>
+  <p class="a">A5：EQ 本質＝<strong>LTI 確定性失真可逆</strong>（E·H≈平坦）、但雜訊在通道後混入被 E 放大——救得了 ISI/DDJ、救不了 RJ。TX de-emphasis 在源頭動手不放大髒東西（代價：眼高換眼寬＋鄰道攻擊力↑）；RX CTLE 在末端動手<strong>不分敵我放大 f<sub>p</sub>/f<sub>z</sub> 倍</strong>；調檔選「雙向裕度」不選「剛好會過」。預算表超支在確定性格（ISI）→ redriver（CTLE 顆粒、jitter 不重置）；隨機格（RJ）也超支 → 只有 retimer（CDR 重取樣、預算表重開）；永遠的第一志願是修通道。</p>
+</div>
+
+<h2>明日預告</h2>
+<div class="card">
+  <p><strong>Day 32（週一）：SI 量測週開張——高速探棒：你的探棒也是一個電路</strong></p>
+  <p>第 6 週、Phase 1 最終週：量測週。這一週要把前五週紙上的每個量（阻抗、損耗、眼圖、jitter）換成儀器上的真數字。第一課從最容易被忽視的環節開刀——<strong>探棒</strong>。你以為探棒是「一條把訊號接進示波器的線」？它是一個掛在你電路上的 RLC 網路：輸入電容會把你的邊沿拖慢、把你的時脈樹加載到失真，10:1 被動探棒的分壓補償沒調好，波形直接變形給你看。Perfect Timing II Ch.11 對這件事有整章的實測波形——為什麼同一個訊號、三種探法、三張完全不同的臉；什麼時候非用主動探棒不可。Day 29 你量過「儀器的手震」，明天量「探棒的重量」——把量測系統自己的指紋認齊，之後量到的才是 DUT。把週末的 Anki 清完，明天見。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 31 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 5/6）｜週日複習日</span>
+</footer>
+
+</div>
+</body>
+</html>

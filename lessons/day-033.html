@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 33｜示波器頻寬與取樣率——「1 GHz 示波器能不能看好 100 MHz 時脈？」三道關卡：頻寬、取樣率、記憶深度</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 33 天（週二新觀念課・SI 量測週）</div>
+  <h1>Day 33：示波器頻寬與取樣率——「1 GHz 示波器能不能看好 100 MHz 時脈？」三道關卡：頻寬、取樣率、記憶深度</h1>
+  <div class="meta">2026-08-25（二）｜預估學習時間：90 分鐘｜難度：★★★☆☆（昨天秤了探棒的重量，今天輪到示波器本體交代自己的極限——這是 Perfect Timing II Ch.11 開篇之問的正式解答日）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Perfect Timing II Ch.11 開篇丟出一個看似送分、實則處處是坑的問題：<strong>「我的 1 GHz 示波器能不能正確顯示我的 100 MHz 時脈？」</strong>（Perfect Timing II Ch.11）。今天把這一題徹底算清楚。讀完你要能夠：</p>
+  <ol>
+    <li>講清楚示波器頻寬的定義：<strong>−3 dB 點</strong>到底在說什麼、為什麼「1 GHz」不是一道牆而是一個緩坡</li>
+    <li>分清楚量測的兩把尺：看<strong>重複波形</strong>用「至少 3 倍頻寬」規則、看<strong>邊沿</strong>用 <strong>t = 0.338/f<sub>3dB</sub></strong> 換算（Perfect Timing II Ch.11）——並理解為什麼書中強調「訊號的頻率根本不重要，重要的是邊沿速度」</li>
+    <li>把 Day 29 的 t<sub>DISPLAY</sub> RSS 公式反過來用：從「量到的數字」推回「真實的邊沿」，以及建立<strong>誤差 vs 頻寬餘裕</strong>的速算表（3:1 約 5%、5:1 約 2%）</li>
+    <li>過第二道關卡：<strong>取樣率</strong>——為什麼 Nyquist 的 2 倍是數學家的下限而不是工程師的下限；PT2 給的工程數字：<strong>取樣率:頻寬至少 4:1，8–16:1 極佳，超過 10 之後內插的影響極小</strong>（Perfect Timing II Ch.11）</li>
+    <li>過第三道關卡：<strong>記憶深度</strong>——擷取時間 = 記憶點數 ÷ 取樣率，以及「時基一拉長、取樣率偷偷掉下來」這個坑過所有人的陷阱</li>
+    <li>帶走一張<strong>「訊號邊沿 → 需要的示波器/探棒等級」速查表</strong>（Day 32 預告的兌現）——下次借儀器不再靠信仰</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：量測系統的第四枚指紋</h2>
+<p>本週是 SI 量測週：把儀器對準 DUT 之前，先認清量測系統自己的指紋。目前已對三枚：<strong>觸發手震</strong>（Day 29 的 σ<sub>儀器</sub>）、<strong>顯示虛胖</strong>（Day 29 的 t<sub>DISPLAY</sub> RSS）、<strong>探棒重量</strong>（Day 32 的加載三宗罪）。今天對第四枚，也是掏錢時最常被規格表迷惑的一枚：<strong>示波器本體的三道關卡</strong>——頻寬、取樣率、記憶深度。Day 32 練習 2 算出過一個反直覺的結論：「先修地線（免錢）→ 再升級探棒 → 最後才輪到換示波器」。今天你會看到這個順位的完整理由——同時也會看到，當真的輪到換示波器時，該怎麼換才不會買錯或借錯。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：今天在講什麼（公式看不懂的人只讀這格也夠）</span>
+  <p>示波器就像一台相機。相機有三個規格決定照片品質：<strong>快門速度</strong>（拍高速動作糊不糊——這是「頻寬」）、<strong>畫素</strong>（一秒鐘拍幾張——這是「取樣率」）、<strong>記憶卡容量</strong>（能連拍多久——這是「記憶深度」）。三個規格是三道獨立的關卡，<strong>過不了任何一關，照片都會騙你</strong>。今天的三個重點：①「1 GHz 示波器」的意思不是「1 GHz 以下都拍得完美」，而是「到 1 GHz 時畫面已經暗了三成」——它是個緩坡不是一道牆；而且判斷夠不夠用<strong>不看訊號的頻率、看訊號邊沿的速度</strong>——就像拍賽車，重點不是賽車每圈跑幾分鐘，是它衝過你面前那一瞬間有多快。②一秒拍的張數至少要是快門等級的 4 倍，否則兩張照片之間的動作是軟體「腦補」出來的——腦補有時很準、有時把快動作補成完全不存在的慢動作（叫混疊 aliasing，今天最陰的坑）。③記憶卡不夠大時，相機會<strong>自動降低連拍速度來撐完你要的錄影長度</strong>——你以為你有 1 GHz 等級的眼睛，其實在長錄影模式下它已經自動降級成老人機，而且螢幕上不會跳警告。記住三句話就及格：「<strong>頻寬看邊沿不看頻率、取樣率至少頻寬的 4 倍、時基拉長要回頭檢查取樣率</strong>」。</p>
+</div>
+
+<h2>1. 第一道關卡：頻寬——−3 dB 是緩坡，不是牆</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：毛玻璃，不是鐵捲門</span>
+  <p>很多人把「1 GHz 頻寬」想像成鐵捲門：1 GHz 以下全放行、以上全擋掉。錯——它是一片<strong>越往高頻越霧的毛玻璃</strong>。規格表上的 1 GHz 只是廠商在坡道上插的一支旗子：「到這裡，弦波的振幅已經衰減 3 dB（剩下約 71%）」。旗子前面的頻率也在被衰減（只是少一點），旗子後面的頻率也沒有全滅（只是更慘）。所以「我的訊號 800 MHz &lt; 1 GHz，所以沒問題」這句話是錯的——800 MHz 已經站在坡道上，振幅已經被吃掉一截了。</p>
+</div>
+
+<p>Perfect Timing II Ch.11 的定義原文：示波器頻寬是「<strong>弦波振幅衰減達 3 dB（含）以上的頻率</strong>」（the frequency above which a sine wave's amplitude is degraded by 3 dB or more, Perfect Timing II Ch.11）。書中還補了一個容易忽略的細節：<strong>主機（mainframe）有主機的頻寬、每個通道/插件有自己的頻寬</strong>——通道之間可能不同，插件也可能改變整機能力（Perfect Timing II Ch.11）。現代示波器同理：同一台機器，2 個通道模式和 4 個通道模式的頻寬與取樣率可能不同，開了某些功能（如數位通道）也可能降級——借儀器時要看的是<strong>你實際使用組態下</strong>的規格。</p>
+
+<div class="formula">−3 dB 的意思：振幅 × 1/√2 ≈ 0.707（剩約 71%）；功率剩一半<br>頻寬換算邊沿（PT2 Ch.11 原式）：<strong>t = 0.338 / f<sub>3dB</sub></strong><br>（RMS 頻寬規格的機型：t = 0.361 / F<sub>RMS</sub>）<br>例：1 GHz 示波器 → t ≈ 0.338/1G ≈ <strong>340 ps</strong>——「1 GHz 示波器充其量只能準確看到 340 ps 的上升時間」（PT2 Ch.11）</div>
+<p><em>白話翻譯：−3 dB 就是「振幅剩七成」的那個點。第二條公式是今天的主角：把「頻寬」（頻域規格）換算成「這台機器自己的上升時間」（時域規格）——你可以想成<strong>這台示波器的眼睛眨一次要多久</strong>。1 GHz 的機器，眼睛眨一次約 340 ps：比 340 ps 更快的事件，它睜眼時已經結束了，只能看到殘影。這個 0.338 是哪來的？它是單極點低通系統「頻寬 × 上升時間 ≈ 0.35」那條老公式（Day 2 的 0.35/t<sub>r</sub>！）的孿生兄弟——同一個物理，從兩個方向講。<strong>以現代標準需上修的註記：</strong>0.338（≈0.35）適用於高斯型頻率響應的示波器（2002 年的主流，以及現代多數 1 GHz 以下機型）；現代高頻寬機種多採「最平坦型（maximally flat）」響應，換算係數約在 0.40–0.45——用 0.35 算會略偏樂觀，查該機型手冊最準。公式看不懂沒關係，記住：<strong>頻寬除下去，得到這台機器自己的邊沿；你的訊號邊沿不能比它快太多，否則量到的是機器不是訊號</strong>。</em></p>
+
+<h2>2. 兩把尺：看波形用「3 倍」，看邊沿用「0.338」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：量身高的尺 vs 量百米衝刺的碼錶</span>
+  <p>時脈訊號身上有兩種東西可以量，需要的儀器等級完全不同。第一種是<strong>「波形長什麼樣」</strong>——頻率對不對、佔空比對不對、有沒有漏拍：這像量身高，尺大概準就行。第二種是<strong>「邊沿有多快」</strong>——上升時間、過衝、振鈴：這像量百米衝刺，碼錶本身的反應時間必須遠快於選手。PT2 給的兩把尺：看重複波形，頻寬<strong>至少是最高頻率的 3 倍</strong>（100 MHz 時脈 → 至少 300 MHz，把 3 次諧波收進來，波形不變形）；看邊沿，用 0.338 換算後<strong>跟訊號邊沿比大小</strong>。同一台示波器，可能第一把尺綽綽有餘、第二把尺當場出局——這正是 1 GHz 之問的陷阱所在。</p>
+</div>
+
+<p>Perfect Timing II Ch.11 把時脈訊號拆成兩種量測需求：<strong>連續重複的波列</strong>（repetitive stream of waves）與<strong>單次的邊沿事件</strong>（single-shot pulse due to the rising and falling edges），並分別給出頻寬要求：</p>
+<ul>
+  <li><strong>重複波形：</strong>「頻寬需至少是所量最高頻率的 3 倍」（Perfect Timing II Ch.11）——這確保完整波形不失真地被擷取。為什麼是 3 倍？回想 Day 3：方波的能量在基頻與奇次諧波上，3 次諧波是塑形的主力——3 倍頻寬至少把它收進門。（業界另有更保守的「5 倍」慣例，把 5 次諧波也收進來，邊沿形狀更保真——PT2 給的 3 倍是底線，不是舒適區。）</li>
+  <li><strong>邊沿事件：</strong>「單次脈衝頻寬對高速訊號而言可能是最重要的」（PT2 Ch.11）——設計者用<strong>時間</strong>思考邊沿，示波器卻用<strong>頻寬</strong>標規格，所以需要 t = 0.338/f<sub>3dB</sub> 這座橋。</li>
+</ul>
+
+<p>然後是書中最有教育意義的一句話。在示範完 400 MHz 示波器＋400 MHz 探棒把 1 ns 邊沿顯示成 1.5 ns 之後（Day 29 引過這個算例），PT2 Ch.11 寫道：「<strong>注意，在這些方程式中，訊號的頻率完全不重要。重要的是訊號的轉換時間</strong>」（the frequency of the signal does not matter. It is the transition time of the signal that is of importance, Perfect Timing II Ch.11）。這句話值得抄在儀器室牆上：一條 10 MHz 的時脈，若驅動它的 buffer 邊沿是 500 ps，它對示波器的要求跟 200 MHz 時脈一樣苛刻——<strong>買示波器、借示波器，先問邊沿，再問頻率</strong>。</p>
+
+<h3>2.1 誤差速算：頻寬餘裕要留幾倍？</h3>
+<p>把 Day 29 的 RSS 公式攤開，就能算出「儀器邊沿 : 訊號邊沿」的比值對應多大的量測誤差：</p>
+<div class="formula">t<sub>量到</sub> = √(t²<sub>訊號</sub> + t²<sub>系統</sub>)　→　誤差 = √(1 + r²) − 1，其中 r = t<sub>系統</sub>/t<sub>訊號</sub><br>r = 1（系統跟訊號一樣快）→ 誤差 <strong>+41%</strong>　｜　r = 1/2 → <strong>+12%</strong><br>r = 1/3 → <strong>+5.4%</strong>　｜　r = 1/5 → <strong>+2.0%</strong>　｜　r = 1/7 → <strong>+1.0%</strong></div>
+<p><em>白話翻譯：t<sub>系統</sub> 是示波器＋探棒（＋地線）合成後的「儀器自己的邊沿」。這張小表是今天第二張值得背的表：儀器跟訊號一樣快時，量出來的邊沿虛胖四成——完全不能用；儀器快 3 倍，虛胖 5%——工程上通常可接受；快 5 倍，虛胖 2%——可以當量測數據交出去。所以行規是：<strong>驗波形抓 3:1，出數據抓 5:1</strong>。注意 t<sub>系統</sub> 是示波器和探棒用 RSS「疊」出來的——兩者頻寬相同時，合成邊沿是單支的 √2 倍（各慢一點，疊起來更慢），這就是 PT2 那個「單看都夠、合體就不夠」算例的數學根源。</em></p>
+
+<h3>2.2 正式回答開篇之問</h3>
+<div class="card takeaway">
+  <span class="label">「1 GHz 示波器能不能看好 100 MHz 時脈？」——答案是一句反問</span>
+  <p><strong>「你的 100 MHz 時脈，邊沿多快？」</strong>——① 若只看頻率/佔空比/漏拍（重複波形）：3 倍規則要求 300 MHz，1 GHz 綽綽有餘，<strong>能</strong>。② 若要量邊沿：1 GHz 機器自己的邊沿約 340 ps；訊號邊沿 1 ns → r ≈ 0.34 → 虛胖約 5.6%，<strong>勉強能</strong>（還沒算探棒！掛上 1 GHz 探棒，系統合成約 480 ps，r ≈ 0.48，虛胖約 11%——開始說謊了）；訊號邊沿 500 ps → r ≈ 0.68（僅示波器）→ 虛胖約 21%，<strong>不能</strong>。③ 若邊沿是現代 buffer 常見的 200–300 ps 級：直接出局，這是 3–4 GHz 系統的工作。<strong>同一台儀器、同一條時脈，三種問法三個答案——因為決定生死的從來不是 100 MHz 這個數字，是邊沿</strong>（PT2 Ch.11 的核心教誨）。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 760 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：頻寬是緩坡不是牆——−3 dB、諧波的遭遇與邊沿虛胖</text>
+  <!-- top-left: frequency response -->
+  <rect x="36" y="40" width="340" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="206" y="64" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">示波器頻率響應（毛玻璃，非鐵捲門）</text>
+  <line x1="64" y1="248" x2="352" y2="248" stroke="#64748b" stroke-width="1.4"/>
+  <line x1="64" y1="248" x2="64" y2="84" stroke="#64748b" stroke-width="1.4"/>
+  <text x="352" y="264" text-anchor="end" font-size="8.5" fill="#64748b">f →</text>
+  <text x="60" y="92" text-anchor="end" font-size="8.5" fill="#64748b">增益</text>
+  <!-- gaussian rolloff -->
+  <path d="M64,104 L150,104 C200,105 232,112 258,132 C284,152 306,186 330,232" fill="none" stroke="#0e7490" stroke-width="2.6"/>
+  <line x1="64" y1="104" x2="352" y2="104" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="90" y="99" font-size="8" fill="#64748b">0 dB（100%）</text>
+  <!-- -3dB marker -->
+  <line x1="258" y1="132" x2="258" y2="248" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <circle cx="258" cy="132" r="4" fill="#dc2626"/>
+  <text x="258" y="122" text-anchor="middle" font-size="9" font-weight="bold" fill="#dc2626">−3 dB 點＝規格上的「頻寬」</text>
+  <text x="258" y="262" text-anchor="middle" font-size="8.5" fill="#dc2626">f_3dB（例：1 GHz）</text>
+  <text x="300" y="152" font-size="8" fill="#0e7490">振幅剩 71%</text>
+  <text x="150" y="200" font-size="8.5" fill="#374151">旗子前面也在衰減</text>
+  <text x="150" y="212" font-size="8.5" fill="#374151">（只是少一點）</text>
+  <!-- top-right: harmonics -->
+  <rect x="392" y="40" width="340" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="562" y="64" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">100 MHz 方波的諧波 vs 兩台示波器</text>
+  <line x1="420" y1="240" x2="710" y2="240" stroke="#64748b" stroke-width="1.4"/>
+  <!-- harmonic bars: f1 100, f3 300, f5 500, f7 700, f9 900 -->
+  <rect x="440" y="110" width="16" height="130" fill="#0e7490"/>
+  <text x="448" y="254" text-anchor="middle" font-size="8">100M</text>
+  <rect x="496" y="196" width="16" height="44" fill="#0e7490"/>
+  <text x="504" y="254" text-anchor="middle" font-size="8">300M</text>
+  <rect x="552" y="214" width="16" height="26" fill="#0e7490"/>
+  <text x="560" y="254" text-anchor="middle" font-size="8">500M</text>
+  <rect x="608" y="222" width="16" height="18" fill="#0e7490"/>
+  <text x="616" y="254" text-anchor="middle" font-size="8">700M</text>
+  <rect x="664" y="226" width="16" height="14" fill="#0e7490"/>
+  <text x="672" y="254" text-anchor="middle" font-size="8">900M</text>
+  <!-- 400MHz scope response -->
+  <path d="M420,86 L500,90 C520,94 528,110 540,150 C550,184 556,214 566,236" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="470" y="82" font-size="8.5" fill="#b45309" font-weight="bold">400 MHz 機：5 次諧波起被砍</text>
+  <!-- 1GHz scope response -->
+  <path d="M420,76 L620,80 C650,84 664,100 686,150" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="640" y="72" font-size="8.5" fill="#15803d" font-weight="bold">1 GHz 機：收到 9 次</text>
+  <text x="562" y="274" text-anchor="middle" font-size="8.5" fill="#374151">3 倍規則＝至少收進 3 次諧波（PT2 Ch.11：看重複波形的底線）</text>
+  <!-- bottom: edge comparison -->
+  <rect x="36" y="296" width="696" height="240" rx="10" fill="#0b1220"/>
+  <text x="384" y="320" text-anchor="middle" font-size="12" font-weight="bold" fill="#e2e8f0">邊沿虛胖：PT2 Ch.11 算例——1 ns 真實邊沿，400 MHz 示波器＋400 MHz 探棒</text>
+  <!-- true edge -->
+  <path d="M90,490 L230,490 L262,370 L470,370" fill="none" stroke="#4ade80" stroke-width="2.4"/>
+  <text x="500" y="368" font-size="9.5" fill="#4ade80" font-weight="bold">板上真實邊沿：1 ns</text>
+  <!-- displayed edge -->
+  <path d="M90,494 L230,494 C260,492 274,452 292,424 C310,396 322,380 348,376 L470,376" fill="none" stroke="#f472b6" stroke-width="2.4"/>
+  <text x="500" y="392" font-size="9.5" fill="#f9a8d4" font-weight="bold">螢幕顯示：1.5 ns（虛胖 5 成）</text>
+  <text x="500" y="408" font-size="8.5" fill="#f9a8d4">t_DISPLAY = √(1² + 0.84² + 0.84²) ≈ 1.5 ns</text>
+  <text x="500" y="424" font-size="8.5" fill="#fbbf24">單看都「夠」（400&gt;100 MHz），合體就不夠</text>
+  <text x="500" y="440" font-size="8.5" fill="#fbbf24">——因為比的是邊沿不是頻率（PT2 Ch.11）</text>
+  <text x="384" y="474" text-anchor="middle" font-size="9" fill="#94a3b8">t_SCOPE = t_PROBE = 0.338/400M ≈ 840 ps（PT2 Ch.11 原算例）</text>
+  <text x="384" y="522" text-anchor="middle" font-size="9" fill="#94a3b8">誤差速算：儀器邊沿是訊號的 1/3 → 虛胖 5.4%；1/5 → 2%；一樣快 → 41%（出數據抓 5:1）</text>
+</svg>
+<figcaption>圖 1：左上——頻寬的真面目：−3 dB 只是坡道上的旗子，旗前也在衰減。右上——100 MHz 方波的奇次諧波撞上兩台示波器的響應曲線：400 MHz 機從 5 次諧波起大砍（邊沿變圓），1 GHz 機收到 9 次（波形保真）——「3 倍規則」就是至少收進 3 次諧波。下——PT2 Ch.11 的著名算例：頻率上綽綽有餘的儀器組合，把 1 ns 邊沿顯示成 1.5 ns。</figcaption>
+</figure>
+
+<h2>3. 第二道關卡：取樣率——點連起來的波形，可以連錯</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：連連看與腦補</span>
+  <p>數位示波器不是連續地「看」訊號，它是<strong>高速連拍</strong>：每隔固定時間拍一個點（電壓＋時間），螢幕上的波形是把點<strong>連連看</strong>連出來的——連線這個動作叫「內插」（interpolation，就是腦補）。點夠密，怎麼連都對；點太疏，同一組點可以連出好幾種完全不同的波形——腦補出來的邊沿、過衝、甚至頻率，都可能是假的。數學家說「取樣率只要超過訊號頻率的 2 倍就能重建」（Nyquist 定理）——理論上對，但那需要無限長的訊號和完美的重建演算法。工程師的世界裡，PT2 給的數字實在得多：<strong>取樣率至少要是頻寬的 4 倍；8 到 16 倍會得到極好的波形；超過 10 倍之後，內插用什麼演算法幾乎沒差</strong>（Perfect Timing II Ch.11）。</p>
+</div>
+
+<p>PT2 Ch.11 的原文脈絡：數位儲存示波器對輸入波形取樣，「每個點代表其電壓與時間；取樣率越快、代表訊號的點越多；內插藉由連接這些點做曲線擬合，在螢幕上顯示連續波形。<strong>取樣率相對於頻寬，至少應為 4 比 1；8 或 16 比 1 能提供極佳的波形；比值大於 10 時，僅需極少的內插</strong>」（Perfect Timing II Ch.11）。三個工程註解：</p>
+<ul>
+  <li><strong>為什麼 2 倍不夠：</strong>Nyquist 的 2 倍成立於「無限長觀察＋理想 sin(x)/x 重建」。實際示波器抓的是有限長度、常常是單次事件，且邊沿附近你需要真實的點而不是腦補的點——一個 340 ps 的邊沿，若取樣間隔也是 340 ps，邊沿上可能只落到 1 個點，上升時間根本無從談起。4:1 保證邊沿上至少有幾個真點。</li>
+  <li><strong>內插演算法有兩種主流：</strong>線性內插（點跟點拉直線——點少時波形變鋸齒）與 sin(x)/x 內插（按取樣理論擬合——點少時可能「腦補」出實際不存在的過衝）。比值 &gt;10 之後兩者輸出幾乎一樣（PT2 Ch.11 的「minimal interpolation」），這就是舒適區的意義：<strong>點多到不需要相信腦補</strong>。</li>
+  <li><strong>現代註記：</strong>2002 年的高階機取樣率在 GS/s 級；現代主流示波器即使入門級也有數 GS/s，高階達每秒數十至上百 G 樣本——但 4:1 這個「比值」規則不過時：買 2 GHz 頻寬配 10 GS/s（5:1）是健康組態，看到「1 GHz 頻寬但只有 2.5 GS/s」的規格（剛好 2.5:1）就要知道它的 1 GHz 是打折的。另注意<strong>多通道分食</strong>：很多機型開兩個通道就把取樣率砍半——4:1 要用你實際開的通道數去算。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">取樣不足最陰的病：混疊（aliasing）——高頻訊號假扮成低頻</span>
+  <p>點太疏的時候，最危險的不是波形變醜（醜你會起疑），而是波形<strong>變成另一個頻率的漂亮波形</strong>（漂亮你就信了）。經典比喻：電影裡的車輪倒轉——攝影機每秒 24 格拍高速旋轉的輪子，拍出來的輪子慢轉甚至倒轉。示波器同理：取樣率 1 MS/s 去看 1.5 MHz 的開關雜訊，螢幕上會出現一個乾淨的 500 kHz「訊號」——<strong>頻率是假的、波形是假的、但看起來無比真實</strong>。防身術三招：①改變時基（真訊號的週期讀值不隨時基變，混疊假象會變）；②看螢幕讀出的取樣率跟你關心的最高頻率比一比（含雜訊與諧波，不是只算基頻）；③用峰值偵測（peak detect）模式做交叉檢查。第 4 節會講到：混疊最常發生的場景不是你把取樣率調低，而是<strong>記憶深度不夠時示波器自己把它調低</strong>。</p>
+</div>
+
+<h2>4. 第三道關卡：記憶深度——時基一拉長，機器偷偷降級</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：記憶卡快滿的行車記錄器</span>
+  <p>取樣的每個點都要存進記憶體。PT2 Ch.11 說得直白：「取樣之後需要記憶體儲存這些點，容量應大到足以在給定取樣率下擷取完整訊號；<strong>儲存受限時，螢幕上能看的時間長度就受影響</strong>」（Perfect Timing II Ch.11）。但現代示波器的實際行為比「看的時間變短」更陰險：你把時基拉長（想看一整段 power sequence、一整包傳輸），機器發現記憶體裝不下，它不會拒絕你，而是<strong>自動降低取樣率</strong>硬撐完你要的時間窗——像行車記錄器記憶卡快滿時自動把畫質從 4K 降到 480p，還不通知你。結果：你花大錢買的 GHz 眼睛，在 100 ms 時基下可能只剩 MS/s 級的視力——快邊沿的 glitch 直接消失，開關雜訊混疊成假訊號。</p>
+</div>
+
+<div class="formula">擷取時間窗 = 記憶深度 ÷ 取樣率<br>反過來（機器內部的算法）：實際取樣率 = min(最大取樣率, 記憶深度 ÷ 你要的時間窗)<br>例：10 Mpts 記憶、10 GS/s 上限 → 全速只能看 <strong>1 ms</strong><br>你把時基拉到 100 ms 窗 → 取樣率被迫降到 10M/0.1 = <strong>100 MS/s</strong>（視力剩 1%）</div>
+<p><em>白話翻譯：記憶深度（點數）除以取樣率（每秒點數）就是你能看多長的時間，這是一個蹺蹺板：時間窗和取樣率不可兼得，記憶深度是蹺蹺板的長度。實務動作只有一個：<strong>每次改時基，眼睛掃一下螢幕角落的實際取樣率讀值</strong>（所有數位示波器都會顯示），跟你關心的最快事件對一下 4:1。要長時間窗又要高取樣率，只能買更深的記憶——這就是為什麼記憶深度是示波器的第三個關鍵規格，以及為什麼抓「幾十 ms 才出現一次的 glitch」時，深記憶（幾十 Mpts 以上）比高頻寬更救命。</em></p>
+
+<figure>
+<svg viewBox="0 0 760 540" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：取樣率與記憶深度——連連看、腦補、混疊與蹺蹺板</text>
+  <!-- top-left: sparse sampling -->
+  <rect x="36" y="40" width="340" height="220" rx="10" fill="#0b1220"/>
+  <text x="206" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">取樣 2.5:1——點疏，腦補當家</text>
+  <!-- true wave faint -->
+  <path d="M60,150 C75,100 90,100 105,150 C120,200 135,200 150,150 C165,100 180,100 195,150 C210,200 225,200 240,150 C255,100 270,100 285,150 C300,200 315,200 330,150" fill="none" stroke="#475569" stroke-width="1.6" stroke-dasharray="3 3"/>
+  <text x="330" y="120" text-anchor="end" font-size="8" fill="#64748b">真實訊號（灰虛線）</text>
+  <!-- sparse dots -->
+  <circle cx="60" cy="150" r="3.5" fill="#fbbf24"/><circle cx="132" cy="188" r="3.5" fill="#fbbf24"/><circle cx="204" cy="172" r="3.5" fill="#fbbf24"/><circle cx="276" cy="112" r="3.5" fill="#fbbf24"/><circle cx="330" cy="150" r="3.5" fill="#fbbf24"/>
+  <!-- linear interp wrong -->
+  <path d="M60,150 L132,188 L204,172 L276,112 L330,150" fill="none" stroke="#f472b6" stroke-width="2"/>
+  <text x="206" y="234" text-anchor="middle" font-size="9" fill="#f9a8d4">連出來的波形：頻率、形狀全錯（混疊前奏）</text>
+  <!-- top-right: dense sampling -->
+  <rect x="392" y="40" width="340" height="220" rx="10" fill="#0b1220"/>
+  <text x="562" y="62" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">取樣 10:1——點密，怎麼連都對（PT2 舒適區）</text>
+  <path d="M420,150 C435,100 450,100 465,150 C480,200 495,200 510,150 C525,100 540,100 555,150 C570,200 585,200 600,150 C615,100 630,100 645,150 C660,200 675,200 690,150" fill="none" stroke="#4ade80" stroke-width="2"/>
+  <g fill="#fbbf24">
+    <circle cx="420" cy="150" r="2.4"/><circle cx="429" cy="124" r="2.4"/><circle cx="438" cy="106" r="2.4"/><circle cx="447" cy="101" r="2.4"/><circle cx="456" cy="112" r="2.4"/><circle cx="465" cy="150" r="2.4"/><circle cx="474" cy="176" r="2.4"/><circle cx="483" cy="194" r="2.4"/><circle cx="492" cy="199" r="2.4"/><circle cx="501" cy="188" r="2.4"/><circle cx="510" cy="150" r="2.4"/><circle cx="519" cy="124" r="2.4"/><circle cx="528" cy="106" r="2.4"/><circle cx="537" cy="101" r="2.4"/><circle cx="546" cy="112" r="2.4"/><circle cx="555" cy="150" r="2.4"/><circle cx="564" cy="176" r="2.4"/><circle cx="573" cy="194" r="2.4"/><circle cx="582" cy="199" r="2.4"/><circle cx="591" cy="188" r="2.4"/><circle cx="600" cy="150" r="2.4"/><circle cx="609" cy="124" r="2.4"/><circle cx="618" cy="106" r="2.4"/><circle cx="627" cy="101" r="2.4"/><circle cx="636" cy="112" r="2.4"/><circle cx="645" cy="150" r="2.4"/><circle cx="654" cy="176" r="2.4"/><circle cx="663" cy="194" r="2.4"/><circle cx="672" cy="199" r="2.4"/><circle cx="681" cy="188" r="2.4"/><circle cx="690" cy="150" r="2.4"/>
+  </g>
+  <text x="562" y="234" text-anchor="middle" font-size="9" fill="#86efac">≥4:1 底線｜8–16:1 極佳｜&gt;10 內插影響極小（PT2 Ch.11）</text>
+  <!-- bottom: memory seesaw -->
+  <rect x="36" y="276" width="696" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="384" y="300" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">記憶深度的蹺蹺板：時間窗 = 記憶點數 ÷ 取樣率</text>
+  <!-- seesaw -->
+  <line x1="130" y1="380" x2="410" y2="340" stroke="#334155" stroke-width="3"/>
+  <polygon points="270,392 250,362 290,362" fill="#94a3b8"/>
+  <rect x="110" y="358" width="82" height="24" rx="4" fill="#fee2e2" stroke="#dc2626"/>
+  <text x="151" y="374" text-anchor="middle" font-size="9" fill="#b91c1c">時間窗拉長</text>
+  <rect x="352" y="318" width="82" height="24" rx="4" fill="#fee2e2" stroke="#dc2626"/>
+  <text x="393" y="334" text-anchor="middle" font-size="9" fill="#b91c1c">取樣率下墜</text>
+  <text x="272" y="414" text-anchor="middle" font-size="9.5" fill="#374151" font-weight="bold">支點＝記憶深度（買深記憶＝把蹺蹺板加長）</text>
+  <text x="272" y="436" text-anchor="middle" font-size="9" fill="#6b7280">例：10 Mpts＋10 GS/s → 全速僅 1 ms；拉到 100 ms 窗 → 剩 100 MS/s</text>
+  <!-- right: checklist -->
+  <rect x="474" y="366" width="238" height="132" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="593" y="388" text-anchor="middle" font-size="10" font-weight="bold" fill="#0f4c5c">防混疊三動作（改時基必做）</text>
+  <text x="488" y="410" font-size="9" fill="#374151">① 看螢幕角落「實際取樣率」讀值</text>
+  <text x="488" y="430" font-size="9" fill="#374151">② 對最快事件（含雜訊）檢查 ≥4:1</text>
+  <text x="488" y="450" font-size="9" fill="#374151">③ 可疑就換時基／開 peak detect</text>
+  <text x="488" y="482" font-size="8.5" fill="#b45309">真訊號讀值不隨時基變，混疊會變形</text>
+</svg>
+<figcaption>圖 2：上排——同一個訊號，2.5:1 取樣連出完全錯誤的波形（混疊的前奏），10:1 取樣怎麼連都對（PT2 Ch.11 的 4:1 底線／8–16:1 極佳／&gt;10 內插影響極小）。下——記憶深度蹺蹺板：時間窗與取樣率不可兼得，改時基必看實際取樣率讀值。</figcaption>
+</figure>
+
+<h2>5. 兌現承諾：「訊號邊沿 → 儀器等級」速查表</h2>
+<p>用法：先估你的訊號邊沿（datasheet 的 t<sub>r</sub>/t<sub>f</sub>，或用 Day 2 的 0.35/頻寬反推），查表得到<strong>系統</strong>（示波器＋探棒 RSS 合成）需要的等級。表中頻寬以 0.338 換算、抓「驗波形 3:1／出數據 5:1」兩檔；取樣率按 PT2 的 4:1 底線與 8–16:1 舒適區。<strong>注意：頻寬欄是「系統合成」——示波器和探棒各自都要達標，且兩者相同等級時合成會慢 √2 倍，所以單品規格要再抓高一點。</strong></p>
+
+<table>
+<tr><th>訊號邊沿 t<sub>r</sub></th><th>典型場景（你的板子）</th><th>系統頻寬<br>驗波形（3:1）</th><th>系統頻寬<br>出數據（5:1）</th><th>取樣率<br>（底線 4:1／舒適 8:1+）</th><th>探棒建議（Day 32）</th></tr>
+<tr><td>約 20 ns</td><td>I2C、GPIO、reset、電源好訊號</td><td>約 50 MHz</td><td>約 85 MHz</td><td>200 MS/s／400 MS/s+</td><td>10:1 被動即可，地線隨意</td></tr>
+<tr><td>約 5 ns</td><td>低速 SPI、PWM（背光/VCM 驅動）</td><td>約 200 MHz</td><td>約 340 MHz</td><td>0.8 GS/s／1.6 GS/s+</td><td>10:1 被動＋短地針</td></tr>
+<tr><td>約 1–2 ns</td><td>一般時脈 buffer、中速 SPI、DDR 控制訊號量級</td><td>約 0.5–1 GHz</td><td>約 0.8–1.7 GHz</td><td>2–4 GS/s／8 GS/s+</td><td>被動探棒的極限區——短地針必須，建議主動</td></tr>
+<tr><td>約 300–500 ps</td><td>現代高速時脈、快 buffer 輸出</td><td>約 2–3.4 GHz</td><td>約 3.4–5.6 GHz</td><td>8–14 GS/s／27 GS/s+</td><td>主動探棒（&lt;1 pF）必須</td></tr>
+<tr><td>約 100 ps 級</td><td>MIPI D-PHY HS、高速 SerDes（量級）</td><td>約 10 GHz</td><td>約 17 GHz</td><td>40 GS/s／80 GS/s+</td><td>差動主動探棒或 SMA 治具＋50 Ω 輸入（週 13 展開）</td></tr>
+</table>
+<p><em>白話註記：表格數字是 0.338/t 的直接換算（現代平坦響應機種可再乘約 1.2 保守係數），「約」字全部當真——這張表的用途是<strong>借儀器前 30 秒的 sanity check</strong>，不是規格書。最後一列印證了為什麼 camera 模組廠量 D-PHY 眼圖要動用實驗室最貴的那台機器和治具，而不是桌上那台 debug 用機。另外倒著讀也有用：手上只有 200 MHz 示波器（機器邊沿約 1.7 ns）？那它能出數據的訊號邊沿下限約 8 ns、能驗波形的下限約 5 ns——比這快的邊沿，量到的數字只能參考、要用 RSS 扣帳（練習 1）。</em></p>
+
+<h2>6. 實務案例：這些觀念在你的板子上長什麼樣</h2>
+<ul>
+  <li><strong>NB 主機板——「這台 200 MHz 的老示波器能不能用？」的正確答法：</strong>產線或 RD 桌上最常見的情境：手邊只有中低階機器，要量 33 MHz 或 100 MHz 的時脈。用今天的兩把尺回答：查頻率/佔空比/漏拍——3 倍規則下 200 MHz 機看 33 MHz 綽綽有餘、看 100 MHz 勉強（3 次諧波 300 MHz 已在坡道上，波形略圓但頻率讀值可信）；量邊沿——200 MHz 機自己的邊沿約 1.7 ns，現代 buffer 的 1 ns 級邊沿會被虛胖三成以上，<strong>數字不能寫進報告</strong>。正確動作不是拒量，而是：量了、註明儀器極限、必要時用 RSS 扣帳回推（t<sub>真</sub> ≈ √(t<sub>量</sub>² − t<sub>系統</sub>²)，僅當比值健康時可信——練習 1 會算），並在報告寫「edge rate 待高頻寬儀器複測」。面試時能講出「什麼情況下敢用爛儀器、怎麼用、極限在哪」比「我只用好儀器」高一個段位。</li>
+  <li><strong>NB 主機板——power sequence 量測的記憶深度陷阱：</strong>抓開機時序：五、六條電源軌先後爬升，整個 sequence 橫跨幾十到幾百 ms——時基必須拉很長。此時取樣率被記憶深度壓到 MS/s 級：軌與軌的先後順序、爬升斜率都還量得準（它們是 ms 級事件），但<strong>疊在軌上的開關雜訊會混疊成假頻率、爬升途中的 µs 級 glitch（例如某相 buck 短暫失控）直接消失</strong>。對策：sequence 全景用長時基＋peak detect 抓「有沒有異常」，發現異常再用短時基＋全取樣率對單一事件放大複測——<strong>全景圖找嫌疑人、特寫圖定罪</strong>，一次量測想兩者兼得就是被蹺蹺板夾死。</li>
+  <li><strong>鏡頭模組——VCM/OIS 驅動的 PWM 假波形：</strong>VCM 驅動常用數百 kHz 級 PWM。模組 debug 時想看「對焦全行程」的電流/電壓包絡，時基拉到秒級——取樣率掉到每秒幾十萬點以下時，PWM 載波開始混疊：螢幕上出現一個緩慢漂移的低頻「拍頻」波形，看起來像驅動不穩。曾經有人據此去查 driver IC 的穩定性——其實訊號無辜，是取樣率跟 PWM 頻率打拍子。破案手法就是第 3 節的防身術：換一檔時基，「不穩」的頻率跟著變 → 混疊實錘。</li>
+  <li><strong>鏡頭模組——MIPI D-PHY 為什麼是「另一個等級」的量測：</strong>速查表最後一列：HS 模式邊沿在百 ps 量級，系統頻寬要求 10 GHz 級、取樣率數十 GS/s、差動探棒或 SMA 治具——這就是為什麼 D-PHY 眼圖驗證（CTS 一致性測試）在多數公司是專屬儀器＋專屬治具＋專人排程的資源，而不是桌邊順手量的東西。你在模組廠看過的「排隊等眼圖機台」現象，物理根源就是今天這張表。週 13 講 D-PHY 量測 setup 時，會把治具、參考通道、CTS 用的固定頻寬設定完整展開（Day 32 已掛號）。</li>
+</ul>
+
+<h2>7. 動手練習（今天動筆不動儀器——本週五實作日會把 PROBE COMP 和取樣率實驗一起做）</h2>
+<p>四題用今天的三條武器：0.338/f 換算、RSS 及其反運算、時間窗＝記憶÷取樣率。</p>
+
+<details>
+<summary>練習 1（1 GHz 之問完整版＋扣帳回推）：你的訊號是 100 MHz 時脈、規格書說 buffer 邊沿典型 700 ps。儀器：1 GHz 示波器＋1 GHz 被動探棒（短地針，t<sub>GROUND</sub> 忽略）。(a) 系統合成邊沿 t<sub>系統</sub> 是多少？(b) 螢幕會顯示邊沿多少？虛胖幾 %？這數字能不能寫進報告？(c) 用 RSS 反運算從顯示值扣帳回推真實邊沿——什麼時候這種回推可信、什麼時候不可信？(d) 若只驗「頻率有沒有 100 MHz、佔空比 50%±5%」，這套儀器夠不夠？用哪條規則判斷？</summary>
+<p><strong>解：</strong>(a) 各自 0.338/1G ≈ 338 ps，RSS 合成 t<sub>系統</sub> = √(0.338²+0.338²) ≈ <strong>478 ps</strong>（相同等級合體慢 √2 倍——這就是「單品要買得比需求高」的原因）。(b) t<sub>顯示</sub> = √(0.7²+0.478²) ≈ <strong>848 ps</strong>，虛胖 (0.848−0.7)/0.7 ≈ <strong>21%</strong>——r = 478/700 ≈ 0.68，遠差於出數據的 1/5 標準，<strong>不能直接寫報告</strong>。(c) 反運算：t<sub>真</sub> ≈ √(0.848²−0.478²) ≈ 0.70 ns ✓ 數學上完美復原——但這招的可信度取決於兩件事：①t<sub>系統</sub> 你知道得多準（0.338 係數本身是近似、平坦響應機種係數不同）；②相減的兩數不能太接近（r 越大，t<sub>系統</sub> 的小誤差被平方差放大得越兇）。行規：<strong>r ≤ 0.7 時扣帳值可當參考、標註方法；r 接近 1 時扣帳等於用兩個大數的差猜一個小數，不可信</strong>。(d) 夠。重複波形用 3 倍規則：100 MHz × 3 = 300 MHz ≪ 1 GHz——頻率、佔空比、漏拍全部可信。同一套儀器、兩種問法、兩個答案：<strong>先問你要量的是波形還是邊沿</strong>（PT2 Ch.11 的核心區分）。</p>
+</details>
+
+<details>
+<summary>練習 2（頻率不重要、邊沿才重要——反直覺對決）：兩條訊號：A 是 200 MHz 時脈、邊沿 2 ns；B 是 10 MHz 的 SPI 時脈、邊沿 400 ps（新款快 buffer 驅動）。手上有一台 500 MHz 示波器＋500 MHz 探棒。(a) 分別判斷 A、B 的「重複波形」量測能不能做。(b) 分別判斷 A、B 的「邊沿」量測能不能做（算出虛胖 %）。(c) 哪條訊號對儀器更苛刻？這印證了 PT2 Ch.11 的哪句話？(d) B 訊號量出來邊沿嚴重虛胖，但工程師堅稱「10 MHz 而已，我的 500 MHz 機是它的 50 倍」——用一句話糾正他。</summary>
+<p><strong>解：</strong>(a) A：200×3 = 600 MHz &gt; 500 MHz——<strong>勉強不及格</strong>，3 次諧波已在 −3 dB 坡道外，波形會圓但頻率讀值仍可信；B：10×3 = 30 MHz ≪ 500 MHz——<strong>輕鬆及格</strong>。(b) 系統邊沿 = √2 × 0.338/500M ≈ 956 ps。A：r = 0.956/2 ≈ 0.48 → 虛胖 √(1+0.48²)−1 ≈ <strong>11%</strong>——驗波形可以、出數據不行；B：r = 956/400 ≈ 2.4 → 虛胖 √(1+2.4²)−1 ≈ <strong>160%</strong>！400 ps 會顯示成約 1.04 ns——<strong>量到的幾乎全是儀器自己</strong>。(c) <strong>B 更苛刻</strong>，雖然它的頻率只有 A 的 1/20——印證 PT2 Ch.11：「訊號的頻率完全不重要，重要的是轉換時間」。(d) 「你的 500 MHz 是拿去跟 <strong>10 MHz</strong> 比的，但儀器面對的是 <strong>400 ps 的邊沿</strong>——換算成邊沿，你的機器（約 1 ns）比訊號慢 2.4 倍，你在用慢快門拍子彈。」</p>
+</details>
+
+<details>
+<summary>練習 3（記憶深度蹺蹺板＋混疊破案）：示波器規格：最大 2 GS/s、記憶深度 1 Mpts。你要量 NB 的開機 power sequence，時間窗需要 200 ms。(a) 這個時間窗下實際取樣率剩多少？(b) 疊在 3.3 V 軌上的 buck 開關漣波約 1.2 MHz——這個取樣率下會發生什麼事？算出混疊後的假頻率。(c) 螢幕上因此出現一個約 200 kHz 的「異常振盪」，同事準備開 8D 報告追 buck 穩定性——給他兩個 30 秒內可執行的驗證動作。(d) 若必須「同窗同時」看清 sequence 順序＋開關漣波，需要多深的記憶？（用 PT2 的 4:1 對 1.2 MHz 的諧波不苛求，取樣率抓 10 MS/s 級即可的話又需要多少？）</summary>
+<p><strong>解：</strong>(a) 取樣率 = 1 Mpts ÷ 0.2 s = <strong>5 MS/s</strong>（離 2 GS/s 的標稱差了 400 倍——機器不會警告你）。(b) 1.2 MHz 對 5 MS/s：Nyquist 邊界 2.5 MHz &gt; 1.2 MHz？<strong>注意這裡基頻其實還在 Nyquist 內</strong>，但開關漣波不是弦波——它的 3 次（3.6 MHz）、5 次（6 MHz）諧波遠超 2.5 MHz，全部折返：3.6 MHz 折到 |3.6−5| = 1.4 MHz、6 MHz 折到 |6−5| = 1 MHz……波形被折返的諧波污染成一團不存在的低頻紋（若取樣率再低些，連基頻都折返：例如 1 MS/s 時 1.2 MHz → 假 200 kHz）。教訓：<strong>檢查 4:1 要用「含諧波的最高頻率成分」算，不是只算基頻</strong>。(c) ①換一檔時基（如 100 ms 窗）：取樣率倍增，若「異常振盪」的頻率/形狀跟著變 → 混疊實錘，真訊號不會因時基改頻率；②開 peak detect：它用硬體抓每個取樣區間的極值，漣波的真實包絡會現形、假頻率消失。兩招都是零成本零風險，先做再談 8D。(d) 要在 200 ms 窗內維持 10 MS/s：記憶 = 10M × 0.2 = <strong>2 Mpts</strong>（手上 1 Mpts 差一倍）；若對漣波形狀認真（對 6 MHz 的 5 次諧波抓 4:1 = 24 MS/s）：24M × 0.2 = <strong>4.8 Mpts</strong>。這就是「深記憶是長時窗量測的第一規格」的由來——以及買示波器時 10 Mpts 起跳的理由。</p>
+</details>
+
+<details>
+<summary>練習 4（速查表實戰＋倒讀）：(a) 你要替 camera 模組驗一條規格書標邊沿約 150 ps（量級）的 D-PHY HS lane 出 report：查速查表邏輯，系統頻寬、取樣率、探棒各要什麼等級？(b) 公司只肯出 4 GHz 機器＋4 GHz 差動探棒：算這套系統量 150 ps 邊沿的虛胖，說明為什麼「還是可以量、但只能做這兩件事」。(c) 倒讀題：桌上那台 350 MHz 示波器（配 350 MHz 探棒），它「能出數據」的訊號邊沿下限約是多少？「能驗波形」呢？(d) 為什麼速查表的頻寬欄特別註明「系統合成」？兩台等頻寬儀器串起來，合成頻寬大約打幾折？</summary>
+<p><strong>解：</strong>(a) 出數據抓 5:1：系統邊沿 ≤ 30 ps → 系統頻寬 ≥ 0.338/30p ≈ <strong>11 GHz 量級</strong>；取樣率底線 4:1 → 約 45 GS/s、舒適 8:1 → 約 90 GS/s；探棒：<strong>差動主動探棒</strong>（&lt;1 pF、頻寬同級）或 SMA 治具進 50 Ω 輸入——Day 32 的理由：單端 10 pF 被動探棒會壓垮 100 Ω 差動線並破壞對稱。這套規格就是「眼圖專屬機台」的價位帶，量級對了就好。(b) 4 GHz 系統：各 0.338/4G ≈ 85 ps，合成 √2×85 ≈ 120 ps；r = 120/150 = 0.8 → 虛胖 √(1+0.64)−1 ≈ <strong>28%</strong>——邊沿數字不能交。但兩件事仍可做：①<strong>定性 debug</strong>：lane 有沒有訊號、極性對不對、LP↔HS 切換時序、有沒有大反射——這些是「波形」層次，4 GHz 對 HS 基頻（Gbps 級的基頻在 GHz 級）大致夠看形狀；②<strong>相對比較</strong>：改 layout 前後、換料前後的邊沿「變化量」——儀器誤差在兩次量測中近似相同，差值仍有意義。不能做的：絕對值報告、CTS 判 pass/fail。(c) 350 MHz 系統合成邊沿 = √2×0.338/350M ≈ 1.37 ns。出數據（5:1）：訊號邊沿 ≥ 約 <strong>6.8 ns</strong>；驗波形（3:1）：≥ 約 <strong>4.1 ns</strong>——所以它的主場是 I2C/GPIO/PWM/電源，量現代時脈 buffer 就越界了。(d) 因為訊號要<strong>先過探棒再過示波器</strong>（PT2 Ch.11：訊號必須先通過探棒，故探棒頻寬須與示波器同樣對待），兩級邊沿 RSS 相加：等頻寬串聯 → 合成邊沿 ×√2 → 合成頻寬約打 <strong>0.7 折（÷√2）</strong>。所以「1 GHz 示波器＋1 GHz 探棒」其實是一套約 700 MHz 的系統——規格表不會替你做這個乘法。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+<p>示波器選型題是 validation/test 職缺的必考題，而且是「送分題面孔的陷阱題」——面試官等你講出 3 倍/5 倍規則之後，追問一句「so is frequency what matters?」看你會不會掉進去。先英文口述，再看參考答案。</p>
+
+<details>
+<summary>Q1: "Will a 1 GHz oscilloscope correctly display a 100 MHz clock? Walk me through your reasoning."</summary>
+<p><strong>參考答案骨架：</strong>It depends on what "correctly display" means, and the key insight is that the answer hinges on the clock's edge rate, not its frequency. If I only need frequency, duty cycle, and to confirm no missing pulses — that's a repetitive-waveform measurement, and the rule of thumb is bandwidth at least three times the fundamental, so 300 megahertz needed, 1 gigahertz is plenty. But if I need to measure the rise time, I convert the scope bandwidth to its own intrinsic rise time: roughly 0.35 over bandwidth — about 340 picoseconds for a 1-gigahertz front end. The displayed edge is the root-sum-square of the signal edge and every element in the chain: signal, probe, scope, and the ground-lead term. So for a 1-nanosecond edge, scope alone inflates it about 6 percent — acceptable. Add a 1-gigahertz probe and the system rise time grows by root-2 to roughly 480 picoseconds, and the error is over 10 percent. For a modern buffer with a 300-picosecond edge, this setup measures mostly itself, not the signal. And there are two more gates people forget: sample rate should be at least 4 times the bandwidth — ideally 8 to 16 — otherwise the edge is interpolated rather than measured; and memory depth, because at long timebases the scope silently drops its sample rate, which can alias switching noise into convincing ghost signals. So my actual answer to the interviewer's question: "For waveform validation, yes; for edge measurement, tell me the edge rate first — the frequency was never the constraint."</p>
+<p><strong>加分點：</strong>開頭就把問題重構成「edge, not frequency」（正中 PT2 的教誨，也正中面試官埋的陷阱）；報得出 0.35/BW、RSS、√2 合成、4:1 取樣這串數字；主動補記憶深度與混疊——沒被問就講，證明是實戰裡吃過虧的人。</p>
+</details>
+
+<details>
+<summary>Q2: "You measured a rise time of 1.2 nanoseconds on a scope. The designer claims the true edge is under 1 nanosecond. How do you resolve this — and when would you trust a de-embedded number?"</summary>
+<p><strong>參考答案骨架：</strong>First, characterize my measurement system instead of arguing. The displayed rise time is the RSS of the true edge plus the scope, probe, and ground-lead contributions. I'd compute the system rise time from the bandwidths — 0.35 over f for scope and probe, root-sum-squared, plus the ground-lead term 3.4 root-LC if I'm on a long ground clip — and then de-embed: true edge is approximately the square root of measured-squared minus system-squared. If my system rise time is, say, 700 picoseconds, then 1.2 measured implies roughly 0.97 true — the designer is probably right. Second part of the question is when to trust that arithmetic: only when the ratio is healthy. If the system rise time is a small fraction of the measured value — a third or less — de-embedding is a mild correction and robust. If they're comparable, I'm subtracting two large, similar numbers, and small errors in my assumed system response — the 0.35 constant itself varies between Gaussian and flat-response scopes — blow up in the result. In that regime the honest answer is "my equipment can't resolve this edge"; I'd re-measure with a higher-bandwidth scope and a sub-picofarad active probe, shortest possible ground, and report the measurement chain alongside the number. Also worth checking before any of this: probe compensation on the calibrator, and the actual sample rate at my timebase setting — an interpolated edge isn't a measured edge.</p>
+<p><strong>加分點：</strong>「characterize, don't argue」的開場展現量測素養；de-embed 公式與其<strong>適用邊界</strong>一起講（知道工具什麼時候失效比會用工具更資深）；提到高斯 vs 平坦響應的係數差異；收尾的 PROBE COMP 與 sample rate 檢查呼應完整的量測 SOP。</p>
+</details>
+
+<h2>9. 今日 Anki 卡片</h2>
+<div class="anki">
+  <p class="q">Q1：示波器頻寬的定義？怎麼換算成「儀器自己的邊沿」？（PT2 Ch.11）</p>
+  <p class="a">A1：頻寬 = <strong>弦波振幅衰減 3 dB（剩約 71%）的頻率</strong>（Perfect Timing II Ch.11）——是緩坡不是牆，旗子前面的頻率也在被衰減。換算：<strong>t = 0.338/f<sub>3dB</sub></strong>（RMS 頻寬機型用 0.361/F<sub>RMS</sub>）→ 1 GHz 機器自己的邊沿約 <strong>340 ps</strong>。現代註記：0.338 適用高斯響應；現代高頻寬平坦響應機種係數約 0.40–0.45，查手冊最準。主機與各通道/插件頻寬可能不同，看實際使用組態。</p>
+  <p class="q">Q2：量時脈的「兩把尺」是什麼？PT2 Ch.11 最重要的一句話？</p>
+  <p class="a">A2：<strong>看重複波形</strong>（頻率/佔空比/漏拍）：頻寬<strong>至少 3 倍</strong>最高頻率（收進 3 次諧波；業界另有保守的 5 倍慣例）。<strong>看邊沿</strong>：用 0.338/f 換算後跟訊號邊沿比。最重要的一句：「<strong>訊號的頻率完全不重要，重要的是轉換時間</strong>」（PT2 Ch.11）——10 MHz 時脈配 400 ps 邊沿，比 200 MHz 時脈配 2 ns 邊沿更難量。借儀器先問邊沿，再問頻率。</p>
+  <p class="q">Q3：頻寬餘裕與量測誤差的速算表？儀器串聯怎麼合成？</p>
+  <p class="a">A3：誤差 = √(1+r²)−1，r = t<sub>系統</sub>/t<sub>訊號</sub>：<strong>r=1 → +41%；1/2 → +12%；1/3 → +5.4%；1/5 → +2%</strong>。行規：<strong>驗波形抓 3:1、出數據抓 5:1</strong>。合成：示波器＋探棒邊沿 RSS 相加——等頻寬兩級串聯 → 合成邊沿 ×√2、合成頻寬 ÷√2（「1 GHz 機＋1 GHz 探棒」實為約 700 MHz 系統）。扣帳回推 t<sub>真</sub>≈√(t<sub>量</sub>²−t<sub>系統</sub>²) 僅在 r 健康（≤0.7 量級）時可信。</p>
+  <p class="q">Q4：取樣率要幾比一？取樣不足最陰的病是什麼、怎麼防？</p>
+  <p class="a">A4：PT2 Ch.11：取樣率 : 頻寬<strong>至少 4:1；8–16:1 極佳；&gt;10 之後內插影響極小</strong>。Nyquist 的 2 倍是數學下限（需無限長訊號＋理想重建），不是工程下限。最陰的病：<strong>混疊</strong>——高頻（含諧波！）折返成漂亮的假低頻。防身三招：①改時基看讀值變不變（真訊號不變、混疊會變）②對「含諧波的最高頻率成分」檢查 4:1 ③peak detect 交叉驗證。注意多通道模式常砍半取樣率。</p>
+  <p class="q">Q5：記憶深度的蹺蹺板公式？長時基量測的陷阱與對策？</p>
+  <p class="a">A5：<strong>時間窗 = 記憶深度 ÷ 取樣率</strong>；時基拉長時示波器<strong>自動降取樣率</strong>硬撐（不警告）——GHz 眼睛在 100 ms 窗下可能剩 MS/s 視力：glitch 消失、開關漣波混疊成假訊號。對策：<strong>每改時基必看螢幕實際取樣率讀值</strong>；長時窗抓全景（＋peak detect）找嫌疑、短時窗全速特寫定罪；要兼得只能買深記憶（10 Mpts 起跳的理由）。示波器三規格一起看：頻寬、取樣率、記憶深度——三道獨立關卡缺一不可。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<div class="card">
+  <p><strong>Day 34（週三）：S 參數入門——把整條通道裝進一個黑盒子，只問它「進去多少、出來多少」</strong></p>
+  <p>本週前兩天把「量測系統自己」秤完了，明天開始量真正的通道。TDR（Day 9–14）是在時域戳通道，S 參數是同一件事的頻域版本：S11 告訴你反射多少（跟 ρ 什麼關係？）、S21 告訴你穿透多少（跟 Day 25–26 的損耗曲線什麼關係？）、insertion loss 曲線上每一個凹陷都對應你學過的一種病（stub 諧振、via、串擾）。你會發現規格書裡那些「@ 4 GHz, IL &lt; −x dB」的天書突然變成老朋友的名字。這也是理解 D-PHY/CSI-2 通道規範（週 13–14）的前置語言。把今天的 −3 dB 觀念帶著，明天它會從「儀器的規格」變成「通道的體檢報告」。</p>
+</div>
+
+<footer>
+  <span>EE 深造計畫 Day 33 / 180</span>
+  <span class="progress-note">Phase 1：SI 基礎（週 6/6）</span>
+</footer>
+
+</div>
+</body>
+</html>

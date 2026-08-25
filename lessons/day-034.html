@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 34｜S 參數入門——「黑盒子怎麼量」：S11 反射、S21 穿透與損耗曲線，把通道當電路元件</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 34 天（週三新觀念課・SI 量測週）</div>
+  <h1>Day 34：S 參數入門——「黑盒子怎麼量」：S11 反射、S21 穿透與損耗曲線，把通道當電路元件</h1>
+  <div class="meta">2026-08-26（三）｜預估學習時間：90 分鐘｜難度：★★★☆☆（從儀器規格跳到通道診斷——把 Day 33「−3 dB 是什麼」變成「通道有沒有病」；連接 Day 6 的反射係數、Day 9–14 的 TDR，看到同一件事的三種面孔：時域、頻域、單點量測）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>PCB 通道本身是一個黑盒子。我們無法直接進去量電容、電感，但可以給它輸入、看輸出，根據輸入輸出的關係倒推裡面的病——這就是 S 參數（散射參數，Scattering Parameters）的工作。它是 SI 工程師必須會讀的「通道體檢報告」。讀完今天，你要能：</p>
+  <ol>
+    <li>明白 S 參數是什麼、為什麼叫「散射」：反射和穿透——連回 Day 6 的反射係數 ρ、Day 9–14 的時域反射量測（TDR），看到它們是<strong>S 參數在單一時刻的一個「快照」</strong></li>
+    <li>讀懂 S 參數網表：2-port 系統的四個參數 S11、S12、S21、S22，以及為什麼 SI 工程師最關心 S11（反射=阻抗失配）與 S21（穿透=損耗）</li>
+    <li>把 Day 25–26 學過的「損耗曲線」（IL vs 頻率），與 S21 的頻率響應對應起來——它們是同一份資料的不同呈現方式</li>
+    <li>直觀理解「IL 曲線上的凹陷」（insertion loss 下凹）對應什麼電路病——stub 諧振（Day 11）、via 阻抗反跳、串擾影響等</li>
+    <li>會看 dB 尺度與線性尺度互換、理解為什麼 dB 尺度在頻寬寬的東西上最好用</li>
+    <li>認識單端 2-port 的核心三式（反射係數 ρ、傳輸係數 τ、與能量守恆 |S11|² + |S21|² = 1 理想情況下成立），為週 13–14 的差動與 mixed-mode 預留位子</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：從時域反射看，到頻域掃描</h2>
+<p>過去五週學過三種不同「姿勢」看同一件事：</p>
+<ul>
+  <li><strong>Day 6（週 1）：</strong>訊號在傳輸線末端遇到不同特性阻抗，會反射回去。反射大小用反射係數 ρ = (Z − Z0)/(Z + Z0) 量化。</li>
+  <li><strong>Day 9–14（週 3）：</strong>時域反射量測（TDR）——在傳輸線上打入步進波，根據反回來的波形判讀每個位置的阻抗。是「一根線上從頭掃到尾，同一時刻看全部位置」。</li>
+  <li><strong>Day 25–26（週 5）：</strong>損耗（insertion loss）——訊號通過一段傳輸線，不同頻率的衰減不同，用 IL(f) 曲線描述。</li>
+</ul>
+<p>S 參數把這三種串起來。它用<strong>頻域掃描</strong>回答：「如果我在這個黑盒子的輸入端注入一個<strong>特定頻率</strong>的弦波，輸出會怎樣？」——掃遍所有頻率，就得到完整的「通道體檢報告」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：通道是個黑盒子，但可以會診</span>
+  <p>想像 PCB 上的高速訊號通道像一條黑盒子水管：看不見裡面有沒有積垢、轉折幾次、管徑的不連續在哪。但醫生可以從管口打進去染料水，根據<strong>哪些頻率的染料進得去、哪些進不去、進去的又反出來多少</strong>，推斷管子裡面的問題。S 參數就是這份體檢報告：它用數字和曲線告訴你，對於不同的頻率——有多少信號被反射回去（S11）、有多少穿透出來（S21）。工程師根據報告的形狀（尖峰、下凹、平坦），判斷是哪種病：是終端阻抗不匹配（S11 峰值高）？是中途有諧振（S21 凹陷）？是整體損耗過大（S21 向下滑）？同一份資料，用線性尺度看細節，用 dB 尺度看全景——就像同一條 X 光片，近看能看清楚鬆散的牙齒，遠看能看出整體骨質疏鬆。</p>
+</div>
+
+<h2>1. 什麼是 S 參數（散射參數）</h2>
+
+<h3>1.1 定義：散射＝反射＋穿透</h3>
+<p>「散射」就是訊號在遇到不連續或失配時，會分成兩部分：<strong>有些反射回去，有些穿透過去</strong>。S 參數用四個複數來描述一個雙端口（2-port）系統的散射行為：</p>
+
+<div class="formula">
+S11 = 反射係數（port 1）｜S12 = 反向傳輸係數（port 2→port 1）<br>
+S21 = 正向傳輸係數（port 1→port 2）｜S22 = 反射係數（port 2）<br>
+<br>
+單端傳輸線的理想情況（無損、終端匹配）：<br>
+|S11| = |S22| = 0（無反射）　｜　|S21| = |S12| = 1（全穿透，不損耗）<br>
+<br>
+能量守恆（理想無損系統）：|S11|² + |S21|² = 1
+</div>
+<p><em>白話翻譯：S 參數是複數（有大小與相位），通常用<strong>大小</strong>和<strong>相位</strong>分開報告。大小告訴你「反射或穿透有多少」，相位告訴你「相對於輸入，延遲或超前多少」。SI 工程師 90% 的時間只關心大小（幅值），相位留給天線工程師。能量守恆那條式子的意思是：進來 100% 的信號，反射出去 x%，就有 (100−x)% 穿透出去（理想無損時）；如果算出來反射 30%、穿透也 30%，那你的量測系統或計算有問題。</em></p>
+
+<h3>1.2 這三種「看法」其實在講同一件事</h3>
+<figure>
+<svg viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="380" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：Day 6 反射 ρ、Day 9–14 TDR 時域掃描、Day 34 S 參數頻域掃描——同一件事</text>
+  
+  <!-- Left panel: single-frequency reflection (Day 6) -->
+  <rect x="30" y="40" width="220" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="140" y="62" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">Day 6：反射係數 ρ（單頻率）</text>
+  <text x="140" y="84" font-size="9.5" fill="#374151">注入一個特定頻率的弦波</text>
+  <circle cx="80" cy="130" r="3" fill="#0e7490"/>
+  <text x="95" y="135" font-size="8.5" fill="#374151">訊號源</text>
+  <line x1="95" y1="130" x2="140" y2="130" stroke="#0e7490" stroke-width="1.5"/>
+  <circle cx="160" cy="130" r="12" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <text x="160" y="143" text-anchor="middle" font-size="8" fill="#dc2626">未知</text>
+  <line x1="175" y1="130" x2="200" y2="130" stroke="#0e7490" stroke-width="1.5"/>
+  <line x1="200" y1="120" x2="200" y2="140" stroke="#0e7490" stroke-width="1.5"/>
+  <text x="210" y="135" font-size="8.5" fill="#374151">反射看大小</text>
+  <text x="140" y="165" font-size="9" fill="#7c3aed" font-weight="bold">ρ = (Z_L − Z0)/(Z_L + Z0)</text>
+  <text x="140" y="180" font-size="8" fill="#374151" text-anchor="middle">Day 6 推導過的那個式子</text>
+  
+  <!-- Middle panel: time-domain TDR (Day 9-14) -->
+  <rect x="270" y="40" width="220" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="380" y="62" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">Day 9–14：TDR 時域掃描</text>
+  <text x="380" y="84" font-size="9.5" fill="#374151">打入步進波，看整條線的 Z</text>
+  <!-- TDR step in and reflections -->
+  <path d="M310,140 L335,140 L335,115 L360,115" fill="none" stroke="#0e7490" stroke-width="1.8"/>
+  <text x="308" y="155" font-size="8.5" fill="#374151">step</text>
+  <path d="M360,115 L380,115 L380,128 L400,128" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="3 2"/>
+  <text x="405" y="130" font-size="8" fill="#dc2626">反射波</text>
+  <text x="380" y="175" font-size="9" fill="#7c3aed" font-weight="bold">Z(距離) = 時間 → 位置對應阻抗</text>
+  <text x="380" y="190" font-size="8" fill="#374151" text-anchor="middle">「一根線上、每個位置掃一次」</text>
+  
+  <!-- Right panel: frequency-domain S-parameters -->
+  <rect x="510" y="40" width="220" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="620" y="62" text-anchor="middle" font-size="12" font-weight="bold" fill="#7c3aed">Day 34：S 參數 s(f)</text>
+  <text x="620" y="84" font-size="9.5" fill="#374151">掃 100 MHz 到 10 GHz 注 1000 個頻率</text>
+  <!-- Frequency response curve -->
+  <line x1="540" y1="140" x2="680" y2="140" stroke="#64748b" stroke-width="1"/>
+  <line x1="540" y1="140" x2="540" y2="80" stroke="#64748b" stroke-width="1"/>
+  <path d="M545,136 Q600,132 620,125 Q650,110 675,95" fill="none" stroke="#0e7490" stroke-width="2"/>
+  <text x="620" y="75" font-size="8.5" fill="#0e7490" font-weight="bold">|S21(f)|</text>
+  <text x="620" y="175" font-size="9" fill="#7c3aed" font-weight="bold">每個頻率一個 S 參數</text>
+  <text x="620" y="190" font-size="8" fill="#374151" text-anchor="middle">「掃頻率、看穿透或反射」</text>
+  
+  <!-- Bottom: relationship -->
+  <rect x="30" y="220" width="700" height="240" rx="8" fill="#0b1220"/>
+  <text x="380" y="244" text-anchor="middle" font-size="12" font-weight="bold" fill="#e2e8f0">三者的關係：測訊號通過傳輸線時的「失配」與「損耗」</text>
+  
+  <text x="50" y="270" font-size="10" font-weight="bold" fill="#4ade80">① 反射係數 ρ（Day 6）</text>
+  <text x="50" y="288" font-size="9.5" fill="#d1d5db">—— 終端阻抗不等於特性阻抗時，會反射</text>
+  <text x="50" y="304" font-size="9.5" fill="#d1d5db">—— 是 S11 在「某一個固定頻率」的一個數字</text>
+  <text x="50" y="320" font-size="9.5" fill="#d1d5db">—— 因為反射係數與頻率有關（Day 7 討論過），不同頻率反射幅度不同</text>
+  
+  <text x="50" y="348" font-size="10" font-weight="bold" fill="#4ade80">② 時域掃描 TDR（Day 9–14）</text>
+  <text x="50" y="366" font-size="9.5" fill="#d1d5db">—— 對傳輸線上「每個位置」測量，看沿路有沒有阻抗不連續</text>
+  <text x="50" y="382" font-size="9.5" fill="#d1d5db">—— 相當於 S 參數在「無限多個時刻」的快照，但只看「大小」不看「頻率相位資訊」</text>
+  <text x="50" y="398" font-size="9.5" fill="#d1d5db">—— 可檢查 via、分支、終端接頭有沒有問題，但看不出「頻率相關損耗」</text>
+  
+  <text x="50" y="426" font-size="10" font-weight="bold" fill="#4ade80">③ S 參數與頻域掃描（Day 34）</text>
+  <text x="50" y="444" font-size="9.5" fill="#d1d5db">—— 對「每個頻率」測量反射和穿透，畫出完整的頻率響應</text>
+  <text x="50" y="460" font-size="9.5" fill="#d1d5db">—— 能看出頻率相關的病：哪個頻率反射特別多（諧振）、哪個頻率穿透特別差（損耗）</text>
+</svg>
+<figcaption>圖 1：把訊號通過一段黑盒子通道的過程，用三種「儀器語言」描述。Day 6 是「請進來一個客人，看他反不反」；Day 9–14 是「掃描整條走廊，看每個轉角」；Day 34 是「對每個時間點分別請不同頻率的客人進來，看誰進得去、誰被擋出來」。</figcaption>
+</figure>
+
+<h3>1.3 與傳輸線理論的橋樑</h3>
+<p>回想 Day 2 與 Day 6 的基本式：</p>
+<div class="formula">
+反射係數：ρ = (Z_L − Z0)/(Z_L + Z0)　　　　傳輸係數：τ = 2Z_L/(Z_L + Z0)<br>
+<br>
+若訊號完全無損、線性系統：<br>
+|ρ|² + |τ|² ≠ 1　（因為 τ 是電壓比，功率比須考慮阻抗）<br>
+正確的能量關係：反射功率 + 穿透功率 = 入射功率<br>
+</div>
+<p><em>白話翻譯：S 參數是單位電壓反射係數和穿透係數，直接對應 Day 6 講的 ρ 和 τ。但要注意單位：ρ 和 τ 是電壓比，S 參數在 50 Ω 系統下有時也用 50 Ω 的「偽」功率比表示。實務上工程師只要記得：S11 高 → 反射多 → 阻抗失配；S21 低 → 穿透少 → 損耗大或有諧振。</em></p>
+
+<h2>2. S11 與反射：通道的「終端病」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：鏡子 vs 黑洞</span>
+  <p>把 S11 想成「這段通道的反射程度」——S11 = 0 時像黑色布料（訊號進去就吸收，沒有反射），S11 = 1 時像完美鏡子（訊號全反射回去）。在 DUT 末端貼一個不等於 50 Ω 的東西（比如未端接的 IC pad，或一個 100 Ω 的終端電阻），訊號進去一部分反射出來，就會在 S11 的頻率響應上看到「峰值」或「凹陷」。如果是阻抗反跳（via 附近突然變粗），就會看到高頻的小尖峰。工程師根據尖峰的頻率，往往能反推是什麼東西造成的。</p>
+</div>
+
+<p>S11 定義在 port 1 測量的反射，通常用來量測被測物（DUT）的入阻抗。若 DUT 是一段傳輸線，S11 主要取決於終端阻抗：</p>
+<ul>
+  <li><strong>終端完美匹配（Z_L = Z0）：</strong>S11 ≈ 0（無反射）</li>
+  <li><strong>終端開路（Z_L = ∞）或短路（Z_L = 0）：</strong>S11 ≈ ±1（全反射）</li>
+  <li><strong>終端部分失配：</strong>S11 是 0 到 1 之間的數值，取決於失配程度</li>
+</ul>
+
+<p>更重要的是，<strong>S11 的頻率響應形狀</strong>會洩露通道內部的結構：</p>
+<ul>
+  <li><strong>寬平的凸起（broad hump）：</strong>整段通道的特性阻抗有緩的變化（如 PCB 微帶線逐漸變細）</li>
+  <li><strong>尖銳的峰值（sharp spike）：</strong>某個特定頻率的諧振或諧波陷阱。比如 Day 11 的 stub 諧振：stub 長度對應的共鳴頻率上，反射會特別強</li>
+  <li><strong>高頻小波紋（ripple）：</strong>via 不連續、分層阻抗變化、或多層板平面之間的耦合</li>
+</ul>
+
+<div class="formula">
+Stub 諧振的反射係數（Day 11 復習）：<br>
+Z_stub = j·Z0·tan(βl)　（其中 β = 2π/λ、l 是 stub 長度）<br>
+<br>
+當 βl = π/2 (或 3π/2、5π/2...)：tan 趨於無窮 → Z_stub 開路 → |S11| = 1<br>
+（即 l = λ/4、3λ/4、5λ/4...）
+</div>
+
+<h2>3. S21 與損耗：通道的「健康」</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：聽筒的音量與清晰度</span>
+  <p>S21 就是通道的「穿透率」——訊號有多少進得來。S21 = 1 時信號毫髮無損，S21 = 0.5 時只有一半穿透得了。在實務上，S21 通常用「插入損耗」（insertion loss，IL）表示：IL = −20 log₁₀(|S21|) dB。一個 S21 = 0.5 的通道，IL = 6 dB（損失一半功率）；S21 = 0.9，IL ≈ 0.9 dB（損失不到一成）。<br><br>S21 的曲線形狀會告訴你通道有什麼毛病：③ 如果曲線整體向下傾斜（低頻 −1 dB、高頻 −6 dB），就是「頻率相關損耗」，來自導體損（skin effect，Day 25）和介質損；② 如果曲線光滑但某個頻率出現<strong>凹陷</strong>（dip），那通常是 stub 諧振的「反面」——該頻率能量被反射了，穿透下來的就少；③ 如果曲線上出現多個尖峰（不規則），那可能是多層板內的平面共鳴、或通道彎曲產生的「多路徑」干涉。</p>
+</div>
+
+<div class="formula">
+S21 與插入損耗的換算：<br>
+IL (dB) = −20 log₁₀(|S21|)　　　　或　　|S21| = 10^(−IL/20)<br>
+<br>
+S21 幅值與功率的關係（50 Ω 系統）：<br>
+P_out / P_in = |S21|²　　　　（假設 S11 ≈ 0、無其他反射）
+</div>
+
+<p><em>白話翻譯：IL 曲線就是 S21 的「負對數」。為什麼要用 dB？因為 S21 的變化範圍很寬（0.99 到 0.1 都是常見的），線性尺度下很難看出細節——0.99 和 0.98 在曲線上看起來一樣，但實務上都是「損耗小於 0.1 dB」，計算起來是一樣的。用 dB 後，−0.08 dB 和 −0.16 dB 在圖上就能清楚看出差異。所以實務上拿到 S 參數檔，S21 都是用 dB 單位給出（稱 S21(dB) 或 S21_mag）。</em></p>
+
+<h3>3.1 「IL 曲線凹陷」的診斷學</h3>
+<p>根據凹陷的形狀與頻率，可以倒推病因：</p>
+<table border="1" cellpadding="8" style="border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 0.95em;">
+  <tr style="background: #0f4c5c; color: #fff;">
+    <th>IL 曲線特徵</th>
+    <th>可能的原因</th>
+    <th>所在課程</th>
+  </tr>
+  <tr style="background: #f8fafc;">
+    <td><strong>尖銳單峰凹陷</strong>（某個頻率穿透少）</td>
+    <td>Stub 諧振（Day 11）或 via 轉角的不連續諧振</td>
+    <td>Day 11, 15</td>
+  </tr>
+  <tr style="background: #f8fafc;">
+    <td><strong>多個規則凹陷</strong>（一個頻率間隔重複）</td>
+    <td>多層板平面之間的平行板耦合共鳴，或分岔短線造成的多路徑干涉</td>
+    <td>Day 8, 9</td>
+  </tr>
+  <tr style="background: #f8fafc;">
+    <td><strong>整體向下傾斜</strong>（低頻 0 dB、高頻 −10 dB）</td>
+    <td>導體損 + 介質損（skin effect），正常。但若斜率太陡（>−1 dB/GHz）要檢查線寬、層疊設計</td>
+    <td>Day 25, 26</td>
+  </tr>
+  <tr style="background: #f8fafc;">
+    <td><strong>低頻高於高頻，但有平臺</strong>（−0.5 dB 到 −2 dB 區間很平）</td>
+    <td>整條線的阻抗從低頻到某個頻率算匹配，超過那個頻率才損耗快升。通常是 RC 濾波或終端網路的效應</td>
+    <td>Day 10, 18</td>
+  </tr>
+</table>
+
+<h2>4. dB 尺度與線性尺度</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：地震儀與分貝王</span>
+  <p>線性尺度（0 到 1）像用尺子量長度——結論明確，但問題是：0.99 和 0.98 看起來沒區別，你無法判斷「損耗減了多少」。dB（分貝）尺度是對數，把小數值「放大」了——好比地震儀把極微弱的地動放大 1000 倍才看得出來。在 SI 工程：−0.1 dB 損耗是「很好」，−1 dB 是「可接受」，−6 dB 是「有問題」。用線性尺度分別是 0.989、0.891、0.501，毫無規律；用 dB 尺度就是「−0.1、−1、−6」，一眼看出劣化程度。</p>
+</div>
+
+<div class="formula">
+dB 與線性的互換：<br>
+S21(dB) = 20 log₁₀(|S21|)　　　　（電壓或場強）<br>
+P(dB) = 10 log₁₀(P/P_ref)　　　　（功率）<br>
+<br>
+快速查表（20 log₁₀ 版，工程常用）：<br>
+|S21| = 1 → 0 dB　　　　0.9 → −0.9 dB　　　　0.7 → −3 dB　　　　0.5 → −6 dB<br>
+0.3 → −10 dB　　　　0.1 → −20 dB　　　　0.01 → −40 dB
+</div>
+
+<h2>5. 實務案例：NB 主機板的高速訊號通道診斷</h2>
+
+<div class="card intuition">
+  <span class="label">場景：DDR5 時脈線路的 S 參數量測與診斷</span>
+  <p>筆記型電腦主機板上，DDR5 時脈從 PMIC 經過 15 cm 走線送到 DRAM，沿路要經過：電源平面之間的通孔（via）、過轉角、穿過磁珠濾波網路、最後到 DRAM 的 BGA ball。產線上量了一片板的 S 參數，發現：<br>① S11 在 800 MHz 和 2.4 GHz 各有一個尖峰（|S11| = 0.3）<br>② S21 整體向下傾斜，800 MHz 時 −1.5 dB、2.4 GHz 時 −4.2 dB<br>③ 在 1.6 GHz 出現一個尖銳凹陷（S21 掉到 −0.6 dB 而旁邊是 −1.2 dB）<br><br>工程師的診斷：① 800 MHz 尖峰 → 查 PCB 結構，發現有個 0.5 pF via 樁（via stub）附近阻抗不連續，λ/4 = (c/f)/4 ≈ 9 cm（走線長度）= stub 共鳴點；② 2.4 GHz 尖峰 → 可能是磁珠濾波網路的並聯諧振；③ 整體傾斜 → 正常的導體＋介質損；④ 1.6 GHz 凹陷 → 可能是同層相鄰走線的串擾（Day 4）造成的反向傳輸耦合。對策：加電源通孔接地、調整磁珠參數、加端接網路。</p>
+</div>
+
+<h2>6. 單端 2-port 的核心三式（為差動預留位子）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：「我會背三式，週 13 差動不用驚」</span>
+  <p>單端系統只有一個訊號線＋一個地。輸入端（port 1）和輸出端（port 2）各有一個反射係數（S11、S22），中間有正向（S21）與反向（S12）穿透。90% 的 SI 工作只用前三個——S11（輸入反射）、S21（正向損耗）、S22（輸出反射）。但在差動訊號（週 13）時，會多出「同向」與「反向」的組合（called common-mode 與 differential-mode），S 參數矩陣會變成 4×4——但骨子裡還是在看「反射多不多、損耗大不大」，只是有兩組獨立頻率響應。今天記住單端的三式，下週就不會困惑。</p>
+</div>
+
+<div class="formula">
+單端 2-port 的四參數網路（其中 S12 與 S21 在無損對稱系統下相等）：<br>
+[b₁]   [S11  S12] [a₁]<br>
+[b₂] = [S21  S22] [a₂]<br>
+<br>
+其中 a₁ 是入射波、b₁ 是反射波、a₂ 是輸出口的反射進來、b₂ 是穿透出去的<br>
+<br>
+能量守恆（無損時）：|S11|² + |S21|² = 1　（假設 port 2 完美終端）
+</div>
+
+<h2>7. 動手練習</h2>
+
+<details>
+<summary><strong>練習 1：反射係數的 dB 換算</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某通道的 S11 在 500 MHz 測得 0.15（線性值）。請轉換成 dB 單位，並判斷失配程度。</p>
+<p><strong>詳解：</strong></p>
+<p>S11(dB) = 20 log₁₀(0.15) = 20 × (−0.824) ≈ −16.5 dB</p>
+<p>失配判斷：|S11| = 0.15 意味著 15% 的訊號被反射回去，相當於反射係數 ρ = 0.15。根據 Day 6 的公式：</p>
+<div class="formula">
+ρ = (Z_L − Z0)/(Z_L + Z0) = 0.15<br>
+→ Z_L − Z0 = 0.15(Z_L + Z0)<br>
+→ Z_L(1 − 0.15) = Z0(1 + 0.15)<br>
+→ Z_L ≈ 1.35 Z0 ≈ 67.5 Ω（假設 Z0 = 50 Ω）
+</div>
+<p>終端阻抗約 68 Ω，相對 50 Ω 失配 35%——小信號場景（如示波器探棒終端）算可接受，高速訊號場景（如 LVDS）就不行。</p>
+<p><strong>工程判斷：</strong>若這是要送給 DRAM 的 DDR5 時脈，−16.5 dB 反射算「合格」（一般要求 <−10 dB）；若這是 LVDS 差動對，就要檢查終端網路了。</p>
+</details>
+
+<details>
+<summary><strong>練習 2：S21 與插入損耗的轉換</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某 PCB 走線的 S21 在 2 GHz 測得 0.89（線性值）。(a) 轉換成 dB；(b) 換算成功率損耗百分比。</p>
+<p><strong>詳解：</strong></p>
+<p>(a) S21(dB) = 20 log₁₀(0.89) ≈ −1.0 dB（−20 log 版本）</p>
+<p>插入損耗 IL = −S21(dB) = +1.0 dB（通常 IL 用正數表示損失）</p>
+<p>(b) 功率損耗：</p>
+<div class="formula">
+P_out/P_in = |S21|² = 0.89² ≈ 0.792<br>
+損耗功率百分比 = 1 − 0.792 = 20.8%（約 21% 的功率在這段線路被耗散）
+</div>
+<p><strong>工程判斷：</strong>2 GHz 時 1.0 dB 損耗是正常的（高速訊號線的典型值）。但若走線長度只有 5 cm，這個損耗就偏高，可能需要檢查：① 微帶線微距（trace width）是否太窄；② 層疊是否選錯（介質損耗特別高的材料）；③ 沿路有沒有 via 或彎曲增加損耗。</p>
+</details>
+
+<details>
+<summary><strong>練習 3：Stub 諧振的診斷</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某 NB 主機板的 DDR 訊號，在 S11 與 S21 曲線上看到一個尖銳的峰值 / 凹陷組合，正好在 1.2 GHz。估計這是哪種元件造成的失配？（假設 Dk = 4、訊號速度 c_eff ≈ 1.5 × 10⁸ m/s）</p>
+<p><strong>詳解：</strong></p>
+<p>尖銳峰值 + 凹陷 = Stub 諧振的標誌（Day 11）。Stub λ/4 共鳴：</p>
+<div class="formula">
+λ = c_eff / f = (1.5 × 10⁸) / (1.2 × 10⁹) ≈ 0.125 m = 125 mm<br>
+l_stub = λ/4 ≈ 31 mm
+</div>
+<p>31 mm stub 是什麼東西？可能是：</p>
+<ul>
+  <li>PCB 上 DDR 終端網路的一條短走線尚未接地</li>
+  <li>BGA ball 或 connector pin 的引線長度造成</li>
+  <li>via 樁（via stub）——從訊號層打孔下來，上面還留著孔的「尾巴」</li>
+</ul>
+<p><strong>對策：</strong>檢查 1.2 GHz 附近有沒有看起來奇怪的短走線；如果是 via 樁，改用「背鑽」（via 從另一側鑽開）或「接地 via」貼住。</p>
+</details>
+
+<details>
+<summary><strong>練習 4：多通道比較與故障排查</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某個連接器有 4 對高速通道，量了 S21 曲線，結果三條一致（都是 −1.2 dB @2 GHz），但第四條異常地高（−0.3 dB @2 GHz）。怎麼判斷是什麼出問題？</p>
+<p><strong>詳解：</strong></p>
+<p>三條正常、一條偏高（穿透偏多，即損耗偏少），可能的原因：</p>
+<ul>
+  <li><strong>最可能：</strong>第四條通道根本沒有經過濾波網路或某個衰減元件（而其他三條都經過）。檢查原理圖，看第四條走線的路由是否不同。</li>
+  <li><strong>次可能：</strong>第四條在 PCB 上走在更高的層（介電常數更低的層間），損耗自然較少。查層疊和高度。</li>
+  <li><strong>測量誤差：</strong>量測時連接器對接不良（比如第四條接觸不好，其實是開路啊，為什麼還有 −0.3 dB 而不是掛掉）——不太可能，除非你的網路分析儀壞了。</li>
+</ul>
+<p><strong>行動：</strong>先驗證三條「正常的」線路是不是真的一致（檢查重複性）；然後跟第四條比較原理圖和 PCB layout；測過多片看是單片問題還是普遍現象。</p>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目 + 參考答案</span>
+  <p>
+    <strong>Question 1: "You are given S-parameter data for a DDR5 clock trace on an NB motherboard. The S11 shows a sharp dip at 1.6 GHz, and S21 has a notch at the same frequency. What could be the root cause, and how would you fix it?"</strong><br><br>
+    <strong>Reference answer:</strong> A sharp dip in S11 combined with a notch in S21 at a specific frequency is typically caused by a stub resonance or a via discontinuity. At 1.6 GHz, the quarter-wave length is roughly: λ/4 = c_eff/(4f) ≈ (1.5×10⁸ m/s) / (4 × 1.6×10⁹ Hz) ≈ 23 mm. This suggests a stub or via pin of that length is resonating. To fix: (1) Use via-in-pad with copper plating to bury the stub; (2) Add a short stitching via to ground immediately after the stub to kill the resonance; (3) Check if there's an unterminated branch in the circuit. The diagnostic value of S-parameters here is that the frequency of the dip directly reveals the physical length causing the problem.
+  </p>
+  <p style="margin-top: 1.5em;">
+    <strong>Question 2: "Your network analyzer shows S21 = −0.8 dB @ 2 GHz for a board-to-board connector. Is this acceptable for a 5 Gbps signal? What other information would you need to make a decision?"</strong><br><br>
+    <strong>Reference answer:</strong> To determine if −0.8 dB is acceptable, we need to know: (1) The total channel budget (how much loss can the receiver tolerate before losing eye margin); (2) The data rate's required bandwidth (5 Gbps NRZ typically needs 2.5 GHz bandwidth; at 2 GHz we're already in the high-loss region); (3) Whether this loss is linear or frequency-dependent (if loss keeps climbing beyond 2 GHz, high-frequency content will suffer more); (4) Receiver equalizer capability (some receivers have on-die equalization that can compensate ~5–10 dB of loss). The S21 curve shape matters more than a single point: a smooth roll-off is recoverable, but sharp dips or ripples indicate resonances that equalization cannot fix easily.
+  </p>
+</div>
+
+<h2>9. 今日 Anki 卡片</h2>
+<p>
+  <strong>卡 1（定義）：</strong><br>
+  正面：S11、S21、S22 分別代表什麼？<br>
+  背面：S11 = 反射係數（port 1）｜ S21 = 正向穿透係數 ｜ S22 = 反射係數（port 2）。在單端系統，SI 工程師主要看 S11（終端失配）和 S21（損耗）。
+</p>
+<p>
+  <strong>卡 2（換算）：</strong><br>
+  正面：S21(dB) 與線性 S21 的關係式是什麼？<br>
+  背面：S21(dB) = 20 log₁₀(|S21|)。記住快速查表：S21=0.9 → −0.9 dB；0.7 → −3 dB；0.5 → −6 dB。
+</p>
+<p>
+  <strong>卡 3（診斷）：</strong><br>
+  正面：S21 曲線上看到一個「尖銳的下凹」（notch），而周邊頻率正常，這表示什麼？<br>
+  背面：某個頻率的諧振或共鳴（通常是 stub 或 via 的 λ/4 共鳴）。該頻率的能量被反射出去，所以穿透下來少。可根據凹陷頻率 f 反推 stub 長度 l ≈ c_eff/(4f)。
+</p>
+<p>
+  <strong>卡 4（連結）：</strong><br>
+  正面：Day 6 的反射係數 ρ 與 S11 有什麼關係？<br>
+  背面：S11 就是 ρ（在匹配的系統中，或相當於終端的反射係數）。Day 6 是「一個固定頻率算一次 ρ」；Day 34 S11 是「掃遍所有頻率，每個頻率都有一個 ρ」——背後原理相同，只是 S 參數把頻率依賴性完整呈現出來。
+</p>
+<p>
+  <strong>卡 5（應用）：</strong><br>
+  正面：在 NB 主機板 DDR5 設計時，為什麼要量 S 參數而不只量 TDR？<br>
+  背面：TDR 看通道的物理結構（有沒有 via 凹陷、阻抗有沒有突變），但看不出「頻率相關損耗」和「共鳴陷阱」。S 參數的頻域掃描能抓住 stub 諧振、磁珠濾波網路的並聯共鳴等頻率現象。TDR + S 參數一起用，才能全景診斷。
+</p>
+
+<h2>10. 明日預告</h2>
+<p>Day 35（週四）將討論 S 參數的進階應用或開始講 <strong>Bathtub curve</strong>（眼圖的統計表示法），決定權基於本週進度。Bathtub 是 Day 27、30、31 三次預告尚未兌現的內容，代表「在不同時間抽樣時刻，收集所有可能的 1 與 0 邊沿，統計分布」——將正式連接 jitter 與眼圖判讀，為週 13 的 D-PHY 眼圖量測打地基。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

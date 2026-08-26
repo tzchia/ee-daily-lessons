@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 35｜眼圖統計與 Bathtub Curve——從時間軸上的亂跳，到眼開啟程度的量化：jitter 與 margin 的對話</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 35 天（週四新觀念課・SI 量測週）</div>
+  <h1>Day 35：眼圖統計與 Bathtub Curve——從時間軸上的亂跳，到眼開啟程度的量化：jitter 與 margin 的對話</h1>
+  <div class="meta">2026-08-27（四）｜預估學習時間：90 分鐘｜難度：★★★★☆（過去 7 天 Day 28–34 累積的眼圖、jitter、S 參數觀念大串聯；把 Day 5 看過的眼圖從「圖形判讀」跳到「數字量化」，把 Day 27/30/31 三次預告的「統計」兌現；為週 13 D-PHY 眼圖量測打地基）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>眼圖（eye diagram）是訊號完整性工程師最常掛在嘴邊的診斷工具，從 Day 5 起就在讀眼圖。但過去一直是「定性判讀」——眼睛越開越好。今天要把眼圖變成<strong>可數字化、可量測、可抓住問題根源的診斷工具</strong>。讀完今天，你要能：</p>
+  <ol>
+    <li>明白眼圖是什麼：把大量的時間軸波形疊圖，每個邊沿都在不同時刻落下 → 形成「眼睛」形狀 → 眼睛越開越好</li>
+    <li>認識眼圖的三個關鍵軸：水平軸（時間 = jitter 與取樣時間裕度）、垂直軸（電壓 = 幅度餘量）、第三維（時間軸重疊後的亂跳統計）</li>
+    <li>理解 Bathtub curve：把眼圖的「所有可能邊沿位置」統計起來 → 水平軸是時刻、垂直軸是出錯機率 → 形狀像浴盆 → 浴盆越淺越好</li>
+    <li>連結 Day 5 jitter 分類（RJ/DJ/ISI）與 bathtub 的形狀：RJ 造成低谷寬度、DJ 造成低谷斜邊、ISI 造成低谷變形</li>
+    <li>認識「margin」概念：取樣時刻偏移多少、電壓裕度還有多少，才不會掉進浴盆裡（邊沿被誤判）</li>
+    <li>實務應用：NB DDR5 / 鏡頭 MIPI 場景下，用 bathtub 量化「這個通道還能多快」或「還能容許多大的 jitter」</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要：眼圖到現在為止學過什麼</h2>
+<p>Day 5（週 1）初次接觸眼圖——把一堆示波器波形疊在一起，看起來像一隻眼睛，眼睛越開越好。當時只會「看著圖說好壞」。後來累積的觀念：</p>
+<ul>
+  <li><strong>Day 27–31（週 5）：</strong>眼圖變形的根源——導體損（skin effect）→ 衣服掉色、ISI 造成邊沿模糊、jitter 造成邊沿時刻不確定、雜訊疊上去</li>
+  <li><strong>Day 28（週 5）：</strong>jitter 的三元組（RJ/DJ/ISI）——隨機亂跳 vs 有規律偏移 vs 前一個位元對後一個的影響</li>
+  <li><strong>Day 34（昨天）：</strong>通道本身的「病況」用 S 參數量化——終端失配（S11 反射）、損耗（S21 衰減）、頻率相關異常（諧振）</li>
+</ul>
+<p>但三件事都還沒串聯在一起。<strong>Bathtub curve</strong> 就是這條線：把眼圖轉成「統計」形式，定量告訴你「在每個取樣時刻，出錯機率是多少」——這樣就能直接量化「通道還有多少裕度」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：浴盆曲線救孤兒</span>
+  <p>想像眼圖是一張「時間軸上的人口分佈圖」：訊號邊沿理想時刻應該在午夜 12:00，但因為 jitter 和 ISI，實際邊沿到達時間有的提前（11:45）、有的延遲（12:15）。然後你要在某個時刻（比如 12:05）用檢測器「抽查」這個訊號是 0 還是 1。如果選在邊沿「灰色地帶」（人群最密集的時刻），你會看到一堆「誤判」。浴盆曲線就是「在每個時刻的誤判率分布圖」：越接近邊沿應該落下的地方誤判率越高（浴盆最低點），越遠離邊沿誤判率越低（浴盆的邊沿）。工程師的工作就是讓浴盆越淺越好（誤判率下降），這樣即使時刻晚到一點、電壓降一點，也不會掉進陷阱。</p>
+</div>
+
+<h2>1. 從眼圖到統計——Bathtub 的概念</h2>
+
+<h3>1.1 眼圖怎麼來的</h3>
+<p>一條高速訊號通過 PCB，在終端用示波器看 1000 個時鐘週期。每週期都有一個上升邊沿（從 0 跳到 1）——理想情況下，所有 1000 個上升邊沿在同一時刻到達，看起來像一條直線。但現實中：</p>
+<ul>
+  <li><strong>RJ（隨機 jitter）：</strong>每個邊沿到達時刻都在正負 σ 高斯分佈內亂跳</li>
+  <li><strong>DJ（確定性 jitter）：</strong>邊沿延遲取決於前面位元序列（ISI）或電源/串擾雜訊</li>
+  <li><strong>ISI（符號間干擾）：</strong>前面的位元信號還沒完全落定，後面的位元訊號已經來了 → 邊沿被「拖」得變慢、變鈍</li>
+</ul>
+<p>把 1000 個邊沿全部疊圖，就看到一個「模糊的帶狀」而不是銳利的直線——這就是眼圖的「亮度分布」。亮度越高 = 那個位置到達的邊沿越多 = 統計上的「最可能位置」。</p>
+
+<div class="formula">
+眼圖的本質：邊沿時刻的直方圖<br>
+<br>
+設理想邊沿時刻為 t0；實際第 n 個邊沿到達時刻為 tₙ<br>
+Jitter[n] = tₙ − t0　　　　（偏移量）<br>
+<br>
+眼圖就是「Jitter[n] 在一個時鐘週期內的分佈」，用亮度表示頻率直方圖<br>
+Bathtub curve 就是「計數每個 Jitter 值，然後統計誤判機率」
+</div>
+
+<h3>1.2 什麼是 Bathtub Curve</h3>
+<figure>
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：眼圖到 Bathtub Curve 的轉換——同一份資料的三種說法</text>
+  
+  <!-- Left panel: Eye Diagram -->
+  <g>
+    <rect x="20" y="45" width="280" height="200" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="160" y="65" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f4c5c">（1）眼圖</text>
+    <text x="160" y="85" text-anchor="middle" font-size="10" fill="#374151">訊號電壓 vs 時間</text>
+    
+    <!-- Eye diagram axes -->
+    <line x1="60" y1="220" x2="270" y2="220" stroke="#64748b" stroke-width="1"/>
+    <line x1="60" y1="100" x2="60" y2="220" stroke="#64748b" stroke-width="1"/>
+    <text x="50" y="140" font-size="9" fill="#374151" text-anchor="end">Voltage</text>
+    <text x="165" y="235" font-size="9" fill="#374151" text-anchor="middle">Time (one clock cycle)</text>
+    
+    <!-- Eye shape with gaussian blur effect (represented by multiple overlays) -->
+    <defs>
+      <linearGradient id="eyeGrad" x1="0%" y1="50%" x2="100%" y2="50%">
+        <stop offset="0%" style="stop-color:#2563eb;stop-opacity:0.1" />
+        <stop offset="30%" style="stop-color:#2563eb;stop-opacity:0.6" />
+        <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+        <stop offset="70%" style="stop-color:#2563eb;stop-opacity:0.6" />
+        <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0.1" />
+      </linearGradient>
+    </defs>
+    <path d="M75,160 Q90,145 105,150 Q120,140 135,155 L135,185 Q120,200 105,195 Q90,205 75,190 Z" fill="url(#eyeGrad)" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M135,155 Q150,140 165,150 Q180,135 200,155 L200,185 Q180,205 165,195 Q150,210 135,185 Z" fill="url(#eyeGrad)" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M200,155 Q215,145 230,150 Q245,135 265,160 L265,190 Q245,210 230,200 Q215,205 200,185 Z" fill="url(#eyeGrad)" stroke="#2563eb" stroke-width="1.5"/>
+    
+    <text x="160" y="250" font-size="10" fill="#0f4c5c" text-anchor="middle" font-weight="bold">眼睛寬 = 取樣裕度</text>
+    <text x="160" y="265" font-size="9" fill="#374151" text-anchor="middle">眼睛高 = 電壓裕度</text>
+  </g>
+  
+  <!-- Arrow 1 -->
+  <g>
+    <path d="M310,145 L340,145" stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+        <polygon points="0 0, 10 5, 0 10" fill="#666" />
+      </marker>
+    </defs>
+    <text x="325" y="140" font-size="9" fill="#666">提取</text>
+  </g>
+  
+  <!-- Middle panel: Histogram of edge timing -->
+  <g>
+    <rect x="355" y="45" width="280" height="200" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="495" y="65" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f4c5c">（2）邊沿時刻直方圖</text>
+    <text x="495" y="85" text-anchor="middle" font-size="10" fill="#374151">頻數 vs 時刻偏移</text>
+    
+    <!-- Histogram axes -->
+    <line x1="395" y1="220" x2="610" y2="220" stroke="#64748b" stroke-width="1"/>
+    <line x1="395" y1="220" x2="395" y2="100" stroke="#64748b" stroke-width="1"/>
+    <text x="385" y="140" font-size="9" fill="#374151" text-anchor="end">Count</text>
+    <text x="502" y="235" font-size="9" fill="#374151" text-anchor="middle">Timing offset (ps)</text>
+    
+    <!-- Gaussian histogram bars -->
+    <rect x="405" y="195" width="6" height="25" fill="#7c3aed" opacity="0.6"/>
+    <rect x="412" y="175" width="6" height="45" fill="#7c3aed" opacity="0.7"/>
+    <rect x="419" y="145" width="6" height="75" fill="#7c3aed" opacity="0.8"/>
+    <rect x="426" y="115" width="6" height="105" fill="#7c3aed" opacity="0.9"/>
+    <rect x="433" y="105" width="6" height="115" fill="#7c3aed" opacity="1"/>
+    <rect x="440" y="115" width="6" height="105" fill="#7c3aed" opacity="0.9"/>
+    <rect x="447" y="145" width="6" height="75" fill="#7c3aed" opacity="0.8"/>
+    <rect x="454" y="175" width="6" height="45" fill="#7c3aed" opacity="0.7"/>
+    <rect x="461" y="195" width="6" height="25" fill="#7c3aed" opacity="0.6"/>
+    
+    <text x="495" y="250" font-size="10" fill="#0f4c5c" text-anchor="middle" font-weight="bold">高斯分佈：σ = 標準差</text>
+    <text x="495" y="265" font-size="9" fill="#374151" text-anchor="middle">等同於 RJ（隨機 jitter）</text>
+  </g>
+  
+  <!-- Arrow 2 -->
+  <g>
+    <path d="M645" y1="145" x2="675" y2="145" stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+    <text x="660" y="140" font-size="9" fill="#666">轉換</text>
+  </g>
+  
+  <!-- Right panel: Bathtub Curve -->
+  <g>
+    <rect x="690" y="45" width="200" height="200" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="790" y="65" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f4c5c">（3）Bathtub Curve</text>
+    <text x="790" y="85" text-anchor="middle" font-size="10" fill="#374151">誤判率 vs 取樣時刻</text>
+    
+    <!-- Bathtub axes -->
+    <line x1="730" y1="220" x2="850" y2="220" stroke="#64748b" stroke-width="1"/>
+    <line x1="730" y1="220" x2="730" y2="100" stroke="#64748b" stroke-width="1"/>
+    <text x="720" y="140" font-size="8" fill="#374151" text-anchor="end">BER</text>
+    <text x="790" y="235" font-size="8" fill="#374151" text-anchor="middle">Sampling time</text>
+    
+    <!-- Bathtub shape (U-curve, log scale on Y) -->
+    <path d="M735,135 Q765,220 790,200 Q815,135 845,165" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+    <circle cx="790" cy="200" r="3" fill="#dc2626"/>
+    <text x="790" y="218" font-size="8" fill="#dc2626" text-anchor="middle" font-weight="bold">最小誤率</text>
+    
+    <text x="790" y="250" font-size="10" fill="#0f4c5c" text-anchor="middle" font-weight="bold">U 形 = 浴盆</text>
+    <text x="790" y="265" font-size="9" fill="#374151" text-anchor="middle">底部越深→越容易出錯</text>
+  </g>
+  
+  <!-- Bottom explanation -->
+  <rect x="20" y="270" width="870" height="135" rx="8" fill="#0b1220" stroke="#1e293b" stroke-width="1"/>
+  <text x="455" y="290" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">三種圖的對應關係</text>
+  
+  <text x="40" y="315" font-size="10" font-weight="bold" fill="#4ade80">眼圖 (1)</text>
+  <text x="40" y="330" font-size="9" fill="#d1d5db">—— 縱軸：電壓（邊沿模糊程度代表 ISI + jitter 的混合效應）</text>
+  <text x="40" y="345" font-size="9" fill="#d1d5db">—— 橫軸：時間（寬度反映總 jitter，窄 = jitter 小）</text>
+  <text x="40" y="360" font-size="9" fill="#d1d5db">—— 亮度：某時刻有多少邊沿經過（頻數多 = 亮 = 低誤判率）</text>
+  
+  <text x="475" y="315" font-size="10" font-weight="bold" fill="#4ade80">直方圖 (2)</text>
+  <text x="475" y="330" font-size="9" fill="#d1d5db">—— 只看邊沿時刻的分佈（1D 切片）</text>
+  <text x="475" y="345" font-size="9" fill="#d1d5db">—— 高斯分佈 = RJ 主導；多峰 = DJ 或 ISI 成分多</text>
+  <text x="475" y="360" font-size="9" fill="#d1d5db">—— 標準差 σ 直接關聯 BER（誤判率）</text>
+  
+  <text x="710" y="315" font-size="10" font-weight="bold" fill="#4ade80">浴盆曲線 (3)</text>
+  <text x="710" y="330" font-size="9" fill="#d1d5db">—— 橫軸：決策點時刻（何時採樣）</text>
+  <text x="710" y="345" font-size="9" fill="#d1d5db">—— 縱軸：該時刻的出錯機率（對數尺度）</text>
+  <text x="710" y="360" font-size="9" fill="#d1d5db">—— U 形底部 = 最安全的採樣點；邊沿 = 最危險區域</text>
+</svg>
+<figcaption>圖 1：眼圖（訊號時序圖）→ 邊沿時刻直方圖（統計） → Bathtub curve（誤判率曲線），三個角度說同一件事。</figcaption>
+</figure>
+
+<p><em>白話翻譯：Bathtub curve 的名字就是因為形狀像浴盆——底部深（誤判率高）、邊沿淺（誤判率低）。曲線最低點是「決策電路出錯風險最小的時刻」。如果系統的 jitter 或 ISI 很大，浴盆變得又寬又深；反之就淺又窄。工程師的目標就是讓浴盆變淺，這樣即使取樣時刻晚到一點，也不會陷入高誤判率的深坑。</em></p>
+
+<h2>2. 浴盆的三個成分——對應 RJ/DJ/ISI</h2>
+
+<div class="formula">
+總 jitter（TJ）的分解（Perfect Timing II Ch.4 統計推導）：<br>
+<br>
+TJ = RJ + DJ<br>
+<br>
+其中：<br>
+RJ（Random Jitter）= σ_RJ × 高斯尾係數（通常用 6σ 或 12σ 代表頻域範圍）<br>
+DJ（Deterministic Jitter）= 已知的邊界值（ISI、duty cycle distortion、sinusoidal jitter）<br>
+<br>
+Bathtub 低谷寬度 ≈ 2 × TJ　　　　（兩邊沿的 jitter 造成的時間間隔變窄）<br>
+Bathtub 深度 ∝ exp(−(margin/σ_RJ)²)　　　　（高斯尾的離散情形，決定誤判機率）
+</div>
+
+<h3>2.1 浴盆的左邊（RJ 的尾巴）</h3>
+<p>如果訊號的 jitter 完全是 RJ（純隨機高斯分佈），兩邊邊沿的分佈會呈現高斯形。邊沿越往前、越往後落，機率越低（高斯尾巴）。Bathtub 曲線的左右邊沿就是對稱的高斯尾 —— 這時的誤判率用下列公式估算：</p>
+<div class="formula">
+BER ≈ Q(margin / σ_RJ)　　　　（Q-function，高斯尾概率）<br>
+<br>
+其中 margin = 決策點到邊沿統計中心的距離<br>
+Q(x) ≈ (1/√(2π)) × exp(−x²/2) / x　　　　（當 x > 3 時）<br>
+<br>
+快速估算：<br>
+margin = 3σ → BER ≈ 1.3×10⁻³　　　　（千分之 1.3，可接受）<br>
+margin = 4σ → BER ≈ 3.2×10⁻⁵　　　　　（十萬分之 1，很好）<br>
+margin = 6σ → BER ≈ 1×10⁻⁹　　　　　　（十億分之 1，通常目標）
+</div>
+
+<p><em>白話翻譯：浴盆曲線的深度取決於「信號真實邊沿到達時刻」與「決策電路抽樣時刻」的距離（margin）。距離越近邊沿越危險；距離越遠邊沿越安全。用高斯數學就是 Q 函數 —— 這也是為什麼整個行業都在追求「6σ 可靠度」，因為 BER 掉到 10⁻⁹ 級別，一年 24×365 天跑下來基本看不到錯誤。</em></p>
+
+<h3>2.2 浴盆的中間與形狀扭曲（DJ + ISI）</h3>
+<p>如果系統裡還有 DJ（確定性 jitter）或 ISI（符號間干擾），情況就變複雜了。邊沿時刻分佈從單一高斯變成「多峰」或「不對稱」：</p>
+<ul>
+  <li><strong>Duty cycle distortion（半週期 jitter）：</strong>上升邊沿和下降邊沿的時刻不對稱 → 浴盆曲線變成「左右不對稱」的 U</li>
+  <li><strong>ISI（符號間干擾）：</strong>前一個位元的拖尾還沒消，後一個位元就來了 → 邊沿被「卡」在不同時刻，形成「多個小山丘」（多峰） → 浴盆變成「波瀾壯闊」的 U，多個低谷</li>
+  <li><strong>Data-dependent jitter：</strong>邊沿時刻取決於前面 N 個位元的序列 → 浴盆寬度大幅增加，可能從 100 ps 變成 500 ps</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="24" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f4c5c">圖 2：Bathtub 曲線的形狀如何洩露 jitter 的根源</text>
+  
+  <!-- Case 1: Pure RJ -->
+  <g>
+    <rect x="30" y="45" width="270" height="240" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="165" y="65" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">（1）純 RJ（高斯）</text>
+    
+    <!-- Axes -->
+    <line x1="70" y1="250" x2="270" y2="250" stroke="#64748b" stroke-width="1"/>
+    <line x1="70" y1="250" x2="70" y2="100" stroke="#64748b" stroke-width="1"/>
+    <text x="60" y="160" font-size="8" fill="#374151">log(BER)</text>
+    <text x="170" y="265" font-size="8" fill="#374151">Sampling time (ps)</text>
+    
+    <!-- Symmetric U curve -->
+    <path d="M80,110 Q120,200 170,230 Q220,200 260,110" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    
+    <text x="165" y="285" font-size="9" fill="#0f4c5c" text-anchor="middle">光滑的 U 形</text>
+    <text x="165" y="300" font-size="8" fill="#374151" text-anchor="middle">對稱、單一低谷</text>
+  </g>
+  
+  <!-- Case 2: RJ + DJ (duty cycle) -->
+  <g>
+    <rect x="320" y="45" width="270" height="240" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="455" y="65" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">（2）RJ + Duty distortion</text>
+    
+    <!-- Axes -->
+    <line x1="360" y1="250" x2="560" y2="250" stroke="#64748b" stroke-width="1"/>
+    <line x1="360" y1="250" x2="360" y2="100" stroke="#64748b" stroke-width="1"/>
+    <text x="350" y="160" font-size="8" fill="#374151">log(BER)</text>
+    <text x="460" y="265" font-size="8" fill="#374151">Sampling time (ps)</text>
+    
+    <!-- Asymmetric U curve (left deeper) -->
+    <path d="M370,100 Q400,180 440,230 Q490,200 550,120" fill="none" stroke="#7c3aed" stroke-width="2.5"/>
+    
+    <text x="455" y="285" font-size="9" fill="#0f4c5c" text-anchor="middle">不對稱 U 形</text>
+    <text x="455" y="300" font-size="8" fill="#374151" text-anchor="middle">一邊深一邊淺</text>
+  </g>
+  
+  <!-- Case 3: RJ + ISI (multi-modal) -->
+  <g>
+    <rect x="610" y="45" width="270" height="240" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+    <text x="745" y="65" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">（3）RJ + ISI（多峰）</text>
+    
+    <!-- Axes -->
+    <line x1="650" y1="250" x2="850" y2="250" stroke="#64748b" stroke-width="1"/>
+    <line x1="650" y1="250" x2="650" y2="100" stroke="#64748b" stroke-width="1"/>
+    <text x="640" y="160" font-size="8" fill="#374151">log(BER)</text>
+    <text x="750" y="265" font-size="8" fill="#374151">Sampling time (ps)</text>
+    
+    <!-- Multi-modal curve with ripples -->
+    <path d="M660,120 Q670,190 680,225 L700,215 Q710,170 720,200 L740,220 Q760,180 780,210 L800,200 Q820,160 840,120" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+    <text x="745" y="285" font-size="9" fill="#0f4c5c" text-anchor="middle">波浪狀的底部</text>
+    <text x="745" y="300" font-size="8" fill="#374151" text-anchor="middle">多個低谷（前一位元效應）</text>
+  </g>
+</svg>
+<figcaption>圖 2：Bathtub 曲線的形狀直接反映 jitter 的組成。對稱光滑 = 純 RJ；不對稱 = duty distortion；波浪底部 = ISI 造成的多峰。</figcaption>
+</figure>
+
+<h2>3. 實務案例：NB DDR5 與 MIPI 的 Bathtub 測量與診斷</h2>
+
+<div class="card intuition">
+  <span class="label">場景 1：NB DDR5 時脈的 Bathtub（Perfect Timing II Ch.16 參考）</span>
+  <p>筆記型電腦的 DDR5 時脈從 PMIC 出來，走 10 cm PCB 走線、通過磁珠濾波、終端到 DRAM BGA pad。工程師用 Timing Interval Analyzer（TIA）或新型示波器掃描一萬個時脈週期，在終端收集邊沿時刻的統計。結果：<br>① 時脈頻率 1.6 GHz（週期 625 ps）<br>② 邊沿時刻分佈的標準差 σ = 5 ps（RJ）<br>③ 邊沿時刻分佈呈現「略不對稱」的高斯，暗示有 ~20 ps 的 duty cycle distortion<br><br>工程師繪製 Bathtub：在 312.5 ps（理想上升邊沿中心）左右掃描，計算每個採樣時刻的 BER（把有多少邊沿落在採樣時刻±一個判決門檻）。結果發現：<br>—— margin @ 10⁻¹² BER（目標誤判率） ≈ 65 ps（邊沿時刻空間）+ 150 mV（電壓空間）<br>—— 對比設計預算（通常 100 ps 時間 + 200 mV 電壓），這個通道「邊界」但還可以<br><br>對策：因為 duty distortion 造成的不對稱，工程師微調終端電阻數值、降低磁珠的共鳴頻率 → 下一版本 σ 降到 3.5 ps，margin 改善到 90 ps，終於「舒適」。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">場景 2：鏡頭模組 MIPI D-PHY 眼圖（Week 13 預告）</span>
+  <p>相機模組的 MIPI 訊號從感光晶片送到 SoC，走 flex 路線 15 cm、要經過連接器。MIPI HS 模式 1.5 GHz 時鐘、UI（unit interval）= 667 ps。量測發現：<br>① 邊沿直方圖有「兩個山頭」—— 這是前一個位元序列效應（ISI）<br>② RJ σ ≈ 8 ps，但前面位元造成的 DJ ≈ 40 ps → 總 jitter ≈ 48 ps（對 667 ps UI 來說，已占 7.2% — 相當高）<br><br>Bathtub 呈現「底部波浪狀、多個低谷」。最安全的採樣點在 UI 中間，但裕度只有 ~80 ps（30 ps RJ margin + 50 ps DJ margin）。這對「邊沿反轉時受干擾」的鏡頭來說有風險。<br><br>根診：MIPI flex 路線有 5 個彎曲，每個彎曲都造成 ISI。對策：加等化器（equalizer）、或改 flex 走線設計。加等化器後 ISI 下降、Bathtub 變淺，margin 改善到 120 ps。</p>
+</div>
+
+<h2>4. Margin 的三個維度——時間、電壓、統計</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：裕度矩陣</span>
+  <p>想像通道就像一個「邊界狹窄的橋梁」。列車必須在規定時間到達（Time margin），列車不能超過橋的寬度（Voltage margin），列車也不能撞上另一列正在過橋的列車（Jitter margin / ISI margin）。Bathtub curve 量化的就是「在這個通道上，最多還能跑多快、電壓能掉多少、jitter 能大多少」才不會出軌。</p>
+</div>
+
+<div class="formula">
+Margin 的三層定義（以 DDR5 為例）：<br>
+<br>
+1. 時間 Margin（Time margin）<br>
+   T_margin = （採樣窗 / 2）−（總 jitter TJ）<br>
+   = （週期 / 2）− （6σ_RJ + DJ）<br>
+   典型值：625 ps 週期 → 312.5 ps 採樣窗 → T_margin 應 > 100 ps（安全）<br>
+<br>
+2. 電壓 Margin（Voltage margin / Eye opening）<br>
+   V_margin = （VIH − VIL）/2 − ISI − crosstalk − noise<br>
+   典型值：1.2V 供電 → 0.6V 邏輯擺幅 → V_margin 應 > 150 mV（安全）<br>
+<br>
+3. 統計 Margin（Statistical margin, 來自 Bathtub）<br>
+   S_margin = （BER 目標）對應的 σ 倍數<br>
+   若目標 BER ≤ 10⁻¹², 需 S_margin ≈ 6–7σ（取決於 DJ 比例）
+</div>
+
+<h2>5. 實務：用示波器或 TIA 量 Bathtub</h2>
+
+<p>現代示波器（如 Teledyne LeCroy, Keysight，以現代標準需上修，當時 2002 年還用傳統 CRT 示波器）已內建 jitter 分析軟體。基本流程：</p>
+<ol>
+  <li><strong>連接：</strong>高頻探棒（>5 GHz）連接示波器，觸發邊沿選擇（上升邊沿或下降邊沿）</li>
+  <li><strong>擷取：</strong>集合 10,000–100,000 個邊沿的時刻（edge timing capture）</li>
+  <li><strong>分析：</strong>軟體自動繪製直方圖、計算 σ、判別 RJ/DJ 成分</li>
+  <li><strong>合成 Bathtub：</strong>掃描所有可能的採樣時刻，計算 BER，繪製 U 形曲線</li>
+</ol>
+
+<p>關鍵參數（需從示波器設定）：</p>
+<ul>
+  <li><strong>Trigger 準確度：</strong>trigger 本身的 jitter 會混進測量結果 → 要選用「低 jitter trigger」或「phase-locked trigger」</li>
+  <li><strong>垂直解析度：</strong>決定能測出多小的電壓 margin（通常 12 bit 以上才夠精度）</li>
+  <li><strong>取樣率：</strong>需遠高於訊號頻率（通常 5–10 倍 BW，即 5–10 GHz 頻寬通常需 25–50 GS/s 以上）</li>
+</ul>
+
+<h2>6. Bathtub 與眼圖的互推</h2>
+
+<p>從 Bathtub 曲線可以推回眼圖；反過來也可以從眼圖估計 Bathtub：</p>
+<ul>
+  <li><strong>眼圖 → Bathtub：</strong>眼圖的「亮度分布」就是邊沿直方圖，每個時刻的亮度代表該時刻邊沿的密度（counts）。密集的地方 = 低誤判風險 = Bathtub 淺；稀疏的地方 = 高誤判風險 = Bathtub 深</li>
+  <li><strong>Bathtub → 眼圖：</strong>已知 Bathtub 的 BER 分布，可以反演出「在每個時刻的邊沿分布應該是什麼」，進而合成眼圖。（反演計算複雜，通常工程師只正向用 Bathtub）</li>
+</ul>
+
+<h2>7. 動手練習</h2>
+
+<details>
+<summary><strong>練習 1：從 Bathtub 讀出 Margin</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某 DDR 時脈的 Bathtub 曲線最低點（浴盆底部）的 BER = 10⁻⁸；邊沿（最陡的斜率點）處 BER = 10⁻⁴。估計該通道能允許多大的時間 jitter 而仍保持 BER < 10⁻¹²？</p>
+
+<p><strong>詳解：</strong></p>
+
+<p>Bathtub 的形狀反映高斯分布的尾部。如果假設純 RJ（高斯），BER 與 margin（信噪比）的關係是：</p>
+
+<div class="formula">
+BER = Q(margin / σ_RJ)<br>
+<br>
+已知：最低點 BER(中心) = 10⁻⁸<br>
+Q(x) = 10⁻⁸ → x ≈ 5.6σ（查高斯 Q 表）<br>
+即：BER @ 邊沿中心時的 margin 約 5.6σ<br>
+<br>
+邊沿處 BER = 10⁻⁴ → Q(x) = 10⁻⁴ → x ≈ 3.9σ<br>
+即：從中心到邊沿的距離 = (5.6 − 3.9)σ = 1.7σ ≈ 總 jitter 寬度 ≈ 2 × RJ
+</div>
+
+<p>反推 σ_RJ：假設邊沿間距 ≈ 625 ps（週期），邊沿寬度 1.7σ ≈ 100 ps（估計值）→ σ_RJ ≈ 60 ps。</p>
+
+<p>若目標 BER ≤ 10⁻¹² → 需 margin ≈ 7σ_RJ ≈ 420 ps；現有 5.6σ ≈ 336 ps → <strong>裕度不足，需降低 jitter 或改善通道</strong>。</p>
+
+<p><strong>工程判斷：</strong>這個 Bathtub 呈現「邊界」狀態。檢查：① 終端網路是否匹配；② S 參數有沒有異常諧振；③ 通道 via 或走線有沒有阻抗不連續。</p>
+</details>
+
+<details>
+<summary><strong>練習 2：RJ vs DJ 的診斷</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某通道的邊沿時刻直方圖顯示 σ_RJ = 3 ps，但直方圖呈現「兩個山頭」（雙峰），兩峰之間距離約 25 ps。Bathtub 曲線應呈什麼形狀？</p>
+
+<p><strong>詳解：</strong></p>
+
+<p>直方圖的雙峰結構 = 確定性 jitter（DJ），表示有兩個不同的邊沿「族群」：</p>
+
+<ul>
+  <li>族群 A：時刻在 t0（某個位元序列結果）</li>
+  <li>族群 B：時刻在 t0 + 25 ps（不同的位元序列）</li>
+</ul>
+
+<p>每個族群內部的寬度是 σ_RJ = 3 ps，但兩族群分開 25 ps。</p>
+
+<p><strong>Bathtub 形狀：</strong>不是光滑的 U，而是「底部有兩個低點」（bimodal）。在 t0 和 t0+25ps 附近各有一個淺谷，中間（t0+12.5ps）是一個小丘陵（因為邊沿少，故 BER 反而高）。</p>
+
+<p><strong>工程判斷：</strong>這是典型的 ISI（符號間干擾）信號。不同前置位元序列造成後一個邊沿的時刻移位。對策：① 檢查通道頻率響應（S21 曲線）有沒有陡峭的衰減區（ISI 源）；② 考慮加接收端等化器（equalizer）；③ 檢查終端網路有沒有不匹配。</p>
+</details>
+
+<details>
+<summary><strong>練習 3：電壓 Margin 與 Eye 高度的關係</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>某訊號的眼圖測得「眼睛高」（eye height）= 250 mV，「眼睛寬」（eye width）= 200 ps（在時脈週期 625 ps 中）。若雜訊加起來約 30 mV（包括串擾、電源雜訊、thermal），求時間與電壓 margin。</p>
+
+<p><strong>詳解：</strong></p>
+
+<p>時間 Margin：</p>
+
+<div class="formula">
+T_margin = （採樣窗 / 2）− （眼睛寬 / 2）<br>
+= （625 ps / 2）− （200 ps / 2）<br>
+= 312.5 ps − 100 ps = 212.5 ps<br>
+（相當寬鬆，遠超 100 ps 安全線）
+</div>
+
+<p>電壓 Margin：</p>
+
+<div class="formula">
+V_margin = （眼睛高 / 2）− 雜訊<br>
+= （250 mV / 2）− 30 mV<br>
+= 125 − 30 = 95 mV<br>
+（偏緊，通常要求 > 150 mV 才舒適）
+</div>
+
+<p><strong>工程判斷：</strong>這個通道「時間上寬鬆、電壓上緊張」。需檢查：① 有沒有辦法降低雜訊（EMI、串擾、電源紋波）；② 通道衰減是否過大造成眼睛高度不足；③ 終端阻抗是否太高造成邊沿斜率變緩（eye height 變低）。</p>
+</details>
+
+<details>
+<summary><strong>練習 4：Bathtub 綱領診斷（Advanced）</strong>（點開看詳解）</summary>
+<div class="answer">
+<p><strong>題目：</strong>比較兩個不同 PCB 設計版本的 Bathtub：<br>版本 A：對稱的 U 形，底部 BER = 10⁻¹⁰，margin @ 10⁻¹² = 65 ps<br>版本 B：不對稱的 U（左邊深），底部 BER = 10⁻⁸，margin @ 10⁻¹² = 45 ps<br><br>兩者都是同一條訊號通道，但不同的層疊設計。哪一版本好？為什麼？如何改善版本 B？</p>
+
+<p><strong>詳解：</strong></p>
+
+<p><strong>版本比較：</strong></p>
+
+<ul>
+  <li>版本 A：底部更淺（BER 低 100 倍） → 整體質量更好</li>
+  <li>版本 A 的 margin 也大 20 ps → 容許更大的額外 jitter</li>
+  <li>版本 B 的不對稱 → 暗示 duty cycle distortion 或單邊損耗過大</li>
+</ul>
+
+<p><strong>版本 A 更優。</strong></p>
+
+<p><strong>版本 B 的病因診斷：</strong>不對稱（左深右淺）通常表示：</p>
+
+<ol>
+  <li>上升邊沿受 ISI 或 RC 延遲影響，下降邊沿相對快速</li>
+  <li>或層疊設計造成走線在不同層的回流路徑阻抗不同</li>
+  <li>或終端阻抗不匹配（50 Ω 目標但實際不一致）</li>
+</ol>
+
+<p><strong>改善對策：</strong></p>
+
+<ul>
+  <li>調整層疊：回流層更靠近訊號層，降低環路電感 → 降低高頻損耗</li>
+  <li>檢查 S21 曲線，看有沒有在低頻到中頻區間出現異常衰減</li>
+  <li>驗證終端網路是否真的等於設計值（焊點脫離、電容老化等）</li>
+  <li>實驗加接收端等化器，看能否平衡上升/下降邊沿</li>
+</ul>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class=\"label\">英文題目 + 參考答案</span>
+  <p>
+    <strong>Question 1: \"Explain the difference between an eye diagram and a bathtub curve. Why would you use one over the other in an SI debug flow?\"</strong><br><br>
+    <strong>Reference answer:</strong> An eye diagram is a time-domain overlay of multiple signal transitions, showing voltage vs. time. It's intuitive for visual inspection—you can see if the eye is \"open\" (good) or \"closed\" (bad). However, it's qualitative: hard to extract precise jitter or BER numbers. A bathtub curve, on the other hand, is a statistical representation derived from the eye diagram: it plots BER (bit error rate) versus sampling time (or timing margin). The bathtub's U-shape directly quantifies how much timing margin you have before errors become unacceptable. In SI debug: use the eye diagram first for quick pass/fail assessment and ISI pattern recognition; use the bathtub curve when you need to quantify margin, understand RJ vs. DJ contributions, or justify design trade-offs to stakeholders. A shallow bathtub means you have healthy margin; a deep/narrow bathtub means you're running on the edge.\n  </p>
+  <p style=\"margin-top: 1.5em;\">
+    <strong>Question 2: \"Your measurements show a bimodal (two-peaked) distribution in edge timing for a DDR5 clock. How would the bathtub curve look, and what does this tell you about the channel?\"</strong><br><br>
+    <strong>Reference answer:</strong> A bimodal distribution in edge timing indicates deterministic jitter (DJ)—specifically, data-dependent jitter or inter-symbol interference (ISI). The two peaks represent two \"families\" of edges: one arriving at t0, another at t0+Δt, depending on the prior bit sequence. The bathtub curve would show two distinct \"valleys\" (low BER points), one at each peak's location, with a \"hill\" or rise in between (where edges are sparse). This multi-modal bathtub is much wider than the pure Gaussian (RJ-only) case. It tells you: (1) the channel has significant frequency-dependent loss or a resonance that causes ISI; (2) total jitter is dominated by DJ, not RJ; (3) simple equalization might help—you need to flatten the S21 response or add a receive-side FFE (feed-forward equalizer) to reduce ISI. The tails of the bathtub (at the outer edges of each peak) are still governed by Gaussian RJ, but the central bottom is now the DJ contribution.\n  </p>
+</div>
+
+<h2>9. 今日 Anki 卡片</h2>
+
+<p>
+  <strong>卡 1（定義）：</strong><br>
+  正面：什麼是 Bathtub curve？<br>
+  背面：訊號邊沿時刻分佈的統計表示，橫軸是採樣時刻（或時間偏移），縱軸是誤判率 BER（對數尺度）。曲線呈 U 形（像浴盆），底部最深 = 出錯風險最高，邊沿 = 最安全。是眼圖的另一種表示法。
+</p>
+
+<p>
+  <strong>卡 2（RJ 與 BER）：</strong><br>
+  正面：若邊沿時刻標準差 σ_RJ = 4 ps，要達成 BER ≤ 10⁻¹²，需要多大的 margin？<br>
+  背面：BER ≈ Q(margin/σ_RJ)；Q(7) ≈ 10⁻¹² → margin ≈ 7σ ≈ 28 ps（最低），通常加安全係數到 30–40 ps。
+</p>
+
+<p>
+  <strong>卡 3（多源 jitter）：</strong><br>
+  正面：邊沿直方圖呈現「雙峰」表示什麼？Bathtub 會怎樣？<br>
+  背面：表示有確定性 jitter（DJ）或 ISI；兩個峰對應兩種邊沿「族群」。Bathtub 會變成「底部波浪狀或有兩個低谷」，而不是光滑的 U。
+</p>
+
+<p>
+  <strong>卡 4（Margin 三維）：</strong><br>
+  正面：訊號完整性裡，Margin 有哪三個維度？<br>
+  背面：① 時間 Margin：採樣窗減去總 jitter；② 電壓 Margin：眼睛高減去雜訊；③ 統計 Margin：Bathtub 對應的 σ 倍數（通常 6–7σ @ BER 10⁻¹²）。
+</p>
+
+<p>
+  <strong>卡 5（應用）：</strong><br>
+  正面：在 NB DDR5 設計時，為什麼要量 Bathtub curve 而不只看眼圖？<br>
+  背面：眼圖是定性的（視覺判斷），不能量化 jitter 有多少、可容許多大的偏移。Bathtub 是定量的，能直接讀出「在 BER 10⁻¹² 下有多少 ps 的時間裕度」，支持工程決策和通道預算計算。
+</p>
+
+<h2>10. 明日預告</h2>
+
+<p>Day 36（週五實作日）將指引你用公司的示波器（或 BERT 儀器）實際測量眼圖與 Bathtub curve。準備物品：高頻探棒（>5 GHz）、BNC 連接線、示波器的 jitter 分析軟體（Teledyne LeCroy 或 Keysight 內建）、一段已知的 DDR 或高速訊號測試電路。目標是親手採集邊沿時刻直方圖、計算 σ、合成 Bathtub，體會「數字化診斷」的威力。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href=\"../index.html\">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

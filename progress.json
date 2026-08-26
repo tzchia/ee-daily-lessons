@@ -1,9 +1,9 @@
 {
-  "current_day": 34,
+  "current_day": 35,
   "current_week": 6,
   "phase": 1,
-  "last_lesson_date": "2026-08-26",
-  "last_topic": "Day 34（週三）：S 參數入門——Day 33 預告兌現（把「−3 dB」從儀器規格變成「通道體檢報告」）：S 參數定義（散射＝反射＋穿透）、S11 反射係數（終端失配/stub 諧振診斷）、S21 穿透/insertion loss（Day 25–26 損耗曲線的頻域版）、IL 曲線凹陷解讀（stub Day 11、via、串擾 Day 4）、dB 與線性互換、單端 2-port 核心三式（S11 S21 S22，反射 & 穿透相位資訊預留，為 Day 13–14 差動預留位）。再次強調同一件事的三種儀器語言：Day 6 反射 ρ（單頻）、Day 9–14 TDR 時域（掃位置）、Day 34 S 參數（掃頻率）。NB DDR5 案例：800M/2.4G 尖峰（終端失配/磁珠共鳴）、1.6G 凹陷（串擾反向耦合或 via 不連續），兌現過去三週 Day 27/30/31 預告的「bathtub curve」與眼圖統計（下推 Day 35）。未引 PT2（無 S 參數章節）。",
-  "notes": "Day34（2026-08-26 週三）已出：S 參數入門課（day-034.html，約 30KB，2 張 SVG：①三種「看法」Day 6 反射單頻/Day 9–14 TDR 時域掃/Day 34 S 參數頻域掃的關係圖、②（未額外展示但融入文字）IL 曲線診斷表；4 題練習（stub 諧振診斷、S21 與 IL 互換、多通道故障排查）＋2 英文面試題＋5 Anki）。進度記錄：第 6 週第 3 天，SI 量測週進行中。Week 6 排程：週一 Day 33（示波器規格→量測實務）、週二本課（Day 34 S 參數），週四尚待排（Day 35 可續講 S 參數或直接進 bathtub curve，Day 27/30/31 三次預告之 bathtub 本週必兌現），週五 Day 36 實作日（PROBE COMP、地線 A/B、雙探棒加載、時基-取樣-混疊實驗），週六 Day 37 NB 時脈驗證（Ch.16 對口），週日 Day 38 Phase 1 畢業考（20 題）。掛號待兌：bathtub curve 與眼圖統計（Day 35 最後窗口）、Ch.16 Motherboard Clock Validation（Day 37）、Ch.10 IBIS（視進度併入後續或畢業考前；目前計畫延至 PI 週 7–8 邊時引邊教）、D-PHY 量測 setup（Week 13）。",
+  "last_lesson_date": "2026-08-27",
+  "last_topic": "Day 35（週四）：眼圖統計與 Bathtub Curve——把眼圖從定性判讀升級到定量診斷：jitter 三元組（RJ/DJ/ISI）與邊沿時刻直方圖、Bathtub 曲線（BER vs 採樣時刻）、margin 三維（時間/電壓/統計）、Q-function 與 Gaussian 尾。融合 Perfect Timing II Ch.4 Clock Jitter 的統計推導、多峰分佈診斷。實務串連 Day 27 眼圖解剖、Day 28 jitter 記帳法、Day 34 S 參數通道診斷，為 Day 36 實作（TIA/示波器 jitter 量測）與週 13 D-PHY 眼圖規範打地基。引用 PT2 Ch.4 的 RJ/DJ/DJ-jitter mathematics、Gaussian Statistics、total jitter 分解、多源 jitter 診斷技巧。",
+  "notes": "Day 35（2026-08-27 週四）已出：Bathtub curve 與眼圖統計課（day-035.html，約 36KB，2 張 SVG：①眼圖→直方圖→Bathtub 轉換三步驟、②Bathtub 形狀診斷（純 RJ vs duty distortion vs ISI 多峰）；4 題練習（Bathtub 讀 margin、RJ vs DJ 診斷、眼睛高度與 margin、版本比較診斷）＋2 英文面試題＋5 Anki）。進度記錄：第 6 週第 4 天，SI 量測週進行中。Week 6 排程：之前已完成 Day 33–35（示波器規格→S 參數→Bathtub），週五 Day 36 實作日（TIA 或示波器 jitter 量測、邊沿直方圖採集、Bathtub 實際繪製、probe compensation 與加載實驗），週六 Day 37 NB 時脈驗證（Ch.16 Motherboard Clock Validation 深化），週日 Day 38 Phase 1 畢業考（20 題）。掛號待兌：Ch.16 National Validation 詳解（Day 37）、Ch.10 IBIS 模型（視進度併入或延至 PI 週 7–8）、D-PHY 量測 setup（Week 13）。",
   "pt2_chapters_cited": ["Ch2", "Ch3", "Ch4", "Ch6", "Ch7", "Ch11", "Ch13", "Ch14"]
 }

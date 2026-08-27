@@ -1,9 +1,9 @@
 {
-  "current_day": 35,
+  "current_day": 36,
   "current_week": 6,
   "phase": 1,
-  "last_lesson_date": "2026-08-27",
-  "last_topic": "Day 35（週四）：眼圖統計與 Bathtub Curve——把眼圖從定性判讀升級到定量診斷：jitter 三元組（RJ/DJ/ISI）與邊沿時刻直方圖、Bathtub 曲線（BER vs 採樣時刻）、margin 三維（時間/電壓/統計）、Q-function 與 Gaussian 尾。融合 Perfect Timing II Ch.4 Clock Jitter 的統計推導、多峰分佈診斷。實務串連 Day 27 眼圖解剖、Day 28 jitter 記帳法、Day 34 S 參數通道診斷，為 Day 36 實作（TIA/示波器 jitter 量測）與週 13 D-PHY 眼圖規範打地基。引用 PT2 Ch.4 的 RJ/DJ/DJ-jitter mathematics、Gaussian Statistics、total jitter 分解、多源 jitter 診斷技巧。",
-  "notes": "Day 35（2026-08-27 週四）已出：Bathtub curve 與眼圖統計課（day-035.html，約 36KB，2 張 SVG：①眼圖→直方圖→Bathtub 轉換三步驟、②Bathtub 形狀診斷（純 RJ vs duty distortion vs ISI 多峰）；4 題練習（Bathtub 讀 margin、RJ vs DJ 診斷、眼睛高度與 margin、版本比較診斷）＋2 英文面試題＋5 Anki）。進度記錄：第 6 週第 4 天，SI 量測週進行中。Week 6 排程：之前已完成 Day 33–35（示波器規格→S 參數→Bathtub），週五 Day 36 實作日（TIA 或示波器 jitter 量測、邊沿直方圖採集、Bathtub 實際繪製、probe compensation 與加載實驗），週六 Day 37 NB 時脈驗證（Ch.16 Motherboard Clock Validation 深化），週日 Day 38 Phase 1 畢業考（20 題）。掛號待兌：Ch.16 National Validation 詳解（Day 37）、Ch.10 IBIS 模型（視進度併入或延至 PI 週 7–8）、D-PHY 量測 setup（Week 13）。",
-  "pt2_chapters_cited": ["Ch2", "Ch3", "Ch4", "Ch6", "Ch7", "Ch11", "Ch13", "Ch14"]
+  "last_lesson_date": "2026-08-28",
+  "last_topic": "Day 36（週五）：實作實驗指引——TIA/示波器量測 Jitter 與繪製 Bathtub Curve：儀器校正（計算 t_DISPLAY 與地線電感）→ 邊沿時刻採集（≥1000 週期直方圖）→ 直方圖轉 BER 計算 → 掃描採樣時刻繪 Bathtub 曲線 → 根據形狀診斷 RJ/DJ/ISI 成分。融合 Perfect Timing II Ch.11 探棒與地線的負載失真模型、Ch.16 主機板時脈驗證實務，把 Day 35 Bathtub 理論「活」起來，親手量出數字、繪曲線、診斷問題根源。實驗產出：儀器設置紀錄、邊沿時刻直方圖、Bathtub 曲線圖表、診斷報告（附 RJ/DJ/ISI 根因分析）。",
+  "notes": "Day 36（2026-08-28 週五）已出：實作實驗指引（day-036.html，約 36KB，包含完整工作流程分步驟指導）。核心內容：（1）儀器與探棒驗證 —— Perfect Timing II Ch.11 的地線電感計算、t_DISPLAY 失真公式（含示例計算）；（2）邊沿時刻直方圖採集 —— 示波器設置、三種邊沿提取方法（內建統計 / 手工 CSV 提取 / 自動測量）；（3）Bathtub 手工繪製 —— 從直方圖正規化→BER 計算→對數縮放的逐步演算，含實例數據表格；（4）診斷與根因 —— Bathtub 形狀（對稱 vs 不對稱 vs 波浪）與 RJ/DJ/ISI 的映射表，NB DDR5 與鏡頭 MIPI HS 的實務場景分析；（5）進階與常見卡點 —— 加外部擾動驗證 DJ、溫度掃描驗證 margin、地線失真排查、採樣率問題診斷。包含 5 張實驗速查卡（Anki）。進度記錄：第 6 週第 5 天，SI 量測週最後一個工作日，明天周六 Day 37 為 NB 時脈驗證理論課（Ch.16 深化），週日 Day 38 為 Phase 1 畢業考。掛號待兌：Week 7 PDN 理論課開始（Phase 2 電源完整性）。",
+  "pt2_chapters_cited": ["Ch2", "Ch3", "Ch4", "Ch6", "Ch7", "Ch11", "Ch13", "Ch14", "Ch16"]
 }

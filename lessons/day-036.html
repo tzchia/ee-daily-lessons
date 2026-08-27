@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 36｜實作：TIA/示波器量測 Jitter 與繪製 Bathtub Curve——從黑盒子到數字的轉換</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 36 天（週五實作日・SI 量測週）</div>
+  <h1>Day 36：實作實驗指引——TIA/示波器量測 Jitter 與繪製 Bathtub Curve</h1>
+  <div class="meta">2026-08-28（五）｜預估操作時間：120 分鐘（含儀器預熱、多次掃描、診斷調整）｜難度：★★★★☆（Perfect Timing II Ch.11 高速探棒原理 + Ch.16 主機板時脈驗證實務，把昨天的 Bathtub 理論「活」起來，親手量出數字、繪出曲線、診斷問題根源）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日實驗目標</span>
+  <p>昨天學了 Bathtub curve 是「統計邊沿時刻的誤判率曲線」，但怎麼真正在公司實驗室「量」出來？今天要把示波器變成「jitter 量測工具」，用實際訊號為素材，重現昨天的理論。</p>
+  <ol>
+    <li><strong>儀器與探棒驗證：</strong>確認示波器 / TIA（Timing Interval Analyzer）的頻寬、採樣率、探棒負載與地線問題（Perfect Timing II Ch.11），計算顯示波形的真實失真</li>
+    <li><strong>邊沿時刻統計採集：</strong>利用示波器的邊沿檢測功能或 TIA，量測 ≥1000 個時鐘週期內所有邊沿到達時刻，繪製時刻偏移直方圖（histogram）</li>
+    <li><strong>Bathtub 手工繪製：</strong>根據邊沿直方圖，計算不同採樣時刻的誤判率（BER），用 log 尺度繪出 U 形曲線</li>
+    <li><strong>診斷問題根源：</strong>根據 Bathtub 形狀（對稱 vs 不對稱 vs 多峰），反推 RJ/DJ/ISI 的成分，找出改進方向</li>
+    <li><strong>實務應用：</strong>在 NB 主機板或鏡頭模組的實際訊號上執行上述流程，最少完成 2 條通道的量測</li>
+  </ol>
+</div>
+
+<h2>0. 行前檢查：你需要什麼裝備</h2>
+
+<div class="card intuition">
+  <span class="label">儀器清單與規格核對</span>
+  <p>實驗不一定需要最頂級的儀器，但必須符合基本要求。大多數公司的量測室都備有這些；若缺少，可用替代品（見備註）。</p>
+</div>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.95rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">項目</th>
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">最低要求</th>
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">理想規格</th>
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">備註</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>示波器</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">≥1 GHz 頻寬</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">≥4 GHz（數位儲存式）、採樣率 ≥20 Gsps</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">TDS 5014、MSO6 等都可；若只有 500 MHz 示波器，見後文「降級方案」</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>TIA（選項）</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">無</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">Agilent / Keysight MDA 或 Tektronix DPO / MSO 內建 jitter 模式</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">TIA 是「專門量 jitter 的儀器」，但未必每間公司都有；示波器足夠</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>探棒</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">≥1 GHz 被動探棒</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">主動 FET 探棒（<3 pF 輸入電容、<50 Ω 阻抗）</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">被動 10:1 探棒（10 pF 左右）會造成負載；主動探棒但需電源線</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>地線接頭</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">短地線（<1 cm）或彈簧夾</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">直接焊接地線（現場焊接）或 μ-clip</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>最常見的量測失敗源就在地線</strong>。長 4 吋地線會加 ~150 nH，造成 2-3 ns 假波形</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>訊號源（基準）</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">晶片原生時鐘 (PCB 上)</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">函數產生器 (10–2000 MHz) 或 BERT 儀器</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">大多數實驗直接量測 PCB 上的時鐘訊號；若要造精準擾動見「進階方案」</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;"><strong>分析軟體</strong></td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">示波器內建波形儲存 + 筆電試算表</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">示波器內建 jitter 分析 / MATLAB / Python 繪製 Bathtub</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">初級版：把時刻資料 export 成 CSV，用 Excel 做直方圖；高級版：寫腳本自動化</td>
+</tr>
+</table>
+
+<h2>1. 第一步：校正儀器與探棒</h2>
+
+<h3>1.1 示波器自我診斷</h3>
+
+<p><strong>目的：</strong>確認示波器的實際頻寬、採樣率、記憶體是否足夠量測你的訊號。</p>
+
+<ol>
+  <li><strong>開啟自診斷：</strong>示波器的「Utility」或「Help」菜單通常有「Self-Test」選項，執行一遍。檢查頻寬、採樣率是否與規格一致。</li>
+  <li><strong>計算採樣點密度：</strong>Perfect Timing II Ch.11 提到採樣率與頻寬的比例至少應為 4:1。例如如果你要量 1.6 GHz 的時脈（週期 625 ps），建議採樣率 ≥ 20 Gsps，每個週期至少 ~31 個採樣點。檢查示波器是否達到：
+    <div class="formula">
+    採樣點數 / 週期 = (採樣率 / 訊號頻率)<br>
+    建議值 ≥ 20 點 / 週期（以保證不會遺漏邊沿細節）<br>
+    <br>
+    示例：1.6 GHz 訊號 + 20 Gsps 採樣率<br>
+    點數 = 20 / 1.6 = 12.5 點 / 週期　　　← 邊界（可用但較緊）<br>
+    <br>
+    若點數 < 8，改用 1 GHz 更慢的時脈進行測試，或升級示波器
+    </div>
+    </li>
+  <li><strong>檢查記憶體：</strong>要量 1000 個週期的完整波形，計算所需記憶體：
+    <div class="formula">
+    記憶體需求 = 採樣點 / 週期 × 1000 週期 × 樣本位元寬度<br>
+    示例：20 點 × 1000 = 20,000 樣本（通常 12-16 bits）<br>
+    ≈ 20 KB–40 KB（大多數示波器都有 > 1 MB，足夠）
+    </div>
+    確認示波器能以最高採樣率存儲至少 10 μs 的波形資料。
+  </li>
+</ol>
+
+<h3>1.2 探棒與地線檢查</h3>
+
+<p><strong>目的：</strong>消除或定量測量探棒與地線對測量的失真（Perfect Timing II Ch.11 地線電感的計算）。</p>
+
+<ol>
+  <li><strong>測量地線迴路的尺寸：</strong>準備一把卡尺或直尺，量測：
+    <ul>
+      <li>地線長度 l（吋，例如 2 吋 = 5 cm）</li>
+      <li>地線寬度 w（吋，例如 0.5 吋 = 1.27 cm）</li>
+      <li>地線導線直徑 d（通常 0.02 吋 = 0.5 mm，某些彈簧夾更細）</li>
+    </ul>
+    利用 Perfect Timing II Ch.11 的電感公式計算：
+    <div class="formula">
+    L (nH) = 10.16 × [l × ln(2l/d) + w × ln(2w/d)]<br>
+    <br>
+    示例：l = 2 吋, w = 0.5 吋, d = 0.02 吋<br>
+    L ≈ 10.16 × [2 × ln(200) + 0.5 × ln(50)]<br>
+    ≈ 10.16 × [2 × 5.30 + 0.5 × 3.91]<br>
+    ≈ 130 nH<br>
+    <br>
+    若 L > 150 nH，地線太長；改用彈簧夾或現場焊接（L < 30 nH）
+    </div>
+  </li>
+
+  <li><strong>計算地線的時間常數：</strong>結合探棒輸入電容 C（通常 5–10 pF），計算地線對波形的延遲：
+    <div class="formula">
+    t_GROUND = 3.4 × √(L × C)<br>
+    <br>
+    示例：L = 130 nH, C = 5 pF<br>
+    t_GROUND = 3.4 × √(130 × 0.005)<br>
+    ≈ 3.4 × √0.65 ≈ 3.4 × 0.81 ≈ 2.75 ns<br>
+    <br>
+    此延遲會被疊加到示波器的波形上，導致邊沿看起來更鈍
+    </div>
+    <p><em>白話翻譯：如果你的地線造成 2.75 ns 延遲，而你要量測的邊沿本身只有 1 ns 上升時間，示波器最終會顯示 ~3 ns 的邊沿（被地線吃掉了），完全看不到真實的邊沿形狀。</em></p>
+  </li>
+
+  <li><strong>計算總顯示波形：</strong>Perfect Timing II Ch.11 的完整公式：
+    <div class="formula">
+    t_DISPLAY = √(t_SIGNAL² + t_PROBE² + t_SCOPE² + t_GROUND²)<br>
+    <br>
+    示例（Day 35 教學範例的更新版）：<br>
+    訊號本身 t_SIGNAL = 100 ps<br>
+    探棒 (1 GHz) t_PROBE = 0.338 / 1000 MHz = 338 ps<br>
+    示波器 (4 GHz) t_SCOPE = 0.338 / 4000 MHz = 85 ps<br>
+    地線 t_GROUND = 2.75 ns（如上例）<br>
+    <br>
+    t_DISPLAY = √(0.1² + 0.338² + 0.085² + 2.75²)<br>
+    ≈ √(0.01 + 0.114 + 0.007 + 7.56)<br>
+    ≈ √7.69 ≈ 2.77 ns<br>
+    <br>
+    ← 你看到的邊沿寬度是 2.77 ns，實際訊號只有 100 ps！<br>
+    ← 99% 都是地線失真；除非改善地線，否則後續量測都是白搭
+    </div>
+  </li>
+
+  <li><strong>改進方案：</strong>
+    <ul>
+      <li>若地線計算出 t_GROUND > 1 ns，<strong>必須改用短地線或彈簧夾</strong>（目標 < 500 ps）</li>
+      <li>若現場無法改善（例如 PCB layout 不允許），在「誤差估計」欄記下這個數字，後續所有量測都要 deconvolve 這個延遲</li>
+      <li>最佳實務：為了量測高速 jitter，最好能讓 t_GROUND + t_PROBE < 300 ps</li>
+    </ul>
+  </li>
+</ol>
+
+<h2>2. 第二步：採集邊沿時刻直方圖</h2>
+
+<h3>2.1 目標訊號的選擇</h3>
+
+<p><strong>推薦對象：</strong></p>
+<ul>
+  <li><strong>NB 主機板：</strong>DDR5 時脈（1.6–2.4 GHz）、CPU 參考時脈（266–400 MHz）、PCIe SRC 時脈（100 MHz 左右）</li>
+  <li><strong>鏡頭模組：</strong>MIPI HS 時脈（1–1.5 GHz）、感光晶片內部時脈（50–500 MHz）</li>
+  <li><strong>入門選項：</strong>若無法接觸上述訊號，可用實驗室函數產生器產生 100–500 MHz 的方波作測試訊號</li>
+</ul>
+
+<h3>2.2 示波器設置與採集流程</h3>
+
+<p><strong>步驟 1：基本設定</strong></p>
+<ol>
+  <li>連接探棒到示波器的 CH1（或其他通道），地線夾到最近的 ground pad</li>
+  <li>探棒衰減設定：若訊號幅度 < 500 mV，選 1:1；若 > 1 V，選 10:1（可提高輸入阻抗，減少負載）</li>
+  <li>示波器時基（time scale）：設定為訊號週期的 ~2–5 倍，例如 1.6 GHz 時脈（625 ps 週期），設 200–500 ps/div</li>
+  <li>垂直放大（vertical scale）：調整到訊號幅度佔螢幕 60–80%，避免飽和與量化誤差</li>
+  <li>觸發（trigger）：選「邊沿觸發」（edge trigger），設在上升邊沿或下降邊沿（兩者任選），觸發電位設在信號中間電位（例如 0.5 V）</li>
+</ol>
+
+<p><strong>步驟 2：波形採集</strong></p>
+<ol>
+  <li><strong>單次觸發模式：</strong>確保示波器設在「正常」或「自動」觸發模式，讓它自動捕捉連續波形（約 1000 個週期以上）</li>
+  <li><strong>儲存波形資料：</strong>大多數示波器支援「Save/Export」功能：
+    <ul>
+      <li>將波形存為 .csv 或 .txt（包含時刻 t 與電壓 V 的對應）</li>
+      <li>或直接輸出「邊沿時刻列表」（某些示波器有內建統計功能，見下一小節）</li>
+    </ul>
+  </li>
+  <li><strong>重複採集 ≥2 次：</strong>要驗證波形的穩定性，採集 2–3 次，確認統計結果一致</li>
+</ol>
+
+<h3>2.3 提取邊沿時刻（三種方法）</h3>
+
+<p><strong>方法 1：示波器內建 Jitter 分析（推薦）</strong></p>
+<p>若示波器具有「Jitter」、「Timing」或「Time Interval」分析模式：</p>
+<ol>
+  <li>波形匯入後，進入 Jitter/Timing 功能</li>
+  <li>設定「邊沿檢測閾值」（通常 50% 幅度，即訊號的中點）</li>
+  <li>示波器自動檢測所有邊沿，輸出「邊沿時刻列表」與「時刻偏移直方圖」</li>
+  <li>匯出直方圖資料（包括 bin 數、頻數、均值、標準差 σ）</li>
+</ol>
+
+<p><strong>方法 2：手工提取（低階但可靠）</strong></p>
+<p>若示波器沒有內建分析，用試算表：</p>
+<ol>
+  <li>匯出波形資料（時刻 t 與電壓 V）為 CSV</li>
+  <li>在試算表中，用「條件格式」或「查詢函數」找到所有 V 穿過設定閾值的時刻（例如 0.5 V）</li>
+  <li>提取這些時刻，記為 t_n（n = 1, 2, ..., N）</li>
+  <li>計算邊沿週期 T = 理想週期（如 625 ps），並求 jitter[n] = (t_n − t_{理想})mod(T)</li>
+  <li>繪製直方圖：把 jitter 值分成 50–100 個 bin，計算每個 bin 的頻數</li>
+</ol>
+
+<p><strong>方法 3：示波器脈衝寬度或邊沿測量（若無內建統計）</strong></p>
+<p>某些示波器能測量單個邊沿的時刻。用「自動測量」（Automeasure）功能：</p>
+<ol>
+  <li>設定為「上升時間」或「邊沿到時刻」的自動測量</li>
+  <li>示波器逐一量測 1000 個邊沿，產生一個測量值列表（可匯出為 CSV）</li>
+  <li>提取這些值，按方法 2 的步驟 4–5 來製作直方圖</li>
+</ol>
+
+<p><em>白話翻譯：簡單說，你就是要讓示波器「告訴你每個邊沿在什麼時刻到達」。不同示波器機型的操作步驟不同，但概念一樣。如果示波器有自動化功能，就用自動化；沒有的話，用試算表手工提取邊沿，再排隊統計。</em></p>
+
+<h2>3. 第三步：手工計算與繪製 Bathtub Curve</h2>
+
+<h3>3.1 從直方圖計算 BER（誤判率）</h3>
+
+<p><strong>前提條件：</strong>你已經有了邊沿時刻偏移的直方圖（jitter 分布）。現在要轉換為「BER vs 採樣時刻」曲線。</p>
+
+<p><strong>基本思路：</strong></p>
+<div class="formula">
+假設：<br>
+— 邊沿時刻分布記為 PDF(t)（概率密度函數，直方圖正規化）<br>
+— 決策電路在時刻 t_sample 採樣<br>
+— 邊沿若到達時刻 < t_sample − threshold，被誤判為 0<br>
+— 邊沿若到達時刻 > t_sample + threshold，被誤判為 1<br>
+<br>
+則：BER(t_sample) = ∫[−∞, t_sample − threshold] PDF(t) dt + ∫[t_sample + threshold, +∞] PDF(t) dt<br>
+<br>
+簡化（假設 threshold 固定，如 ±25 mV）：<br>
+BER(t_sample) = 1 − ∫[t_sample − margin, t_sample + margin] PDF(t) dt<br>
+<br>
+其中 margin 是決策電路對時刻偏差的容許範圍
+</div>
+
+<p><strong>逐步計算方法：</strong></p>
+<ol>
+  <li><strong>正規化直方圖：</strong>你的直方圖有 N_bin 個 bin，每個 bin 的頻數為 count[i]。正規化使得總和 = 1：
+    <div class="formula">
+    prob[i] = count[i] / sum(count)
+    </div>
+  </li>
+
+  <li><strong>掃描採樣時刻：</strong>選擇採樣時刻範圍（通常 ±一個 UI 的一半）。例如 1.6 GHz 訊號週期 625 ps，掃描範圍 −300 ps ~ +300 ps（相對於理想邊沿時刻），步長 10 ps：
+    <div class="formula">
+    t_sample = −300, −290, −280, ..., +290, +300 (ps)
+    </div>
+  </li>
+
+  <li><strong>對每個 t_sample，計算該時刻的「邊沿通過機率」：</strong>即直方圖在 t_sample 附近的累積概率。定義一個「決策視窗」（通常 ±一個 sigma，或 ±50 ps）：
+    <div class="formula">
+    P_correct(t_sample) = ∑[prob[i] for all bin i within (t_sample ± window)]<br>
+    BER(t_sample) = 1 − P_correct(t_sample)
+    </div>
+    <br>
+    或更嚴格地，用高斯模型（若直方圖形狀接近高斯）：
+    <div class="formula">
+    BER(t_sample) = Q(margin / σ_RJ)<br>
+    其中 margin = |t_sample − t_ideal|（採樣點到理想邊沿的距離）<br>
+    σ_RJ = 直方圖的標準差<br>
+    Q(x) ≈ 0.5 × erfc(x / √2) ≈ exp(−x²/2) / (x√(2π)) for x > 3
+    </div>
+  </li>
+
+  <li><strong>對數縮放：</strong>BER 通常是 10⁻⁹ 以下的極小數字，需要用對數尺度繪製才能看清：
+    <div class="formula">
+    log_BER(t_sample) = log₁₀(BER(t_sample))<br>
+    <br>
+    若 BER = 10⁻¹², log_BER = −12
+    </div>
+  </li>
+</ol>
+
+<p><strong>實例計算：</strong></p>
+<p>假設你量到的直方圖如下（簡化）：</p>
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#e8f4f8;">
+  <th style="border:1px solid #ccc; padding:0.5rem;">時刻 (ps)</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">−20 ~ 0</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">0 ~ +20</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">+20 ~ +40</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">+40 ~ +60</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">其他</th>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">頻數（counts）</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">50</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">600</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">300</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">45</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">5</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">機率 (prob)</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.05</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.60</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.30</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.045</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.005</td>
+</tr>
+</table>
+
+<p>若決策視窗設為 ±20 ps，掃描採樣時刻：</p>
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#e8f4f8;">
+  <th style="border:1px solid #ccc; padding:0.5rem;">採樣時刻 t_sample (ps)</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">視窗內機率</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">BER = 1 − 視窗內機率</th>
+  <th style="border:1px solid #ccc; padding:0.5rem;">log₁₀(BER)</th>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">−40</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.05</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.95</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">−0.02（~0）</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">−20</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.05 + 0.60 = 0.65</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.35</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">−0.46</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">0 (中心)</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.60 + 0.30 = 0.90</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.10</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">−1.0</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">+20</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.30 + 0.045 = 0.345</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.655</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">−0.18</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">+40</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.045</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">0.955</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">−0.02</td>
+</tr>
+</table>
+
+<h3>3.2 繪製 Bathtub Curve</h3>
+
+<p>使用試算表（Excel / Google Sheets）或 Python（matplotlib）：</p>
+
+<ol>
+  <li><strong>準備資料：</strong>第一列是採樣時刻 t_sample，第二列是對應的 log₁₀(BER)。例如：<br>
+  <code>t_sample (ps) | log_BER</code><br>
+  <code>−100 | −0.3</code><br>
+  <code>−90 | −0.5</code><br>
+  <code>... | ...</code><br>
+  <code>0 | −2.5 (最低點)</code><br>
+  <code>... | ...</code></li>
+
+  <li><strong>繪圖：</strong>X 軸為 t_sample（ps），Y 軸為 log₁₀(BER)。選「XY 散點圖」或「折線圖」，應該看到 U 形曲線（浴盆形）。</li>
+
+  <li><strong>標註關鍵點：</strong>
+    <ul>
+      <li>浴盆最低點（最小 BER）— 這是「最安全的採樣時刻」</li>
+      <li>±3σ 位置（若 BER 達 10⁻³）、±4σ 位置（10⁻⁵）、±6σ 位置（10⁻⁹）— 這些是業界常用的「margin 標籤」</li>
+    </ul>
+  </li>
+</ol>
+
+<p><em>白話翻譯：最終得到的圖就是「浴盆」—— 中間深（誤判率高），兩邊淺（誤判率低）。浴盆越淺越好，因為這意味著即使系統有偏差、採樣時刻晚到，也不會掉進高誤判率的陷阱。</em></p>
+
+<h2>4. 第四步：診斷與根因分析</h2>
+
+<p>量出 Bathtub 後，根據曲線形狀診斷 jitter 的根源（Day 35 昨天教的「浴盆的三個成分」）。</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">觀察到的 Bathtub 形狀</th>
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">推論</th>
+  <th style="border:1px solid #ccc; padding:0.5rem; text-align:left;">下一步檢查</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">光滑 U 形，對稱</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">純 RJ（隨機 jitter）主導，系統狀態良好</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">計算 σ_RJ 與實際規格是否吻合（見下表 「Reference Specification」）</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">左右不對稱的 U 形</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">Duty cycle distortion（上下升/下降邊沿不等長）</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">量測上升邊沿與下降邊沿的分開的 Bathtub（若示波器支援），或檢查終端電阻是否對稱</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">底部波浪狀，多個低谷</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">ISI（符號間干擾）或前一位元的 data-dependent jitter</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">檢查 PCB 走線長度、連接器、通道有無反射（從 Day 33–34 的 S 參數結果對比）；考慮加等化器</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.5rem;">浴盆極深（margin 很小）</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">RJ 或 DJ 的方差偏大，系統接近限界</td>
+  <td style="border:1px solid #ccc; padding:0.5rem;">檢查電源雜訊（PDN）、串擾、溫度漂移；可能需要改 layout 或加濾波</td>
+</tr>
+</table>
+
+<h3>實務診斷：NB DDR5 時脈 vs 鏡頭 MIPI HS</h3>
+
+<div class="card intuition">
+  <span class="label">場景 1：NB DDR5 時脈診斷</span>
+  <p><strong>量測結果假設：</strong>1.6 GHz DDR5 時脈，Bathtub 呈現略不對稱 U 形，左邊低谷深度 BER = 10⁻⁶，右邊低谷深度 BER = 10⁻⁵，中間寬度 ~100 ps。</p>
+  <p><strong>根因診斷：</strong></p>
+  <ul>
+    <li>不對稱 → 上升邊沿與下降邊沿的時刻分布不同 → 終端或走線設計有偏差</li>
+    <li>左邊更深 → 可能上升邊沿驅動強度不足，或走線 return path 異常</li>
+    <li>寬度 100 ps × 50% duty cycle = 50 ps 的有效決策視窗 → 對 DDR5 來說勉強（通常 target > 100 ps）</li>
+  </ul>
+  <p><strong>對策：</strong>檢查 DDR5 時脈的走線（是否有過度的彎曲、via 不對齊），微調終端電阻（假設原來是 50 Ω 並聯 50 Ω，可試試改成 45 Ω + 55 Ω 非對稱），或增加去耦電容以降低電源雜訊。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">場景 2：鏡頭 MIPI HS 眼圖診斷</span>
+  <p><strong>量測結果假設：</strong>1.5 GHz MIPI HS 時鐘，Bathtub 底部呈波浪狀，有 3–4 個明顯的低谷，相鄰低谷間距 ~50 ps，最深低谷 BER = 10⁻⁸。</p>
+  <p><strong>根因診斷：</strong></p>
+  <ul>
+    <li>波浪狀多低谷 → 強烈的 ISI：前一位元的脈衝拖尾還沒消，後一位元就來了 → 邊沿位置被「鎖」在不同的時刻</li>
+    <li>低谷間距 ~50 ps ≈ UI (667 ps) / 多數據流 → 很可能是「前 1 位元」或「前 2 位元」的影響</li>
+    <li>BER 10⁻⁸ 級別 → 還在可接受範圍，但邊界不舒適</li>
+  </ul>
+  <p><strong>對策：</strong></p>
+  <ul>
+    <li>檢查 flex 走線設計：MIPI 訊號從 sensor → SoC 通常走 flex，多個彎曲會造成反射與 ISI。量測一下 S21（通道衰減），若有諧振峰，改走線布局</li>
+    <li>加等化器：感光晶片或接收端的 DSP 中通常有可配置的線性等化器，嘗試提升高頻增益（削減 ISI）</li>
+    <li>改終端：MIPI HS 通常 100 Ω 差動，但若訊號反射較強，可能需要加串聯電阻或調整終端點位置</li>
+  </ul>
+</div>
+
+<h2>5. 實驗產出與數據檔案</h2>
+
+<p><strong>本次實驗你應該產生的檔案清單：</strong></p>
+
+<ol>
+  <li><strong>儀器設置紀錄（setup_log.txt）：</strong>
+    <ul>
+      <li>示波器型號、頻寬、採樣率、記憶體深度</li>
+      <li>探棒型號、衰減、輸入電容</li>
+      <li>地線長度、寬度、直徑，計算出的 L 與 t_GROUND</li>
+      <li>訊號特性：頻率、幅度、邊沿時間、預期 jitter 量級</li>
+    </ul>
+  </li>
+
+  <li><strong>邊沿時刻直方圖（histogram.csv 或圖表）：</strong>
+    <ul>
+      <li>時刻偏移 (ps) vs 頻數（至少 50 個 bin）</li>
+      <li>統計摘要：均值、標準差 σ、最小值、最大值、quartiles</li>
+      <li>如可能，分開上升邊沿與下降邊沿的直方圖</li>
+    </ul>
+  </li>
+
+  <li><strong>Bathtub 曲線數據與圖表（bathtub.csv + bathtub.png）：</strong>
+    <ul>
+      <li>CSV 包含：採樣時刻 (ps) 與 log₁₀(BER) 兩列</li>
+      <li>PNG 為繪製的 U 形曲線，標註浴盆最低點與 margin 標籤</li>
+    </ul>
+  </li>
+
+  <li><strong>診斷報告（diagnosis.md）：</strong>
+    <ul>
+      <li>觀察到的 Bathtub 形狀特徵</li>
+      <li>推論的 RJ/DJ/ISI 成分比例</li>
+      <li>可疑的 PCB 設計或元件清單（待改進項）</li>
+      <li>後續對策建議</li>
+    </ul>
+  </li>
+</ol>
+
+<h2>6. 進階方案與常見卡點</h2>
+
+<h3>進階方案 A：加外部擾動，驗證 DJ 與 ISI 的分離</h3>
+
+<p><strong>場景：</strong>Bathtub 底部波浪，你想確認這是 ISI 還是別的 DJ。</p>
+
+<p><strong>做法：</strong>用函數產生器產生「預知固定位元序列」（例如 0101010... vs 0011001100...），觀察 Bathtub 形狀是否隨位元序列變化：</p>
+<ol>
+  <li>準備兩種位元序列發生器（PRBS / 固定序列，若公司有 BERT 儀器最好）</li>
+  <li>將訊號注入測試目標（通常在 PCB 的時脈輸入）</li>
+  <li>分別量測每種序列的 Bathtub</li>
+  <li>若 Bathtub 形狀隨序列劇變 → 確認是 data-dependent jitter（ISI）；若幾乎不變 → 是環境雜訊（電源 / 串擾）</li>
+</ol>
+
+<h3>進階方案 B：轉溫度 / 工作點，驗證 margin 裕度</h3>
+
+<p><strong>場景：</strong>室溫量測的 Bathtub 剛好通過（margin = 60 ps），但擔心高溫或低電壓時會失效。</p>
+
+<p><strong>做法：</strong></p>
+<ol>
+  <li>準備溫控室（或用烤箱 / 液氮，看公司條件）</li>
+  <li>在 0°C、25°C、50°C、75°C 各量一次 Bathtub（通常每 25°C 做一次）</li>
+  <li>將多條曲線繪在同一圖上，觀察 margin 的溫度漂移</li>
+  <li>若高溫時 margin 下降 > 20%，系統風險高，需要設計改進</li>
+</ol>
+
+<h3>常見卡點 1：「示波器顯示的波形很模糊，量不出邊沿」</h3>
+
+<p><strong>原因 99%：地線失真。</strong></p>
+
+<p><strong>排查步驟：</strong></p>
+<ol>
+  <li>檢查地線長度（應 < 1 cm；若 > 3 cm，立即改短）</li>
+  <li>計算 t_GROUND（見 1.2 節的公式），若 > 1 ns，改用彈簧夾或現場焊接</li>
+  <li>嘗試用更寬的地線（例如寬銅片而非細導線）以降低電感</li>
+  <li>若改了還是模糊，考慮是否示波器頻寬不足（升級到 > 4 GHz）</li>
+</ol>
+
+<h3>常見卡點 2：「直方圖出現多個尖峰，而不是光滑的高斯」</h3>
+
+<p><strong>原因：</strong>
+  <ul>
+    <li><strong>可能 A（正常）：</strong>訊號確實有 ISI 或 DJ，多峰是真實現象</li>
+    <li><strong>可能 B（儀器問題）：</strong>採樣率太低或示波器時基解析度不足，人為造成「量化誤差」</li>
+    <li><strong>可能 C（環境問題）：</strong>量測環境太吵（例如隔壁在焊接），電源或串擾的干擾進來了</li>
+  </ul>
+
+<p><strong>排查步驟：</strong></p>
+<ol>
+  <li>提升採樣率（若有 40 Gsps 的示波器，改用 40 Gsps 重新量）</li>
+  <li>增加採樣次數（從 1000 週期改成 10000 週期），看直方圖是否更光滑</li>
+  <li>試試屏蔽電磁干擾（蓋上導電罩），或改在不同的工作時段（人少、機器少）量測</li>
+  <li>若多峰仍然存在且非常明顯 → 確認是 ISI，見進階方案 A（位元序列掃描）</li>
+</ol>
+
+<h3>常見卡點 3：「Bathtub 最低點很難找，曲線太平」</h3>
+
+<p><strong>原因：</strong>系統 jitter 很小（RJ σ < 2 ps），BER 差異不夠大，對數尺度上看不清。</p>
+
+<p><strong>對策：</strong></p>
+<ol>
+  <li>加大採樣次數（100000 週期或更多），BER 差異會更明顯</li>
+  <li>調整 y 軸范圍（例如只顯示 −2 到 −12，而不是 0 到 −12），放大對比</li>
+  <li>用高階統計模型：若直方圖是高斯，用 Q-function 精確計算而非直方圖積分，可得更光滑的曲線</li>
+</ol>
+
+<h2>7. 總結與明日預告</h2>
+
+<p><strong>今日實驗成果檢查清單：</strong></p>
+<ul>
+  <li>☑ 確認了儀器與地線的誤差源，計算了 t_DISPLAY</li>
+  <li>☑ 採集了 ≥1000 個邊沿的時刻統計直方圖</li>
+  <li>☑ 根據直方圖手工計算並繪出了 Bathtub 曲線</li>
+  <li>☑ 根據 Bathtub 形狀診斷了 RJ/DJ/ISI 的根源</li>
+  <li>☑ 產生了設置紀錄、直方圖、Bathtub 圖表、診斷報告等文件</li>
+</ul>
+
+<p><strong>明日預告（Day 37 週六新觀念課）：</strong>今天量的是「時脈訊號」的 Bathtub；明天要學「NB 主機板整個時脈樹的驗證」—— 從晶振、時脈發生器、Buffer、到各個消費端（CPU/DDR/PCIe）的時脈，怎麼逐級驗證，確保整個系統的時脈預算符合規格。這是 Perfect Timing II Ch.16 Motherboard Clock Validation 的核心，也是 NB 硬體工程師的必修課。</p>
+
+<footer class="lesson">
+  <div class=\"anki\">
+    <h3>本週 Anki 複習卡（Day 36 實作日）</h3>
+    <p style=\"font-size: 0.9rem; color: #666;\">
+      因為是實作日，今日沒有概念卡，而是「實驗操作卡」——把實驗步驟壓縮成 5 張速查卡，下週複習用。
+    </p>
+    <details>
+      <summary><strong>卡 1：Bathtub 量測流程速查表</strong></summary>
+      <div style=\"background: #f0f9ff; padding: 1rem; margin: 0.5rem 0; border-radius: 8px; font-size: 0.95rem;\">
+        <strong>Q:</strong> Bathtub 量測的關鍵 5 步是什麼？（用於快速判斷量測是否完整）<br><br>
+        <strong>A:</strong> ①儀器校正（計算 t_DISPLAY）→ ②邊沿時刻採集 (≥1000 週期的直方圖) → ③直方圖正規化與 BER 計算 → ④掃描採樣時刻，繪 Bathtub 曲線 → ⑤根據形狀診斷 RJ/DJ/ISI<br><br>
+        <em>速記：校 → 採 → 算 → 繪 → 診</em>
+      </div>
+    </details>
+    <details>
+      <summary><strong>卡 2：地線電感計算（Perfect Timing II Ch.11）</strong></summary>
+      <div style=\"background: #f0f9ff; padding: 1rem; margin: 0.5rem 0; border-radius: 8px; font-size: 0.95rem;\">
+        <strong>Q:</strong> 為什麼說「地線是量測 jitter 最常見的失誤源」？計算公式？<br><br>
+        <strong>A:</strong> 長地線會造成大電感 L，與探棒電容 C 形成 LC 諧振 → 導致邊沿失真<br>
+        公式：L (nH) = 10.16 × [l × ln(2l/d) + w × ln(2w/d)]<br>
+        時間延遲：t_GROUND = 3.4 × √(L × C)，若 > 1 ns，必須改用短地線或彈簧夾<br><br>
+        <em>速記：長地線 = 大失真；地線長度 < 1 cm 為佳</em>
+      </div>
+    </details>
+    <details>
+      <summary><strong>卡 3：直方圖到 BER 的轉換</strong></summary>
+      <div style=\"background: #f0f9ff; padding: 1rem; margin: 0.5rem 0; border-radius: 8px; font-size: 0.95rem;\">
+        <strong>Q:</strong> 給定邊沿時刻直方圖，怎麼推算 Bathtub 曲線上某個點的 BER？<br><br>
+        <strong>A:</strong> ①正規化直方圖：prob[i] = count[i] / sum(count) ②選定採樣時刻 t_sample ③計算「視窗內機率」：P_correct = ∑ prob[i] (for bin i within t_sample ± margin) ④BER = 1 − P_correct ⑤取對數：log₁₀(BER)<br><br>
+        <em>速記：直方圖的「中心機率越高，邊沿機率越低 → BER 越低」</em>
+      </div>
+    </details>
+    <details>
+      <summary><strong>卡 4：Bathtub 形狀診斷（Day 35 回顧）</strong></summary>
+      <div style=\"background: #f0f9ff; padding: 1rem; margin: 0.5rem 0; border-radius: 8px; font-size: 0.95rem;\">
+        <strong>Q:</strong> Bathtub 曲線的三種常見形狀與其根因？<br><br>
+        <strong>A:</strong><br>
+        • 光滑對稱 U 形 → 純 RJ，系統好<br>
+        • 左右不對稱 U 形 → Duty cycle distortion（上下邊沿不等長）<br>
+        • 波浪底部（多個低谷） → ISI（符號間干擾，前一位元的脈衝拖尾）<br><br>
+        <em>速記：形狀 = 病症；光滑 = 健康；波浪 = 有 ISI</em>
+      </div>
+    </details>
+    <details>
+      <summary><strong>卡 5：Bathtub Margin 解讀（Perfect Timing II Ch.4）</strong></summary>
+      <div style=\"background: #f0f9ff; padding: 1rem; margin: 0.5rem 0; border-radius: 8px; font-size: 0.95rem;\">
+        <strong>Q:</strong> 「採樣時刻 margin」的工程意義是什麼？業界常用的 margin 標籤有哪些？<br><br>
+        <strong>A:</strong> Margin = 採樣點到邊沿統計中心的最大距離（時間空間），確定在該距離下系統還能保持的最大 BER<br>
+        常用標籤（假設 σ_RJ = 5 ps）：<br>
+        • 3σ margin (15 ps) → BER ≈ 10⁻³（可接受）<br>
+        • 4σ margin (20 ps) → BER ≈ 10⁻⁵（很好）<br>
+        • 6σ margin (30 ps) → BER ≈ 10⁻⁹（業界目標）<br><br>
+        <em>速記：更大的 margin = 系統更抗干擾；6σ 是「金標準」</em>
+      </div>
+    </details>
+  </div>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

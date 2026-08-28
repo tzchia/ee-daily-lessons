@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 37｜NB 時脈驗證全貌——從 14.318 MHz 結晶到 PCIe 眼圖，AC 規格怎麼逐條量</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 37 天（週六新觀念課・SI 量測週）</div>
+  <h1>Day 37：NB 時脈驗證全貌——從 14.318 MHz 結晶到 PCIe 眼圖，AC 規格怎麼逐條量</h1>
+  <div class="meta">2026-08-29（六）｜預估學習時間：90 分鐘｜難度：★★★★☆（Perfect Timing II Ch.16「主機板時脈驗證」整章深化——把你過去 6 週學的量測工具，組裝成一套「系統級時脈驗證流程」；這章就是 NB 主機板的本行，面試官最愛的 case study 素材庫）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>前六週你學的是「單一工具」：Z₀、反射、串擾、損耗、眼圖、bathtub、探棒、S 參數。今天把它們全部串成一條<strong>生產線</strong>：一塊 NB 主機板從一顆結晶長出十幾路時脈，每一路要照規格逐條驗證——這就是 Perfect Timing II Ch.16「主機板時脈驗證」整章的內容，也是你過去五年做 NB bring-up 時「有做但沒系統化」的那件事。</p>
+  <ol>
+    <li>看懂主機板<strong>時脈樹</strong>：一顆 14.318 MHz 結晶如何養出 CPU、PCIe、USB、PCI 全家的時脈（Ch.16 圖 16.1）</li>
+    <li>背熟<strong>五項關鍵 AC 規格</strong>：週期精度（ppm）、cycle-to-cycle jitter、上升／下降時間、duty cycle——以及系統級的<strong>長期抖動（LTJ）</strong></li>
+    <li>會算<strong>量測記憶體深度</strong>：「量 1 µs 平均週期要多少取樣點？」這種面試白板題（Ch.16 實例，含原書算式勘誤）</li>
+    <li>學會<strong>延遲直方圖法量 LTJ</strong>：USB 48 MHz 在 125 µs 延遲、dot clock 在 10 µs 延遲的標準程序（Ch.16 圖 16.17–16.24）</li>
+    <li>學會<strong>jitter 頻譜法</strong>：對週期序列做 FFT 抓耦合來源（33 MHz PCI 耦合實例），並理解「低於 PLL 迴路頻寬的 jitter 才會害死你」（Ch.13 的觀念在 Ch.16 的落地）</li>
+    <li>看懂 <strong>PCIe 合規驗證</strong>：合規負載板、RT-Eye、TIE jitter 60 ps 預算、為什麼 REFCLK 要跟著資料一起過連接器（±300 ppm 與 0.5% SSC 的算帳）</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要</h2>
+<ul>
+  <li><strong>Day 28（週 5）：</strong>jitter 記帳法——TJ = RJ + DJ；PLL 串越多層，低頻 jitter 被「乘」進輸出（PT2 Ch.13 級聯 PLL）。今天的「jitter 頻譜 + PLL 迴路頻寬」是這條線的收帳日。</li>
+  <li><strong>Day 32–33（本週）：</strong>探棒與示波器頻寬——「儀器先在說謊，你再下結論」。今天 Ch.16 一開始就強調：量測設備與探棒頻寬必須應付待測邊沿，否則數字全部作廢（Ch.16 原文明確指回 Ch.11）。</li>
+  <li><strong>Day 35–36（昨天）：</strong>bathtub 曲線理論 + 動手量邊沿直方圖。今天的 LTJ「延遲直方圖法」就是同一招的系統級應用——只是把「看形狀」升級成「對規格判 PASS/FAIL」。</li>
+  <li><strong>NB 背景直連：</strong>你點過無數次的 ITE／Silicon Labs 時脈產生器 chips，今天終於要當「主角」驗收。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：央行與鈔票</span>
+  <p>把主機板的時脈系統想成一個國家的金融體系：那顆 14.318 MHz 石英結晶是<strong>金本位的黃金</strong>（全系統唯一的「真」頻率），時脈產生器是<strong>央行</strong>，它每個輸出腳是一張<strong>面額不同的鈔票</strong>（CPU 鈔、PCIe 鈔、USB 鈔……）。央行把黃金「倍幣」成各種面額：鈔票的品質問題有四種——面額印錯（頻率偏差 ppm）、同一張鈔票兩次印刷厚薄不均（cycle-to-cycle jitter）、正面反面油墨乾得速度不同（duty cycle 與上升／下降時間）、長途運輸後整捆鈔票鬆散漂移（長期抖動）。驗證工程師就是<strong>印鈔局品質稽核員</strong>：先驗央行金庫（先量參考輸出！央行自己錯，驗所有商業銀行都是白費），再逐張鈔票上儀器過五關。最陰險的是：有些假鈔（低頻 jitter）平常看不出來，但一到高速收銀台（PCIe SERDES）就會被自動「放大找零」——所以稽核員要用頻譜儀（FFT）驗鈔，肉眼看不到的浮水印問題會無所遁形。</p>
+  <p><em>公式看不懂可以先跳過，這段結論記住就好：時脈驗證 = 先驗參考源，再逐腳過五項 AC 規格，最後用頻譜法和系統級眼圖收尾。</em></p>
+</div>
+
+<h2>1. 一張圖看懂主機板時脈樹（PT2 Ch.16 圖 16.1）</h2>
+
+<figure>
+<svg viewBox="0 0 920 600" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：主機板時脈樹——一顆結晶養全板（依 PT2 Ch.16 圖 16.1 重繪，右欄加現代註記）</text>
+
+  <!-- Crystal -->
+  <rect x="30" y="250" width="150" height="90" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="105" y="285" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400e">石英結晶</text>
+  <text x="105" y="305" text-anchor="middle" font-size="12" fill="#92400e">14.318 MHz</text>
+  <text x="105" y="325" text-anchor="middle" font-size="9" fill="#92400e">全板唯一的「黃金」</text>
+
+  <!-- Clock generator -->
+  <rect x="240" y="180" width="170" height="230" rx="10" fill="#0f4c5c" stroke="#0f4c5c" stroke-width="2"/>
+  <text x="325" y="215" text-anchor="middle" font-size="14" font-weight="bold" fill="white">時脈產生器</text>
+  <text x="325" y="235" text-anchor="middle" font-size="10" fill="#cbd5e1">（含 PLL + 緩衝器）</text>
+  <text x="325" y="258" text-anchor="middle" font-size="9" fill="#cbd5e1">把一顆低頻「黃金」</text>
+  <text x="325" y="273" text-anchor="middle" font-size="9" fill="#cbd5e1">倍頻／分頻成十幾路</text>
+  <text x="325" y="295" text-anchor="middle" font-size="9" fill="#cbd5e1">驗證主戰場就在</text>
+  <text x="325" y="310" text-anchor="middle" font-size="9" fill="#cbd5e1">它的每一顆輸出腳</text>
+  <line x1="180" y1="295" x2="240" y2="295" stroke="#d97706" stroke-width="2.5" marker-end="url(#arr37)"/>
+
+  <defs>
+    <marker id="arr37" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <polygon points="0 0, 9 4.5, 0 9" fill="#0f4c5c"/>
+    </marker>
+    <marker id="arr37g" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <polygon points="0 0, 9 4.5, 0 9" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Output branches -->
+  <g font-size="11">
+    <!-- CPU refclk -->
+    <line x1="410" y1="200" x2="490" y2="80" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <rect x="495" y="52" width="180" height="58" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="585" y="72" text-anchor="middle" font-weight="bold" fill="#075985">CPU 參考時脈</text>
+    <text x="585" y="88" text-anchor="middle" font-size="10" fill="#075985">2002：266–333 MHz（FSB）</text>
+    <text x="585" y="102" text-anchor="middle" font-size="9" fill="#64748b">內部再倍頻 = CPU 主頻</text>
+
+    <!-- SRC -->
+    <line x1="410" y1="235" x2="490" y2="175" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <rect x="495" y="148" width="180" height="72" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="585" y="168" text-anchor="middle" font-weight="bold" fill="#166534">SRC 串列參考時脈</text>
+    <text x="585" y="184" text-anchor="middle" font-size="10" fill="#166534">100 MHz 差動 0.7 V</text>
+    <text x="585" y="198" text-anchor="middle" font-size="10" fill="#166534">→ PCIe／SATA（約 8 份拷貝）</text>
+    <text x="585" y="212" text-anchor="middle" font-size="9" fill="#64748b">±300 ppm＋SSC 0.5%，跨連接器送</text>
+
+    <!-- Dot clock -->
+    <line x1="410" y1="270" x2="490" y2="268" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <rect x="495" y="242" width="180" height="56" rx="8" fill="#f3e8ff" stroke="#9333ea" stroke-width="1.5"/>
+    <text x="585" y="261" text-anchor="middle" font-weight="bold" fill="#6b21a8">Dot clock 96 MHz（差動）</text>
+    <text x="585" y="276" text-anchor="middle" font-size="9" fill="#6b21a8">→ GMCH 生成 VGA hsync</text>
+    <text x="585" y="290" text-anchor="middle" font-size="9" fill="#64748b">抖動 → 螢幕波紋（Ch.16 實測）</text>
+
+    <!-- PCI -->
+    <line x1="410" y1="305" x2="490" y2="356" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <rect x="495" y="332" width="180" height="52" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="585" y="351" text-anchor="middle" font-weight="bold" fill="#991b1b">PCI 33 MHz 單端 LVTTL</text>
+    <text x="585" y="366" text-anchor="middle" font-size="9" fill="#991b1b">它還是 33 MHz spur 元凶（圖 16.13）</text>
+    <text x="585" y="379" text-anchor="middle" font-size="9" fill="#64748b">已退役 → PCIe 取代</text>
+
+    <!-- USB -->
+    <line x1="410" y1="345" x2="490" y2="438" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <rect x="495" y="418" width="180" height="56" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="585" y="437" text-anchor="middle" font-weight="bold" fill="#9a3412">USB 48 MHz</text>
+    <text x="585" y="452" text-anchor="middle" font-size="9" fill="#9a3412">→ USB 2.0 480 Mbps 之參考源</text>
+    <text x="585" y="466" text-anchor="middle" font-size="9" fill="#64748b">LTJ@125 µs 超 1 ns → 眼圖 FAIL</text>
+
+    <!-- REF -->
+    <rect x="495" y="498" width="180" height="52" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <line x1="410" y1="385" x2="490" y2="514" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr37)"/>
+    <text x="585" y="517" text-anchor="middle" font-weight="bold" fill="#334155">REF 參考時脈</text>
+    <text x="585" y="532" text-anchor="middle" font-size="9" fill="#334155">→ 音訊／ASIC／FPGA 雜項裝置</text>
+  </g>
+
+  <!-- Receiver boxes right edge -->
+  <text x="760" y="70" font-size="10" fill="#475569">CPU＋MCH</text>
+  <text x="760" y="185" font-size="10" fill="#475569">PCIe 端點／</text>
+  <text x="760" y="198" font-size="10" fill="#475569">SATA／顯卡</text>
+  <text x="760" y="272" font-size="10" fill="#475569">外接螢幕</text>
+  <text x="760" y="358" font-size="10" fill="#475569">PCI 插槽</text>
+  <text x="760" y="443" font-size="10" fill="#475569">USB 裝置</text>
+
+  <!-- Bottom annotation -->
+  <rect x="30" y="560" width="860" height="0" fill="none"/>
+  <text x="30" y="580" font-size="10" fill="#475569">現代註記：266–333 MHz FSB、PCI 33 MHz、VGA dot clock 皆已退役；但「一顆 14.31818 MHz 結晶 + 一顆時脈產生器餽養全板」的架構，以及 100 MHz SRC（HCSL）±300 ppm＋−0.5% SSC，至今仍是 NB 主機板現行標準。</text>
+</svg>
+<figcaption>圖 1：時脈樹拓撲（PT2 Ch.16 圖 16.1 精神重繪）。注意「SRC 約 8 份拷貝、每份都從同一顆央行出發」——這決定了後面 skew 與 ppm 驗證的帳怎麼算。</figcaption>
+</figure>
+
+<p><strong>Ch.16 的敘事起點：</strong>主機板時脈產生器的設計使命，就是「從一顆廉價的 14.318 MHz 結晶，產生系統需要的全部時脈」（PT2 Ch.16 原文）。時脈來源分兩類：<strong>主時脈產生器</strong>（產生 CPU、MCH、ICH、USB、PCI 槽、ATA 磁碟控制器用的時脈）與<strong>時脈緩衝器</strong>（把主產生器的訊號複製、分發——Day 3 學過的緩衝器，今天開始背規格責任）。</p>
+
+<p><strong>為什麼頻率越高、擺幅越低、還得改差動？</strong>Ch.16 講了一條連鎖邏輯：頻率上升 → 受限於切換速率（slew rate）要求，時脈電壓擺幅必須<strong>降低</strong>；擺幅一低，雜訊耦合相對變大 → 於是必須從單端訊號<strong>遷移到差動訊號</strong>。書中 2002 年的例子：PCI 參考時脈從 33 MHz 單端 LVTTL 遷移到 100 MHz、0.7 V 差動。<em>以現代標準需上修：這條「擺幅↓→改差動」的演化一路走到 PCIe Gen5（32 GT/s）、USB4、MIPI M-PHY，但你鏡頭模組的 MIPI D-PHY HS 差分對就是這條演化樹上的枝葉——同一條邏輯鏈。</em></p>
+
+<h2>2. 五項關鍵 AC 規格——驗證的「五關」（PT2 Ch.16）</h2>
+
+<p>Ch.16 明確列出（依 Intel Yellow Book 定義）主機板時脈最關鍵的 AC 規格：</p>
+<ul>
+  <li><strong>週期與時脈精度（period, clock accuracy, ppm）</strong>——「面額有沒有印錯」</li>
+  <li><strong>Cycle-to-cycle jitter（c2c jitter）</strong>——「相鄰兩個週期厚薄差多少」</li>
+  <li><strong>上升時間（rise time）</strong>與<strong>下降時間（fall time）</strong>——「油墨乾多快」</li>
+  <li><strong>Duty cycle</strong>——「正反面面積一不一樣」</li>
+</ul>
+<p>此外，對「餵給下游 PLL 的參考時脈」（SRC、USB clock），Ch.16 後半又加了兩把刀：<strong>長期抖動（LTJ）</strong>與<strong>jitter 頻譜（相位雜訊）</strong>——因為 PLL 會把某些 jitter「放大找零」。</p>
+
+<div class="card intuition">
+  <span class="label">白話版：五關各抓什麼病</span>
+  <p>週期精度抓「慢性偏差」（石英老化和溫度造成的整體走鐘，單位 ppm，百萬分之一）；c2c jitter 抓「短期抽筋」（這一個週期跟上一個週期的抖動，ps 等級）；上升／下降時間抓「腿慢」（邊沿不夠陡，頻寬不夠的通道或過載的緩衝器會得這病）；duty cycle 抓「長短腿」（高電平時間和低電平時間不對稱，對 DDR 類雙沿取樣殺傷力極大）；LTJ 抓「長跑漂移」（一毫秒前的邊沿跟現在的邊沿，長時間基準漂了多遠——低速訊號被 PLL 積分後會現形）。五關各管一種死法，少驗一關就有一種死法沒人守。</p>
+</div>
+
+<h3>2.1 SRC 規格表——逐欄看懂（PT2 Ch.16 表 16.1）</h3>
+<p>Ch.16 給的 100 MHz SRC（PCIe／SATA 參考時脈）規格表，是「一張表教你讀規格」的最佳教材，照錄並加白話：</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">參數</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">規格（Ch.16 表 16.1）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">量測條件（原文）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">白話＋現代註記</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tPERIOD</strong> 週期</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">9.997001 – 10.003 ns</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">在交叉點電壓 V<sub>OXC</sub> 量</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">±300 ppm 窗。注意下限寫 9.997001 這種誇張精度——照錄原文</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tPERIODSS</strong>（SSC 開）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">9.997001 – 10.05327 ns</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">同上</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">展頻（down-spread 0.5%）只把「最慢邊界」拉長——判讀前必先知 SSC 有無開，否則誤判</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>LACC</strong> 長期精度</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">最大 300 ppm</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">交叉點量測</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">石英 + PLL 全鏈路的「走鐘」總帳。至今 PCIe 仍用 ±300 ppm 精神（SRIS 例外）</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tCCJ</strong> c2c jitter</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">最大 125 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">交叉點量測</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">短期抽筋預算。<strong>現代上修：</strong>Gen4/Gen5 平台 REFCLK 的積分相位抖動要求已收到約 sub-ps～1 ps rms 量級（看對應版本規格）</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tSKEW</strong> 拷貝間 skew</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">最大 100 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">任意兩路 SRC 交叉點</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">8 份拷貝之間的對齊誤差——Day 14「遠端失真」的規格化版本</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tDC</strong> duty cycle</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">45 – 55 %</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">交叉點量測</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">±5% 的長短腿預算；對 DDR 取樣的下游是雙倍殺傷</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tR / tF</strong></td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">175 – 700 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">從 V<sub>OL</sub>=0.175 V 量到 V<sub>OH</sub>=0.525 V</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>注意不是 10–90%！</strong>差動小擺幅訊號改用固定電壓窗量——「規格怎麼定義，你就怎麼量」的第一課</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>tRFM</strong> 上升/下降匹配</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">最大 20%</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">2·(tR−tF)/(tR+tF) 之比例</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">抓「單條腿瘸」：tR 與 tF 各自合法但差太多，duty 和 jitter 會一起中毒</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>V<sub>OXC</sub></strong> 交叉點</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">250 – 550 mV（單端 0–0.7 V，差動擺幅 1.4 Vpp）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">—</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">交叉點跑掉＝duty 會跑、共模測試視窗會錯——所以所有時間參數都「在交叉點量」</td>
+</tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">坑：規格定義的測量點就是法律</span>
+  <p>同樣是「上升時間」，LVTTL 用 10–90%、PCI 用 1.5 V±窗、SRC 用 0.175→0.525 V 固定窗。<strong>用錯測量定義，量到的是另一層意義的數字</strong>——你的 350 ps 和對手的 400 ps 可能根本沒打架，只是兩把尺不同刻度。面試被問「你怎麼量 rise time」，標準開場是：「先確認規格用的門限與測量窗，再決定儀器與探棒。」（Ch.16 對 duty cycle 特別註明「在差動波形上量」、rise/fall 在單端波形上量——這是它自己對「測量定義」的重視。原文 Figure 16.7/16.8）</p>
+</div>
+
+<h2>3. 第一關：週期與頻率精度——先算記憶體，再下探棒</h2>
+
+<p>Ch.16 的定義：「週期量的是一條 1 µs 時間窗內的平均週期」。用示波器做這件事，<strong>必須把整個 1 µs 窗完整擷取到記憶體裡</strong>（因為你要對窗內所有週期求平均，抽樣測幾個週期不等於平均）。書中算例：輸出 100 MHz（週期 10 ns），要擷取 1 µs 就是 100 個週期；若取樣率 20 Gsps（50 ps/點），書中寫「每週期 500 點 × 100 週期 = 50K 樣本（8-bit 時約 50 KB）」。</p>
+
+<div class="formula">
+記憶體深度計算（自己會推才算會）：<br>
+<br>
+每週期點數 = 週期時間 ÷ 取樣間隔 = 10 ns ÷ 50 ps = <strong>200 點</strong><br>
+總樣本數 = 200 點/週期 × 100 週期 = <strong>20,000 樣本 ≈ 20 KB（8-bit）</strong><br>
+<br>
+白話翻譯：量 1 µs 平均週期，對 2002 年的儀器是「要刻意切換到較深記錄長度」的大事；<br>
+現代示波器動輒 8–128 Mpts，這個計算不再限制可行性，<br>
+但<strong>「記憶體夠不夠裝下整個規格定義窗」這個思考動作，現代依然救命</strong>（量 1 ms LTJ 時就回到這裡）。<br>
+<span style="color:#b91c1c">勘誤註記：原書此例寫 500 pt/cycle 與 50K samples——按它自己給的 50 ps/sample 與 10 ns 週期，正確是 200 pt/cycle、20K samples。方法完全正確，算式有筆誤，引用時留意（面試時能指出来是加分題）。</span>
+</div>
+
+<p>Ch.16 同時給了「專業軍火」選項：用<strong>調變域分析儀（modulation domain analyzer）或高精度頻率計數器</strong>，直接對指定時間窗求平均頻率。兩條路線的取捨：DSO 通用但記憶體會卡、且儀器本底 jitter 要先扣（Day 33 學過）；計數器精度極高但看不到波形細節。<em>現代補充：今日還多了相位雜訊分析儀與即時訊號分析儀（RSA），量相位抖動頻譜比 DSO 的週期 FFT 更直接。</em></p>
+
+<div class="card takeaway">
+  <span class="label">Ch.16 最重要的一句話（先驗央行）</span>
+  <p>原文大意：量測結果都是<strong>相對參考輸出而言</strong>；在判定任何輸出違反時脈精度規格之前，<strong>必須先量參考輸出（那顆 14.318 MHz 結晶本體）確保它自己在規格內</strong>——因為所有輸出都只是參考的倍數，會「直接反映參考的精度」。金融比喻：驗鈔之前先驗金庫。NB bring-up 實戰含意：全板十幾路 ppm 全部偏高 → 先查結晶負載電容/石英本體，不要十幾路個別修。</p>
+</div>
+
+<h2>4. 第二關：Cycle-to-Cycle Jitter——儀器門檻與五步程序</h2>
+
+<p>Ch.16 記錄了 2002 年前後的「軍備競賽」：過去 c2c jitter 用 8–10 Gsps 取樣示波器量就夠；規格收緊後，新門檻是「<strong>取樣示波器 ≥10 Gsps，且累積至少 100K 個週期</strong>」。書中算例：10 ns 週期 × 100K 週期 = 1 ms 波形，「至少需要 20 MB 記憶體」。</p>
+
+<div class="formula">
+100K 週期的記憶體帳：<br>
+100,000 週期 × 10 ns = 1 ms 資料窗<br>
+1 ms × 10 Gsps = 10 M 樣本（8-bit 單通道 ≈ 10 MB；原書寫 20 MB，<br>
+約為 16-bit 化或雙通道的規模——數量級一致，抓「資料窗 × 取樣率」這個動詞就好）<br>
+<br>
+為什麼要累積 100K 週期而不是 100 個？<br>
+→ c2c 規格是「最大偏差」；樣本太少，你量的永遠是「運氣好的 100 個」。統計上不飽和，FAIL 模式會漏抓。
+</div>
+
+<h3>4.1 Ch.16 的五步量測程序（以 TDSJIT3 為例，精神適用於任何 jitter 分析軟體）</h3>
+<ol>
+  <li>先讓畫面顯示幾個週期的波形（確認訊號正常、觸發穩定）</li>
+  <li>設定參考訊號，讓軟體正確判斷訊號位準（threshold 設錯＝整個量測作廢）</li>
+  <li>選通道、用 autoset 帶出 jitter 分析設定</li>
+  <li><strong>把記錄長度設到最大</strong>（書中範例機型為 32 Mpts——呼應上面的記憶體帳）</li>
+  <li>執行單次擷取，從統計結果列讀 c2c jitter（參數為「max + delta」與「max − delta」）</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">坑：取樣間隔 100 ps，怎麼量 125 ps 的 c2c？</span>
+  <p>10 Gsps 的即時取樣間隔是 100 ps——比規格值 125 ps 還粗！直接拿取樣點相減，解析度根本不夠。Ch.16 說的「取樣示波器」（sampling scope）指的是<strong>等效時間取樣＋內插</strong>：用成千上萬次重複取樣，把訊號「錯相位掃描」重建到 ps 級解析。<em>現代標準需上修：現代真實時間示波器（≥25 Gsps、正弦/內插重建）與專用 jitter 分析軟體已把這件事變尋常；但「取樣間隔 ≠ 時間解析度 ≠ 儀器本底 jitter，三者要分開追」的觀念永不过時（Day 33 三把尺的延伸）。</em></p>
+</div>
+
+<h2>5. 第三關：長期抖動 LTJ——延遲直方圖法（Ch.16 看家本領）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：跟時間赛跑的秒針</span>
+  <p>c2c jitter 是「相鄰兩步比」，LTJ 是「第 1 步與第 10,000 步比」。想像一支秒針，每一小步都很準（c2c 很好），但整支針被一根橡皮筋拉著慢慢飄：飄到 125 µs 後回頭看，第 N 圈的「12 點整」可能已經歪了 800 ps。量法很巧：先讓示波器「觸發後等 125 µs，在那個時刻附近畫邊沿直方圖」——等 125 µs，等於把「125 µs 累積的漂移」全數展現在那一個視窗裡。<strong>延遲多長，量到的就是多長時間的累積漂移</strong>——所以規格一定要附「@ 幾 µs」的條件，沒寫條件的 LTJ 數字毫無意義。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：LTJ 延遲直方圖法——「觸發後等 T，在延遲點畫直方圖」（PT2 Ch.16 USB/dot clock 程序圖解）</text>
+
+  <!-- Waveform panel -->
+  <rect x="30" y="50" width="840" height="180" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="50" y="75" font-size="12" font-weight="bold" fill="#0f4c5c">步驟 1–3：最大尺度 → 延遲觸發 T → 在延遲點放直方圖視窗</text>
+
+  <!-- clock waveform: trigger edge at x=120, delayed edges near x=760 -->
+  <path d="M60,200 L120,200 L120,120 L150,120 L150,200 L180,200 L180,120 L210,120 L210,200 L240,200 L240,120 L270,120 L270,200 L300,200 L300,120 L330,120 L330,200 L700,200" stroke="#2563eb" stroke-width="2" fill="none"/>
+  <!-- delayed cluster with jitter spread -->
+  <path d="M748,200 L748,120 L778,120 L778,200 L786,200 L786,120 L816,120 L816,200" stroke="#2563eb" stroke-width="2" fill="none" opacity="0.85"/>
+  <path d="M754,200 L754,120" stroke="#dc2626" stroke-width="1.2" opacity="0.6"/>
+  <path d="M761,200 L761,120" stroke="#dc2626" stroke-width="1.2" opacity="0.6"/>
+  <path d="M769,200 L769,120" stroke="#dc2626" stroke-width="1.2" opacity="0.6"/>
+  <path d="M775,200 L775,120" stroke="#dc2626" stroke-width="1.2" opacity="0.6"/>
+
+  <line x1="120" y1="105" x2="120" y2="215" stroke="#16a34a" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="120" y="98" text-anchor="middle" font-size="10" fill="#16a34a" font-weight="bold">觸發點 t₀</text>
+
+  <!-- delay arrow -->
+  <line x1="128" y1="222" x2="750" y2="222" stroke="#475569" stroke-width="1.5" marker-end="url(#arr37g)"/>
+  <text x="440" y="238" text-anchor="middle" font-size="11" fill="#475569">延遲觸發 T = 125 µs（USB 48 MHz）或 10 µs（dot clock 96 MHz）</text>
+
+  <!-- histogram window -->
+  <rect x="742" y="112" width="46" height="96" fill="#fef08a" opacity="0.35" stroke="#d97706" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <!-- histogram panel -->
+  <rect x="240" y="265" width="420" height="140" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="260" y="290" font-size="12" font-weight="bold" fill="#0f4c5c">步驟 4–5：觸發 &gt;10K～100K 次，讀直方圖 p-p</text>
+  <line x1="290" y1="385" x2="630" y2="385" stroke="#64748b" stroke-width="1"/>
+  <line x1="290" y1="385" x2="290" y2="300" stroke="#64748b" stroke-width="1"/>
+  <rect x="380" y="365" width="12" height="20" fill="#7c3aed" opacity="0.6"/>
+  <rect x="394" y="345" width="12" height="40" fill="#7c3aed" opacity="0.75"/>
+  <rect x="408" y="318" width="12" height="67" fill="#7c3aed" opacity="0.9"/>
+  <rect x="422" y="310" width="12" height="75" fill="#7c3aed" opacity="1"/>
+  <rect x="436" y="322" width="12" height="63" fill="#7c3aed" opacity="0.9"/>
+  <rect x="450" y="350" width="12" height="35" fill="#7c3aed" opacity="0.7"/>
+  <rect x="464" y="368" width="12" height="17" fill="#7c3aed" opacity="0.55"/>
+  <line x1="380" y1="398" x2="476" y2="398" stroke="#dc2626" stroke-width="2" marker-end="url(#arr37g)" marker-start="url(#arr37g)"/>
+  <text x="505" y="402" font-size="11" fill="#dc2626" font-weight="bold">p-p ＝ LTJ@T</text>
+  <text x="460" y="424" text-anchor="middle" font-size="10" fill="#475569">邊沿到達時刻直方圖（在延遲點）</text>
+</svg>
+<figcaption>圖 2：延遲直方圖法。Ch.16 的 USB 48 MHz LTJ 程序：最大尺度→延遲觸發 125 µs→視窗放延遲點→觸發超過 10K 週期→記錄 p-p；dot clock 96 MHz 版則延遲 10 µs、觸發超過 100K 週期。</figcaption>
+</figure>
+
+<h3>5.1 兩個書中實戰案例</h3>
+<p><strong>案例 A：USB 48 MHz 時脈。</strong>它是 USB 2.0 480 Mbps 序列連結的參考源。Ch.16 用 Tek TDS 694/7254 或 HP 54845A（探棒頻寬 ≥1.5 GHz）在時脈走線末端量 LTJ@125 µs；正常件如圖 16.18，失效件「<strong>遠大於 1 ns</strong>」（圖 16.19），後果是「USB 2.0 眼圖測試失敗、接上 PC 的裝置罷工」（圖 16.20）。<em>現代註記：USB 2.0 的 48 MHz 參考時脈在現代 NB 上依然存在，這條驗證仍然活著；USB3+ 則把問題交給內嵌時鐘與 SRIS，概念升級、方法同宗。</em></p>
+
+<p><strong>案例 B：96 MHz dot clock → 螢幕波紋。</strong>Ch.16 這裡有一整段「規格轉譯」示範，值得逐句讀：</p>
+<ol>
+  <li>VESA 視訊信號標準（Version 1, Rev. 1）規定：在 VGA 連接器上量 hsync，累積 <strong>100,000 個上升沿週期樣本</strong>（邊沿定義為穿越 1.5 V），最大值減最小值得 p-p，<strong>再除以 2</strong> 才是規格比較值（規格本質是「peak」）</li>
+  <li>當時最高解析率 1600×1200@85 Hz 對應 hsync 允許 jitter 上限 <strong>650 ps</strong>，換言之 LTJ（÷2 之前）=<strong>1.3 ns</strong>；該解析率下 hsync 頻率 106.3 kHz</li>
+  <li>書中實驗驗證：<strong>hsync 上的 cycle-to-cycle jitter，與 dot clock 上「一段等於 hsync 週期的時間」的長期抖動直接相關</strong>——所以把 LTJ 量測窗取 10 µs（約一個 hsync 週期，書中寫延遲 9.65 µs，取 10 µs 簡化並留 margin）</li>
+  <li>失效件實測 LTJ@10 µs ≈ 2 ns → 直接對應 VESA 判定約 2 ns 違規 → 「不只 FAIL，CRT 螢幕還會出現波紋雜訊」</li>
+</ol>
+<div class="card takeaway">
+  <span class="label">這段案例教你的通用招數</span>
+  <p>當用戶端規格（VESA hsync）和你手上的訊號（dot clock）不是同一個東西時：<strong>找到兩者的傳導機制（PLL/分頻器），把規格窗「翻譯」回你量得到的訊號上的等效條件</strong>（100K 樣本 → LTJ@10 µs）。這個「規格轉譯」能力正是 Apple/Google 面試裡「你怎麼驗證一個你沒有定義權的介面」的標準答法。<em>現代版翻譯：VGA/dot clock 已退役，但同樣的招用在「eDP 參考時脈 → 面板 timing 規格」、「sensor MCLK → 幀同步規格」上一字不改。</em></p>
+</div>
+
+<h2>6. 第四關：jitter 頻譜——對週期序列做 FFT，讓耦合源現形</h2>
+
+<div class="card intuition">
+  <span class="label">白話版：聽診器抓內鬼</span>
+  <p>示波器看波形只能告訴你「這個人發燒了」；jitter 頻譜是「血液報告」——它能告訴你發燒是因為哪種病毒。做法：把每一週期的週期長度依序記下来（一長串數字），對這串數字做 FFT。如果 jitter 是電源開關耦合來的，頻譜上就會在 2 MHz 處豎一根针；如果是隔壁 33 MHz PCI 輸出耦合過來的，就在 33 MHz 處豎一根針。針的位置就是嫌犯的名單。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：週期序列 FFT 的 jitter 頻譜（數據取自 PT2 Ch.16 圖 16.13/16.14 實例）＋ PLL 通過帶判讀</text>
+
+  <!-- axes -->
+  <line x1="90" y1="340" x2="850" y2="340" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="90" y1="340" x2="90" y2="70" stroke="#64748b" stroke-width="1.5"/>
+  <text x="470" y="368" text-anchor="middle" font-size="11" fill="#374151">偏移頻率（DC → 50 MHz）</text>
+  <text x="60" y="205" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 60 205)">jitter 分量（fs rms）</text>
+
+  <!-- ticks: linear 0..50 MHz mapping x=90..850 => 15.2 px per MHz -->
+  <g font-size="10" fill="#64748b" text-anchor="middle">
+    <text x="90" y="355">0</text>
+    <text x="232" y="355">10</text>
+    <text x="384" y="355">20（此處為示意刻度）</text>
+    <text x="536" y="355">30</text>
+    <text x="688" y="355">40</text>
+    <text x="840" y="355">50 MHz</text>
+  </g>
+
+  <!-- PLL loop bandwidth band 7..22 MHz: x = 90+15.2*f -->
+  <rect x="196" y="70" width="228" height="270" fill="#fbbf24" opacity="0.18"/>
+  <line x1="196" y1="70" x2="196" y2="340" stroke="#b45309" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <line x1="424" y1="70" x2="424" y2="340" stroke="#b45309" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="310" y="88" text-anchor="middle" font-size="11" font-weight="bold" fill="#92400e">PCIe 發送端 PLL 迴路頻寬</text>
+  <text x="310" y="103" text-anchor="middle" font-size="10" fill="#92400e">典型 7–22 MHz（Ch.16）</text>
+  <text x="310" y="330" text-anchor="middle" font-size="10" fill="#92400e">此帶內（及其以下）的 jitter → 被 PLL 通過並 ×N 放大進輸出</text>
+
+  <!-- spurs -->
+  <line x1="145" y1="340" x2="145" y2="150" stroke="#dc2626" stroke-width="3"/>
+  <text x="145" y="140" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">3.592 MHz</text>
+  <text x="145" y="126" text-anchor="middle" font-size="9" fill="#dc2626">236.7 fs rms（書中實測）</text>
+
+  <line x1="300" y1="340" x2="300" y2="168" stroke="#dc2626" stroke-width="3"/>
+  <text x="300" y="158" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">13.83 MHz</text>
+  <text x="300" y="144" text-anchor="middle" font-size="9" fill="#dc2626">170.7 fs rms（書中實測）</text>
+
+  <line x1="592" y1="340" x2="592" y2="118" stroke="#9333ea" stroke-width="3"/>
+  <text x="592" y="108" text-anchor="middle" font-size="10" font-weight="bold" fill="#6b21a8">33 MHz</text>
+  <text x="592" y="94" text-anchor="middle" font-size="9" fill="#6b21a8">＝時脈產生器上 33 MHz PCI 輸出的耦合（Ch.16 圖 16.13  diagnosis）</text>
+
+  <!-- noise floor -->
+  <path d="M95,332 L140,333 L200,331 L260,333 L340,332 L420,333 L520,332 L640,333 L760,332 L845,333" stroke="#94a3b8" stroke-width="1.2" fill="none"/>
+  <text x="760" y="322" font-size="9" fill="#64748b">寬頻底噪</text>
+
+  <!-- legend box -->
+  <rect x="90" y="385" width="760" height="44" rx="8" fill="#0b1220"/>
+  <text x="105" y="404" font-size="10" fill="#e2e8f0">判讀法則：spur 落在 PLL 通過帶內（≤~22 MHz）→ 會被倍頻進 2.5 GT/s 序列輸出、直接啃 PCIe 眼圖；</text>
+  <text x="105" y="421" font-size="10" fill="#e2e8f0">落在迴路頻寬之外的高頻分量會被 PLL 濾除，但仍是「耦合路徑存在」的證據，該修還是要修。</text>
+</svg>
+<figcaption>圖 3：Ch.16 的殺手鐧：先抓大量週期（書例擷取 1.6 ms、即 100 MHz 的 160,000 個週期，trigger 前後各 800 µs），再對週期序列做 FFT。33 MHz spur 當場供出「隔壁 PCI 輸出耦合」的內鬼；放大後還看到 3.592 MHz 與 13.83 MHz 兩根針。</figcaption>
+</figure>
+
+<p>Ch.16 的重點敘述：因為 SRC 時脈餵的是下游 PLL，所以「頻譜（相位雜訊）」比單一數字更重要；<strong>低於發送端 PLL 迴路頻寬（書中給 PCIe SERDES 典型 7–22 MHz）的 jitter 分量會被 PLL 直接通過並倍頻放大</strong>，高於它的才會被濾掉。書中給了震撼彈對照：同一支 1.25 Gbps SERDES，用乾淨時脈產生器當參考，輸出峰值抖動 <strong>95 ps</strong>；換成約 200 ps c2c 的髒時脈，輸出抖動變 <strong>342 ps</strong>——參考源的髒，幾乎原封不動「過戶」給序列輸出。</p>
+
+<div class="formula">
+SERDES 對參考時脈的兩本帳（Ch.16）：<br>
+<br>
+帳一【時間帳】：輸出 jitter ≈ max(參考時脈在 PLL 頻寬內的 jitter × N, PLL 自身噪聲)<br>
+　→ 頻寬內髒，全額轉嫁；頻寬外髒，PLL 幫你擋<br>
+<br>
+帳二【頻率帳】：發送端與接收端參考時脈的頻差必須 ≤ ±300 ppm，<br>
+　否則接收端 CDR 追不上、無法還原資料；<br>
+　展頻 SSC 可達 0.5% → 兩端必須「共享同一顆央行」——<br>
+　所以 PCIe 連接器規範規定 REFCLK 要跟著序列資料一起過連接器（共 0 ppm），<br>
+　書中的拓撲圖：時脈產生器做約 8 份 100 MHz 拷貝，root complex 一份、每個端點各一份。<br>
+<br>
+白話翻譯：高速序列連結的兩端不是「各自對錶」就好，而是要「同一隻手錶分身」——<br>
+分身之間還約定好一起慢慢變慢（down-spread），誰也不能自己亂走。
+</div>
+
+<p><em>現代標準需上修：PCIe 已走到 Gen5/Gen6（32/64 GT/s），REFCLK 仍是 100 MHz 差動（HCSL 等電平）、±300 ppm 與 −0.5% down-spread 仍是主流程；但 jitter 預算從 ps 級收到 sub-ps rms 級，且多了 SRIS/SRNS 等替代時脈架構。Ch.13 的 PLL 傳遞函數觀念（jitter transfer 高通/低通）比任何一代的數字更耐 old。</em></p>
+
+<h2>7. 第五關：系統級驗證——合規負載板與 RT-Eye</h2>
+
+<p>Ch.16 的最後一哩：元件級規格全過，不等於系統過。「<strong>最好的評估方式是用真實時脈、真實連接器、真實走線，量主機板上 SERDES 的實際表現</strong>。」書中 PCIe Gen1 流程：</p>
+<ol>
+  <li>把 <strong>PCIe 合規負載板</strong>插進主機板 PCIe 連接器，它把序列訊號（2.5 Gbaud）引到 SMA 接頭，接上示波器形成 50 Ω 終端</li>
+  <li>PHY 感應到終端後喚醒、發連線請求；沒收到回應 → 判定「對面是測試儀器」→ <strong>自動改發合規測試圖樣（compliance pattern）</strong>——這個「儀器自報家門」機制讓你不用寫驅動就能抓到 DUT 吐出的標準圖型</li>
+  <li>RT-Eye 軟體用<strong>時鐘回復（clock recovery）</strong>從圖樣重建眼圖，比對 PCIe 規格眼遮罩；發送端/接收端各有一套規格與遮罩</li>
+  <li>畫眼時只取 <strong>3500 個連續 UI 的中間 250 UI</strong>——刻意避開 SSC 調變的影響（SSC 會讓眼圖整體左右爬，取中段等效於「關展頻」評估）</li>
+</ol>
+
+<p>Ch.16 的合規結果表（表 16.2，2004 年 3 月 18 日的機台輸出，照錄重點欄位）：</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">量測項目</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">實測值</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">規格界</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">與 SRC 時脈的關係</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">Eye Width（min）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">363.65 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">≥ 280 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">被參考時脈 jitter 直接啃——Ch.16 明言受 SRC 影響的三項之一</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">tIE jitter（max/min）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">10.755 / −25.593 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">±60 ps（=0.15 UI，UI=400 ps）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">TIE＝邊沿交叉點相對平均 UI 的偏移，就是 Day 35 bathtub 的原料</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">Unit Interval（mean）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">400.00 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">399.88 – 400.12 ps（±300 ppm）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">400 ps × 300 ppm = <strong>0.12 ps</strong>——ppm 帳要會換算成 ps 才看得懂規格</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">Eye Height（transition bits, min）</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">819.84 mV</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">≥ 800 mV</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">邊沿位元的眼高最吃 tR/tF——邊緣人（819.84 vs 800）就是 margin review 的焦点</td>
+</tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">坑：SSC 開著做眼圖/週期判定</span>
+  <p>Ch.16 特別註明：unit interval 規格是在「<strong>未開展頻</strong>」下量的——因為開了 −0.5% down-spread，序列上的 UI 會比不開時高 0.5%。同理，週期規格 tPERIOD 與 tPERIODSS 是兩扇不一樣的門（上限 10.003 ns vs 10.05327 ns，Ch.16 表 16.1）。<strong>判 PASS/FAIL 之前，先確認當時 SSC 開不開</strong>，否則合法的展頻低點會被你判成超標、超標的 ppm 又可能被展頻掩護蒙混過關。面試講出這個坑＝做過量測的人。</p>
+</div>
+
+<h2>8. 實務案例連結</h2>
+
+<h3>8.1 NB 主機板（你的本行，換個身份重看）</h3>
+<ul>
+  <li><strong>bring-up checklist 重構：</strong>以前你量時脈可能「看有波形、頻率對」就收工。Ch.16 的完整清單：參考結晶先驗 → 逐腳五關（週期 ppm、c2c、tR/tF 用規格窗、duty、LTJ@指定延遲）→ SRC 再加 jitter 頻譜 → 系統級再合規眼圖。下次 FA 會議上你可以直接問：「這板的 LTJ@T 有資料嗎？SSC 狀態？」——這就是從「修板的人」升級成「定義驗證的人」。</li>
+  <li><strong>spur 排查實戰：</strong>NB 上常見 jitter spur 嫌犯名單：DC-DC 切換頻率（數百 kHz～數 MHz）、風扇 PWM、33 MHz 週邊耦合（書中實錄）、顯示相關時脈倍頻 leftovers。先 FFT 定位、再「關掉嫌疑源交叉驗證」。</li>
+</ul>
+
+<h3>8.2 鏡頭模組（把 Ch.16 翻譯成 camera 語言）</h3>
+<ul>
+  <li><strong>sensor 主頻（典型 24 MHz 等級，約值）就是一颗「微型央行」：</strong>它倍頻進 MIPI D-PHY HS 發送端的 SERDES——和 Ch.16 的 125 MHz → 2.5 Gbps 完全同構。MCLK 上的spur（來自查鏡 VCM 驅動、DC-DC）若落在發送 PLL 通過帶內，會直接糊掉 MIPI HS 眼圖（週 13 會正式收帳）。<strong>「參考源髒 200 ps → 輸出 342 ps vs 乾淨 95 ps」的對照實驗，就是鏡頭模組時脈供源選型的論證模板。</strong></li>
+  <li><strong>多攝同步：</strong>多顆 sensor 共同時脈/同步訊號的 skew 預算，本質就是 Ch.16 的 tSKEW（100 ps）問題在系統層的放大版——央行分發的分身對不齐，融合影像就會錯幀。</li>
+  <li><strong>LTJ 延遲直方圖法直接可用：</strong>量 sensor 時脈在 10 µs/125 µs 延遲的 LTJ，預測它對下游 PLL 的污染——不需要昂貴相位雜訊儀，公司示波器就能做（下週可排進實作）。</li>
+</ul>
+
+<h2>9. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：記憶體深度計算（白板題）</strong>——量 100 MHz SRC 的 1 µs 平均週期，示波器取樣率 25 Gsps、8-bit。需要多少樣本？若機器記錄長度只有 8 Kpts 怎麼辦？</summary>
+<div class="answer">
+<p>25 Gsps → 取樣間隔 40 ps；週期 10 ns → 每週期 10/0.04 = 250 點。1 µs = 100 週期 → 250 × 100 = <strong>25,000 樣本 ≈ 25 KB</strong>。8 Kpts 的機器裝不下整個 1 µs 窗。</p>
+<p><strong>對策排序：</strong>① 降取樣率到 8 Kpts 能裝下 1 µs 的程度（8 Kpt ÷ 1 µs = 8 Gsps → 每週期 80 點，對「求平均週期」尚可接受）——注意降取樣率會劣化<strong>單週期邊沿細節</strong>但對「平均頻率」影響較小，因為平均靠的是窗內週期計數；② 改用頻率計數器/調變域分析儀（Ch.16 的備援路線）；③ 分段擷取再合統計——但要確認規格定義允許（規格說「任何 1 µs 窗內平均」，跨段拼接可能違反定義，嚴謹場合不可自行放寬）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：解析度三把尺</strong>——tCCJ 規格 125 ps。同事用 10 Gsps 即時取樣「直接量到 40 ps c2c」就報 PASS。你哪裡要質疑？</summary>
+<div class="answer">
+<p>三層質疑：</p>
+<p>① <strong>取樣間隔 vs 解析度：</strong>10 Gsps 間隔 100 ps，若只做「取樣點找邊沿再相減」，量化誤差就有 ±100 ps 等級，40 ps 的讀數可能是內插曲線給的假精確。必須確認儀器做了什麼內插（sine interpolation 對抖動量測的偏差）、或改用等效時間取樣模式。</p>
+<p>② <strong>儀器本底：</strong>示波器自己的 jitter（Day 33 學過要查規格表/自校）若接近 40 ps，扣除後真實值可能所剩無幾——儀器比待測物還髒。</p>
+<p>③ <strong>統計飽和度：</strong>Ch.16 门槛是累積 ≥100K 週期。若只抓了幾千個週期，「max」永遠是運氣值；規格抓的是最壞情況的尾。</p>
+<p>正確的質疑句式（面試可用）：「What is the instrument's own jitter floor, what interpolation is used, and how many cycles were captured?」</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：spur 診斷</strong>——SRC 100 MHz 的週期 FFT 出現 2 MHz 與 33 MHz 兩根 spur。下游 PCIe 發送 PLL 迴路頻寬 7–22 MHz。問：(a) 哪根更可能傷到序列輸出？(b) 兩根分別最可能的來源？(c) 怎麼驗證？</summary>
+<div class="answer">
+<p>(a) <strong>2 MHz 那根。</strong>它在 PLL 迴路頻寬以下——會被參考時脈路徑「全額通過」並被倍頻（Ch.16：低於迴路頻寬的分量被 PLL 通過/跟隨進輸出）；33 MHz 高於 22 MHz，大部分被發送端 PLL 抑制（但接近邊界時仍有洩漏，且仍是耦合路徑存在的證據，不容忽視）。</p>
+<p>(b) 2 MHz：典型嫌犯是<strong>切換電源</strong>（該路電源軌的 buck 開關頻率或其諧波）或馬達/VCM 驅動；33 MHz：Ch.16 圖 16.13 的實錄答案——<strong>時脈產生器上相鄰的 33 MHz PCI 輸出腳耦合</strong>。</p>
+<p>(c) 交叉驗證法：① 頻譜針頻率去對「嫌疑源規格書上的開關頻率」；② 把嫌疑源關掉/換電池供電，看針有沒有消失或下降；③ 改探棒點位/加地彈簧排除探棒 pickup 造成的假針（Ch.11/Day 36 的地線課）。根因確認後對策：電源軌濾波、時脈腳隔走線/加護城、選 spur 更低的 LDO 給時脈產生器。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：ppm 與 SSC 視窗判讀</strong>——Ch.16 表 16.1：tPERIOD 視窗 9.997001–10.003 ns；tPERIODSS 上限 10.05327 ns。(a) ±上限換算成 ppm？(b) SSC 版上限比標準版多了百分之幾？(c) 你量得平均週期 10.0035 ns，SSC 狀態未知，怎麼下結論？</summary>
+<div class="answer">
+<p>(a) (10.003 − 10)/10 = +300 ppm；(9.997001 − 10)/10 ≈ −299.99 ppm ≈ −300 ppm。與 LACC ≤300 ppm 自洽。</p>
+<p>(b) 10.05327 / 10.003 = 1.00502… → 在 +300 ppm 上限之上再放宽<strong>約 0.5%</strong>——對應 down-spread SSC 把「最慢的瞬間」拉長（展頻向下調變頻率＝週期變長），與 Ch.16「SSC 調變可達 0.5%」的敘述吻合。</p>
+<p>(c) 10.0035 ns → +350 ppm：關 SSC 時<strong>超標</strong>；開 SSC 時「瞬間週期」合法到 10.05327 ns，看似合法——但注意 SSC 的展頻是<strong>週期性調變（典型 30–33 kHz 級三角波，約值）</strong>，你要看的是「調變中樞」有沒有偏走，而不是在展頻谷底抓一個合法的長週期當免死金牌。結論：先確認 SSC 狀態與調變頻率，再決定拿哪扇門（tPERIOD 或 tPERIODSS）判，並且看調變包絡的中心頻率是否仍在 ±300 ppm。判錯門，就等於拿平均身高通過體檢。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：規格轉譯（VESA → LTJ）</strong>——依 Ch.16：hsync 規格為「100K 週期樣本 p-p ÷ 2 ≤ 650 ps」；dot clock 的 LTJ 量測窗取 10 µs。若你量得 LTJ@10 µs 直方圖 p-p = 1.05 ns，過不過？若 p-p = 1.4 ns 呢？另外，為什麼量測延遲要取「一個 hsync 週期」左右？</summary>
+<div class="answer">
+<p>換算基準：LTJ p-p 的合格邊界 = 650 ps × 2 = <strong>1.3 ns</strong>（因為規格把 p-p ÷ 2 當 peak 比較值）。</p>
+<ul>
+  <li>p-p = 1.05 ns → peak = 525 ps &lt; 650 ps → <strong>PASS</strong>，margin = 125 ps（約 19%）</li>
+  <li>p-p = 1.4 ns → peak = 700 ps &gt; 650 ps → <strong>FAIL</strong>（對應書中失效件 ~2 ns 那個腳本：hsync 端 VESA 判定也會同步超標，並出現螢幕波紋）</li>
+</ul>
+<p>延遲取一個 hsync 週期的原因：Ch.16 實驗驗證「hsync 上的 c2c jitter ＝ dot clock 上『一段等於 hsync 週期的時間』的長期抖動」。LTJ 的定義窗必須對齊「下游受害者的積分窗」——hsync 是每 106.3 kHz 重生一次邊沿，它把 dot clock 的漂移「累積一個 hsync 週期」後一次表現出來。<strong>延遲窗要對齊受害機制，不是随便選整數。</strong></p>
+</div>
+</details>
+
+<h2>10. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目 + 參考答案</span>
+  <p><strong>Question 1: "A customer asks you: how do you validate the clock tree on a laptop motherboard? Walk me through your plan."</strong><br><br>
+  <strong>Reference answer:</strong> I'd structure it bottom-up. First, verify the reference itself—the crystal feeding the clock generator—because every output is just a multiple of it; if the master is off-spec, chasing individual outputs is wasted effort. Then, per output, validate the critical AC specs: period/clock accuracy in ppm (averaged over the spec-defined window, e.g. 1 µs, captured entirely in scope memory or measured with a frequency counter), cycle-to-cycle jitter (accumulate at least ~100K cycles on a ≥10 Gsps-class sampler, mind the instrument's own jitter floor), rise/fall time and duty cycle—each measured exactly at the thresholds and voltage windows the spec defines, not whatever the scope defaults to. For reference clocks that feed downstream PLLs (PCIe/SATA 100 MHz, USB 48 MHz), add long-term jitter using the delayed-trigger histogram method at the spec delay, and a jitter spectrum—FFT of the period record—to expose spurs and couple-insiders like switching supplies or adjacent PCI outputs. Finally, close the loop at system level with a compliance load board and clock-recovery eye-mask testing on the actual SERDES link, with SSC state controlled and documented.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "Why does jitter on a 100 MHz PCIe reference clock below the TX PLL's loop bandwidth matter more than jitter far above it?"</strong><br><br>
+  <strong>Reference answer:</strong> Because of the transfer function between reference and output. A TX PLL multiplies the reference up to the serial rate (in the book's era, 125 MHz to 2.5 Gbps). Within its loop bandwidth—typically 7 to 22 MHz for a PCIe SERDES—the PLL tracks the reference, so reference jitter at those offsets passes through and gets multiplied into the serial stream; jitter far above the loop bandwidth is filtered. That means a reference that looks acceptable on a wideband number can still poison the output if its in-band content is bad: the book measured the same SERDES with a clean reference showing ~95 ps of output jitter, versus ~342 ps with a jittery reference. The practical consequence: you must look at the jitter <em>spectrum</em> (FFT of period data, or phase-noise analyzer), not just total jitter, and fix in-band spurs at the source—power-supply rejection, coupling paths. Frequency-domain accuracy also can't be ignored: Tx and Rx references must stay within ~300 ppm, and with 0.5% spread-spectrum modulation, the connector spec requires the reference clock to travel with the data—sharing one master guarantees zero ppm difference between link ends.</p>
+  </p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「驗證的第一原則是先把儀器和參考源變成可信的，再談待測物」（先驗央行＋儀器本底扣除）；「規格怎麼定義測量點與窗，我就怎麼量，SSC 狀態也要記錄進量測條件」；「jitter 要看頻譜，總數合格的時脈可能在 PLL 通過帶內藏著一根殺手 spur」。這三句在 Camera HW EE 面試的「describe your validation methodology」類問題上通用。</p>
+</div>
+
+<h2>11. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：主機板時脈的關鍵 AC 規格有哪五項？LTJ 屬於哪一關？（PT2 Ch.16）</p>
+  <p class="a">A1：①週期/時脈精度（ppm）②cycle-to-cycle jitter ③上升時間 ④下降時間 ⑤duty cycle（依 Intel Yellow Book，Ch.16 原文列舉）。另外對餵下游 PLL 的參考時脈（SRC/USB clock）要加驗<strong>長期抖動 LTJ</strong>（@指定延遲）與 <strong>jitter 頻譜/相位雜訊</strong>。</p>
+
+  <p class="q">Q2：量「1 µs 平均週期」對儀器的基本要求是什麼？Ch.16 的例子算出來要多少記憶體？</p>
+  <p class="a">A2：必須把<strong>整個 1 µs 窗完整存進記憶體</strong>（平均的定義使然）。100 MHz、20 Gsps → 每週期 200 點 × 100 週期 = 20K 樣本（8-bit ≈ 20 KB；原書此例算式有筆誤，寫 500 pt/50K samples）。備援路線：頻率計數器或調變域分析儀。</p>
+
+  <p class="q">Q3：Ch.16 判定 c2c jitter 合格的儀器門檻（2002 版）？現代視角要補什麼？</p>
+  <p class="a">A3：取樣示波器 ≥10 Gsps + 累積 ≥100K 週期（10 ns 週期 → 至少 20 MB，書中值）。現代補三刀：①儀器本底 jitter 要先扣；②取樣間隔 ≠ 時間解析度，確認內插方式；③現代機種 25 Gsps+/專用 jitter app 已常態化，嚴格場合用相位雜訊分析儀。</p>
+
+  <p class="q">Q4：LTJ「延遲直方圖法」五步？書中兩個案例的延遲窗各是多少、為什麼？</p>
+  <p class="a">A4：最大尺度 → 設延遲觸發 T → 直方圖視窗放延遲點 → 觸發 &gt;10K～100K 次 → 讀 p-p 即 LTJ@T。USB 48 MHz：T = 125 µs（USB2.0 眼圖受害窗）；dot clock 96 MHz：T = 10 µs（對齊一個 hsync 週期≈9.65 µs，書中實驗驗證 hsync c2c 抖動 = dot clock 該窗 LTJ）。規格窗必須對齊「下游積分機制」。</p>
+
+  <p class="q">Q5：為什麼 PCIe REFCLK 要跟著資料一起過連接器？PLL 迴路頻寬（7–22 MHz）在 jitter 帳裡是什麼角色？</p>
+  <p class="a">A5：SERDES 兩端時脈差必須 ≤±300 ppm，而 SSC 可調變達 0.5%——只有「同一顆央行分身」（REFCLK 過連接器）才能保證兩端 0 ppm。PLL 頻寬角色：低於迴路頻寬的參考 jitter 被 PLL 跟隨/通過並 ×N 進輸出（實例：髒參考 ~200 ps c2c → 輸出 342 ps，乾淨時 95 ps）；高於頻寬的被濾除。所以要驗「頻譜」不只驗總數。</p>
+</div>
+
+<h2>12. 明日預告</h2>
+
+<p><strong>Day 38（週日・Phase 1 畢業考）：</strong>六週 SI 修業總驗收——20 題跨域自我測驗（傳輸線/反射/端接 → TDR/stub → 串擾/差動 → 損耗/眼圖/jitter → 探棒/S 參數/bathtub/時脈驗證），含 3 道「圖示判讀題」與 2 道「面試實戰情境題」。今晚先把 Day 3/10/17/24/31 五回測驗的錯題掃一遍，明天關掉所有筆記作答。通過線：16/20。週一（Day 39）進入 Phase 2 電源完整性：PDN——為什麼電源會塌、target impedance、以 NB 多電源域做電源樹分析。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

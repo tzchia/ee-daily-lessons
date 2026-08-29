@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 38｜Phase 1 畢業考——20 題 SI 跨域自我測驗（六週總驗收）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 1：訊號完整性基礎｜第 6 週・第 38 天（週日複習日・Phase 1 畢業考）</div>
+  <h1>Day 38：Phase 1 畢業考——20 題 SI 跨域自我測驗</h1>
+  <div class="meta">2026-08-30（日）｜預估時間：90 分鐘（作答 55 分＋對詳解 35 分）｜範圍：Day 1–37 全部（訊號本質 → 傳輸線/端接 → TDR/via/回流 → 串擾/差動 → 損耗/眼圖/jitter → 探棒/示波器/S 參數/bathtub/時脈驗證）｜通過線：16/20</div>
+</header>
+
+<div class="card goal">
+  <span class="label">考試規則（六週修業，今天結帳）</span>
+  <p>這是 Phase 1 的畢業考，也是你未来面試前最值得「實體模擬」的一次：20 題照真實面試的混合比例出——觀念、計算、圖示判讀（3 題）、面試實戰情境（2 題英文）、Perfect Timing II 貫穿（2 題）。範圍橫跨六週，但題目全部重組過，<strong>背不下來的只有「真的懂」</strong>。規則：</p>
+  <ol>
+    <li><strong>關掉所有筆記與 Anki</strong>，拿紙筆作答。先刷五回測驗（Day 3/10/17/24/31）的錯題清單可以，開卷不算數</li>
+    <li>每題 1 分；計分標準是「<strong>詳解裡的粗體重點你都有講到</strong>」，不是「覺得自己會」</li>
+    <li>計算題一律手算，計算機只用来驗算——面試白板前沒有計算機</li>
+    <li>判讀題（Q13–Q15）先寫出「我看到什麼 → 我推斷什麼 → 我下一步做什麼」三段，再展開詳解</li>
+    <li>錯的題目的對應課（詳解末標出處）列入下週睡前重讀清單——Phase 2 的 PI/EMI 全部蓋在這份地基上</li>
+  </ol>
+</div>
+
+<div class="card intuition">
+  <span class="label">六週六句靈魂，先默背再開考</span>
+  <p>週一：「<strong>數位訊號是類比的</strong>——資訊藏在邊沿裡，邊沿的速度決定你要不要把線當線。」週二：「<strong>Z₀ 是行進中的電壓電流比，不是電阻</strong>——失配必反射，端接是決定反射去哪裡、花多少功率的藝術。」週三：「<strong>每段不連續都有指紋與位置</strong>——TDR 把距離畫在時間軸上；via、stub、回流破洞是高速路殺手三兄弟。」週四：「<strong>串擾是鄰道的利息</strong>——NEXT 會飽和封頂、FEXT 隨長度線性滾雪球；間距花的是版面，省的是噪聲預算。」週五：「<strong>通道抽兩種稅（銅 √f、板材 f），後果全寫在眼睛上</strong>——眼圖是統計圖，jitter 要分科記帳：DJ 直加、RJ 取 RSS 再 ×14σ。」週六：「<strong>先讓儀器和參考源自證清白，再審待測物</strong>——探棒是電路、示波器有底噪、規格怎麼定義你就怎麼量。」這六句就是考卷的地圖。</p>
+</div>
+
+<h2>0. 考前 3 分鐘速查表（作答時請蓋住）</h2>
+<table>
+  <tr><th>公式 / 數字</th><th>意義</th><th>出處</th></tr>
+  <tr><td>f<sub>max</sub> ≈ 0.35/t_r；v ≈ 15 cm/ns（εr≈4.3，即 ~6 in/ns）；線長 &gt; λ/6（或 T_D &gt; t_r/6）→ 傳輸線</td><td>邊沿決定頻寬；電長度判準</td><td>Day 1–3</td></tr>
+  <tr><td>Z₀ = √(L′/C′)；Γ = (Z<sub>L</sub>−Z₀)/(Z₀+Z<sub>L</sub>)；串接端接電阻靠<strong>驅動端</strong>；並聯 50 Ω @1.8 V ≈ 65 mW/條</td><td>特性阻抗、反射、端接四法</td><td>Day 4–10</td></tr>
+  <tr><td>TDR 距離 d = v·Δt/2；stub λ/4 陷波 f = v/(4ℓ<sub>stub</sub>)；回流 via 緊貼訊號 via</td><td>TDR 讀法、via 三病、回流路徑（PT2 Ch.6）</td><td>Day 11–17</td></tr>
+  <tr><td>L<sub>sat</sub> = v·t_r/2（1 ns → 7.5 cm）；NEXT 飽和封頂（只更寬不更高）、FEXT 隨長度線性滾；3W 起點</td><td>串擾兩種性格與間距設計</td><td>Day 18–24</td></tr>
+  <tr><td>δ ≈ 66 µm/√f(MHz)；α<sub>cond</sub> ≈ 0.47·√f(GHz) dB/10cm、α<sub>diel</sub> ≈ 0.32·f(GHz) dB/10cm；TJ = DJ<sub>pp</sub> + 14×RJ<sub>rms</sub></td><td>兩種稅、眼圖、jitter 記帳（PT2 Ch.4）</td><td>Day 25–31</td></tr>
+  <tr><td>σ<sub>訊號</sub> = √(σ²<sub>讀</sub>−σ²<sub>儀器</sub>)（1/3 規則）；BW ≥ 3×（PT2 底線）～5×（行規）訊號頻率；d(BR) → S 參數；LTJ 延遲直方圖法；SRC ±300 ppm / c2c 125 ps</td><td>量測週武器庫（PT2 Ch.11/16）</td><td>Day 32–37</td></tr>
+</table>
+
+<h2>Part A｜觀念題（Q1–Q6，每週一題＋收官題）</h2>
+
+<p><strong>Q1.［週 1］訊號的本質：</strong>(a) 「數位訊號其實是類比的」——用頻譜的語言講精確：一個 100 MHz 時脈、t_r = 500 ps 的方波，它的「用處」集中在哪個頻段？誰決定？(b) 為什麼判「要不要當傳輸線」用 t_r 不用時脈頻率？舉一個「頻率很低但必須當傳輸線」的例子。(c) 兩條等價判準（λ/6 與 T_D vs t_r/6）各自的變數是什麼？它們是同一件事嗎？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 方波 = 基頻＋諧波的堆疊，但<strong>能量與資訊的九成以上装在 t_r 決定的頻段裡</strong>：f<sub>max</sub> ≈ 0.35/t_r = 700 MHz（10-90% 定義，約值）。100 MHz 基頻只是「節奏」，500 ps 邊沿才是「字跡」——通道只要在 700 MHz 內別把字跡磨糊，資料就讀得出來。（PT2 Ch.1 的核心世界觀就是「階躍的頻寬由邊沿決定，與重複率無關」。）(b) 因為<strong>邊沿才是高頻內容的載體</strong>：線是否「電氣上長」取決於邊沿在線上停留的空間長度 ℓ_edge = v·t_r，與邊沿重複的頻率無關。例子：<strong>100 kHz 的 PWM 風扇控制？不必。但 100 kHz 的快邊沿閘控訊號（t_r = 1 ns，走 10 cm）</strong>——t_r/6 判準：v·t_r/6 = 2.5 cm &lt; 10 cm → 必須當傳輸線，慢重複率救不了快邊沿（週 1 的「慢時脈快邊沿」反例）。(c) λ/6 判準的變數是「線上波长」λ = v/f<sub>max</sub>；T_D &gt; t_r/6 判準的變數是「單程延遲 vs 邊沿時間」——把 f<sub>max</sub> ≈ 0.35/t_r 代入 λ/6，兩式只差一個係數（0.35×6 ≈ 2 → v·t_r/6 ≈ v/(6f)），<strong>是同一件事的頻域/時域兩副面孔</strong>（Day 1–4）。</p>
+</details>
+
+<p><strong>Q2.［週 2］Z₀ 與端接：</strong>(a) 為什麼說「Z₀ 不是電阻」？用「無限長線Thought Experiment」與功率兩句話說明，並寫出 Z₀ 的构造公式。(b) Γ 公式寫出來：開路、短路、匹配三者的 Γ 與反射電壓各是多少？(c) 串接／並聯／Thevenin／AC 四種端接，各一行原理＋一行代價。(d) 串接端接的電阻為什麼必須貼驅動端、放接收端前面就失效？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>Z₀ = √(L′/C′)</strong>——單位電感的電磁延遲與單位電容的充電位移達成動態平衡時，「行進波看到的 V/I 比」（週 2 階梯模型：第一階段的 V/I 永遠是 √(L′/C′)，後面接什麼都還來不及知道）。不是電阻的兩個理由：①<strong>無限長線（或匹配終止）上沒有直流電流路徑</strong>——能量以行進波存進 L′、C′，不消耗；②理想匹配線不發熱，真正耗能的是終端的實阻抗（Day 4–6）。(b) Γ = (Z<sub>L</sub>−Z₀)/(Z₀+Z<sub>L</sub>)：<strong>開路 Γ=+1</strong>（反射電壓＝入射電壓，負載電壓翻倍）、<strong>短路 Γ=−1</strong>（負載電壓 0）、<strong>匹配 Γ=0</strong>（全吸收無反射）（Day 6）。(c) <strong>串接</strong>：源側湮滅係數湮滅回程波——零直流功耗、元件少；代價是第一趟到負載<strong>先-half 再翻倍</strong>，中途禁止插接頭（多一個未終端 stub）且負載必須近開路（週 8）。<strong>並聯 50 Ω</strong>：負載全吸、波形最乾淨；代價<strong>直流功耗</strong>（1.8 V 摆幅每條約 65 mW，電池產品不可承受）。<strong>Thevenin</strong>（兩電阻分壓到電源/地）：對 DC 也匹配、可吸收直流；代價靜態功耗與分壓噪聲。<strong>AC 端接</strong>（R+C 串聯到電源）：不耗直流；代價 C 選錯時低頻失真、且 RC 對長線只近似匹配（Day 7–8）。(d) 串接端接的機制是「<strong>讓出射波在源頭被全吸收</strong>」：從負載反射回來的波要走进「R_S＋R_out ≈ Z₀」的源內阻才被吃掉。電阻若放負載端：出射時先被它分壓（signal integrity 直接損）、反射波則回到低阻抗輸出級繼續反彈——匹配點錯了，全盤皆輸（週 8「端接的位置就是反射被處理的位置」）。</p>
+</details>
+
+<p><strong>Q3.［週 3］via、stub 與回流：</strong>(a) via stub 害人的三種身分各是什麼？λ/4 陷波的條件與頻率公式？(b) 訊號換層時「回流 via」到底在救什麼？沒有它，迴路發生什麼事？(c) TDR 曲線上：pad（焊盤）、anti-pad（反焊盤挖大）、空腔 via 結構各留下什麼指紋？(d) 「TDR 看主線平 phẳng 50 Ω，眼卻是閉的」——給一個用本週＋下週知識成立的解釋。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) stub 三身分：①<strong>λ/4 開路諧振腔</strong>——stub 末端開路，長度到 λ/4 時入口變短路，在該頻率把訊號整個吸掉（S21 深陷波、S11 尖刺）；②<strong>反射點</strong>——主線上的支節 = 阻抗不連續，任何頻率都回潑一點；③<strong>小天線</strong>（EMI）——高頻能量沿 stub 跑上去輻射。陷波頻率 <strong>f<sub>λ/4</sub> = v/(4ℓ<sub>stub</sub>)</strong>（v ≈ 15 cm/ns）；治法：背鑽（back-drill）砍短 stub、或把不用的端點挪離主線（週 11/13）。(b) 高頻回流电流永遠貼著訊號走「镜像路徑」（感抗最小）。訊號換層，<strong>回流也得換層</strong>——沒有緊貼的回流 via，回流被迫繞到最近的層間連接處：<strong>迴路面積暴增 → L↑、阻抗瞬間往上拱（反射）、跨層繞行變成天線（EMI）、鄰道耦合窗口變大（串擾）</strong>。PT2 Ch.6 的警告與第零藥方：「能不換層就不換層」；要換，回流 via 緊貼訊號 via 對面（週 15–16）。(c) <strong>pad 寄生電容 → 局部阻抗凹陷（曲线下凹）</strong>；<strong>anti-pad 挖太大 → 局部感抗上升（曲線上凸）</strong>；via 主幹本身略感性（上凸）＋stub 在某處出現<strong>窄而深的下凹谐振指紋</strong>——四種指紋、位置各不同，TDR 把「在哪裡」也給你（d = v·Δt/2，週 12）。(d) 兩個典型解釋：①<strong>短 stub / 小電容在時域「太小」、在頻域致命</strong>——1 mm 級 stub 的 λ/4 在 30 GHz 以上不傷 5 Gbps，但 pad 電容＋via 電感合成的<strong>窄陷波若落在奈奎quist 附近</strong>，TDR 上只是「小凹一下」、S21 上是個 10 dB 的坑——<strong>TDR 的空間解析度≠頻域傷害度</strong>（週 14 的 TDR↔S 參數換算）；②眼閉的病因根本不在主線——<strong>串擾（週 4）或時脈髒（週 5/6）不會寫在單端 TDR 上</strong>，TDR 只回答阻抗一個問題（Day 11–14）。</p>
+</details>
+
+<p><strong>Q4.［週 4］串擾與差動：</strong>(a) NEXT 為什麼「會飽和」——飽和的物理機制（不是公式）？FEXT 為什麼「不飽和、隨長度線性滾雪球」？飽和長度公式與 1 ns 邊沿的數值？(b) 從噪聲預算倒推間距的設計流程三步？3W 規則在流程裡是什麼角色？(c) 差動對「不是免疫串擾」——寫出兩條破口。(d) 差動對自己迴流的依賴：pair 內兩條线的回流在哪裡？參考平面裂了怎麼辦？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>NEXT 飽和</strong>：近端串擾是耦合段上各點產生的噪聲「各走各的路」回到近端——不同位置產生、不同時間出發，<strong>到近端的時間被拉散在 2× 耦合段行程的窗裡</strong>；當耦合段拉長到超过邊沿空間長度的一半（L ≥ L<sub>sat</sub> = v·t_r/2），新的貢獻只填進已經散開的窗尾，<strong>尖峰高度封頂、脈衝只會更寬</strong>——「更長只更寬、不會更高」。<strong>FEXT 不飽和</strong>：遠端噪聲沿同方向傳播，各點貢獻「同速追趕、同窗抵達」，<strong>邊沿能量持續累加</strong>——越長越大、越快越大（∝ Len，且吃 1/t_r 的藥），直到損耗開始吃掉增益才緩和（週 19–20）。<strong>L<sub>sat</sub> = v·t_r/2 = 15 × 1/2 = 7.5 cm</strong>@1 ns。(b) 三步：①由規範/收端規格定<strong>容許串擾預算</strong>（mV）；②用耦合模型（飽和 NEXT + 線性 FEXT，取最壞組合）<strong>倒推最大允許耦合長度/最小额外間距</strong>；③版面實作守則：並行段<strong>能短則短</strong>、長平行段做<strong>階梯錯開（offset）</strong>、必要时跨層正交走線。<strong>3W 是起點不是結論</strong>——它是「同層單端線間距 ≥ 3 倍線寬把主要邊場隔開」的預設值，預算緊時仍要用①②算帳（週 20）。(c) 兩條破口：①<strong>不對稱 → 共模轉差模</strong>：P/N 兩條的線寬/介質/spacing 到参考面不等、或其中一條跨縫，_external_ 干擾轉成共模後因不對稱變一部分進差模——收端只減不滤；②<strong>近端結構性耦合</strong>：進入緩衝器/接頭前的不平衡、以及 aggressor 直接耦合到 pair 的「共模路徑」在源端反射後也部分變差模。另外<strong>相位偏差（skew）</strong>讓兩條的「减號」不再滿分抵消——skew 10 ps 在奈奎斯特 1 GHz 就漏 ~3.6%（週 23–24）。(d) 差動對的返回电流<strong>大部分在 pair 內部互相流返</strong>（差模電流等量反向，镜像路徑就在彼此身上）——這是差動抗單端噪聲的根源之一；但<strong>共模電流仍要經参考平面</strong>。参考平面裂縫的傷害：阻抗瞬間跳高（反射）＋共模回流繞行（EMI/串擾）——所以差動線「可以換層但要回流 via、不許跨割縫」照樣成立（週 22–24）。</p>
+</details>
+
+<p><strong>Q5.［週 5］損耗與 jitter 記帳：</strong>(a) 兩種稅各是 √f 與 f 的物理機制？為什麼介質損對走線幾何「完全無感」，這件事在「改疊構 vs 換板材」決策上意味著什麼？(b) 「眼圖是統計圖不是波形」導出哪條報告紀律？(c) DJ/RJ 記帳的兩條規則與背後的統計理由；14σ 的 14 從哪來？(d) redriver 與 retimer 的差別一句話，以及「budget 表上怎麼選」。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) <strong>導體損 ∝ √f</strong>：高頻電流被自感擠到導體表面，皮厚 δ ∝ 1/√f——導電截面隨 √f 縮水，是<strong>幾何效應</strong>（路肩變窄）。<strong>介質損 ∝ f</strong>：tan δ 是「電場每搖一個來回抽走固定比例能量」，每秒搖 f 次、按次計費，是<strong>材料效應</strong>。介質損公式只有 tan δ 與 ε<sub>eff</sub>——<strong>沒有 w、t、Z₀</strong>：改線寬、改疊構對它白忙，介質損超支只有「換板材（降 tan δ）」或「縮短走線」（週 25–26；f<sub>x</sub> ≈ 2 GHz 量級以上板材當主犯）。(b) 眼圖 = 百萬 UI 對齊摺疊出的<strong>二維直方圖</strong>：疊 10⁷ 與 10⁹ 個 UI 的眼不一樣大（RJ 無界，尾巴越疊越長）。紀律：<strong>報眼高眼寬必附「樣本數／目標 BER」</strong>，沒附等於沒報（週 27）。(c) 規則一：<strong>DJ（DCD/DDJ/SJ/BUJ）pk-pk 直加</strong>——有界確定量，最壞情況真的會在某個 pattern/時刻對齊，RSS 攤薄它是造假。規則二：<strong>RJ 報 σ、獨立源取 RSS，最後 ×14 換成 @BER 10⁻¹² 的 pk-pk 當量</strong>——獨立高斯不會同時站上各自極值。14 = 10⁻¹² 對應的雙邊約 ±7σ 高斯尾（PT2 Ch.4 用 ±6σ 慣例並註明界限 14σ——2002 clock 世界夠用，現代 serial link 14σ 是入場券）（週 28、PT2 Ch.4）。(d) 一句話：<strong>redriver 是一顆會調位的 CTLE——救確定性 ISI 但不重置 jitter；retimer 有 CDR 重取樣——jitter 預算整個重開，但多一顆 PLL、多一份 delay 與成本</strong>。預算表選法：超支只在確定性格（ISI）→ redriver；隨機格（RJ）也超支 → 只有 retimer；<strong>永遠的第一志願是修通道</strong>（週 30）。</p>
+</details>
+
+<p><strong>Q6.［週 6］量測週武器庫＋收官：</strong>(a) 探棒三宗罪各是什麼？「補償」到底在補什麼？(b) 示波器三道關卡（頻寬、取樣率、記憶深度）各攔誰？PT2 給的頻寬倍數底線與現代行規各是多少？(c) S11/S21 一行定義；TDR 與 S 參數是一枚硬幣的哪兩面？(d) 收官題：Ch.16 時脈驗證的「第一原則」是什麼？為什麼它排在所有儀器議題之前？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 三宗罪：①<strong>容性負載</strong>——10:1 被動棒輸入電容約 10 pF 級（約值，spec 因型號而異），掛上高阻抗節點直接把邊沿拖慢、把 RC 節變成低通；②<strong>stub 負載</strong>——探棒引線/尖針是掛在訊號上的短 stub，GHz 級變成谐振器；③<strong>地線環路</strong>——長地線 = 串入 L，振鈴與「量到的鬼」多半是它（t<sub>DISPLAY</sub> 帳，PT2 Ch.11）。補償：被動棒內部可變電容與示波器輸入電容<strong>對頻率把分壓比配平</strong>——R₁C₁ = R₂C₂，補錯波形「頭重腳輕」或「腳重頭輕」（週 32）。(b) <strong>頻寬攔幅度與邊沿</strong>（正弦 3 dB 點；方波 t_r 讀值 = √(t_r,訊號²+t_r,儀器²)）；<strong>取樣率攔「有沒有抓到那個點」</strong>（奈奎斯特是數學底線、工程上即時取樣要 ≫2×，內插救不回混疊）；<strong>記憶深度攔「窗抓多長」</strong>（記憶體 = 取樣率 × 時窗——要 100K 週期的統計，先算記憶體）。PT2 的底線：<strong>頻寬 ≥ 訊號頻率 3 倍</strong>（Ch.16 量 133 MHz 用 ≥500 MHz——把 3 次諧波以上收進來）；現代行規 <strong>5 倍</strong>（收 5 次諧波、邊沿形狀保真，週 33）。(c) <strong>S11 = 從 port 1 看进去的反射係數（阻抗失配度）；S21 = port 1→port 2 的穿透（插損/陷波）**；|S11|²+|S21|² ≈ 1（無損終端假設下，週 34）。TDR 是同一個網路的<strong>時域激應</strong>，S 參數是<strong>頻域激應</strong>——FFT 互通；「時域看不出來的窄陷波，頻域無所遁形」（Q3(d) 的另一半答案）。(d) 第一原則：<strong>「先驗央行」——先驗證時脈樹的源頭（14.318 MHz 結晶/振盪電路），再逐路驗輸出</strong>。排在儀器議題之前是因為<strong>拓撲邏輯</strong>：全樹每一路都是央行的倍頻分身，央行偏 50 ppm，十二路一起偏——下游量得再精緻都在錯的基準上。順序 = 央行 → 各路 AC 五項 → 餵 PLL 的路加 LTJ＋頻譜 → 系統級合規（PT2 Ch.16，週 37）。</p>
+</details>
+
+<h2>Part B｜計算題（Q7–Q12）</h2>
+
+<p><strong>Q7.［週 1/2］電長度判定：</strong>鏡頭模組的 MIPI flex 長 3 cm，FR4/PI 上 v ≈ 15 cm/ns。(a) 單程延遲 T_D 多少？(b) HS driver t_r = 0.5 ns：用 λ/6 家族判準（v·t_r/6）算臨界長度，3 cm 的 flex「當線看」嗎？超標幾倍？(c) 同一條線改走 t_r = 5 ns 的慢速 I²C——判定變了嗎？這說明「線要不要端接」取決於什麼？(d) 若邊沿加速到 0.3 ns（換更高 rate 的 sensor），臨界長度變成多少？對 flex 設計（長度/疊層）意味著什麼？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) T_D = 3 ÷ 15 = <strong>0.2 ns</strong>。(b) 臨界長度 ℓ<sub>crit</sub> = v·t_r/6 = 15×0.5/6 = <strong>1.25 cm</strong>；3 cm ÷ 1.25 cm = <strong>2.4 倍</strong>——妥妥的傳輸線，必須按 Z₀ 控制＋端接（等价判準：T_D = 0.2 ns ≫ t_r/6 = 0.083 ns）。(c) ℓ<sub>crit</sub> = 15×5/6 = <strong>12.5 cm</strong> → 3 cm 在線性區，集總電路處理即可（慢 I²C 靠上拉電阻與規範內線長就活）。結論：<strong>「要不要端接」取決於邊沿時間，不取決於資料率的名字，也不取決於「這條線叫低速總線」</strong>——同一條銅線，換個 driver 就換個世界。(d) ℓ<sub>crit</sub> = 15×0.3/6 = <strong>0.75 cm</strong>——3 cm flex 超標 4 倍：flex 必須完整控制 Z₀（線寬/間距/介厚進疊層表）、兩端端接校對、並行段縮短（週 4/19 的 FEXT 帳同時變緊）。邊沿越「快」，全板的 SI 紀律門檻就自動上抬（Day 1–4、19）。</p>
+</details>
+
+<p><strong>Q8.［週 2/8］端接算帳：</strong>1.8 V Thevenin 驅動（內阻 10 Ω）、50 Ω 線、 CMOS 高阻負載（Γ_L ≈ +1），單程 T_D = 0.2 ns。(a) 不加串接電阻：初始注入電壓、負載第一趟電壓、以及之後的行為（Γ_S 算出來）。(b) 加 R_S = 40 Ω 貼驅動端：負載在 t=0⁺、T_D、2T_D 之後各看到多少電壓？會再反彈嗎？(c) 改用並聯 50 Ω 端接：每條線在 1.8 V 摆幅下的直流功率？4 條 data lane 共多少？(d) 為什麼 MIPI D-PHY 選「收端內建端接、驅動端不並聯」？用 (c) 的數字說話。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 注入分壓：V⁺ = 1.8×50/(10+50) = <strong>1.5 V</strong> → 負載第一趟 1.5×(1+Γ_L) = <strong>3.0 V</strong>（翻倍，超出軌電壓——CMOS 輸入的保護二極體不答應）。反射回源：Γ_S = (10−50)/(10+50) = <strong>−0.667</strong> → 部分吸收、部分反彈，振鈴以 −0.667 衰減收斂到 1.8 V——<strong>一圈圈耗損的 ringing</strong>，EMI 與誤觸發的來源。(b) R_S+R_out = 50 Ω = Z₀ → 注入 V⁺ = 1.8×50/(50+50) = <strong>0.9 V</strong>；t = T_D⁻ 負載看到 0.9 V，到 T_D⁺ 開路翻倍到 <strong>1.8 V</strong>；反射波回到源端被<strong>全吸收（Γ_S ≈ 0）</strong>，不再反彈——負載電壓 0.9 →（T_D 後）1.8 V 台階，<strong>零過衝收斂</strong>。這就是串接端接「先減半、反射補齊」的設計性格。(c) P = V²/R = 1.8²/50 = <strong>0.0648 ≈ 65 mW/條</strong>；4 條 data + clock ≈ <strong>0.26–0.33 W</strong>（量級）——只為「端接」一件事，在手機上是發熱與待機電流的大開銷。(d) D-PHY 的答案：<strong>端接放收端、由供電域管理、且只在 HS 模式啟用</strong>（LP 模式關閉省電）——功率花在「接收的當下」而非全程短路到地；驅動端不並聯則避免發射側無謂直流。算的就是 (c)：並聯方案在電池產品上把 ~0.3 W 燒在銅片上，D-PHY 用收端端接＋模式管理把這張帳砍掉大半（週 8、專題 1）。</p>
+</details>
+
+<p><strong>Q9.［週 3/14］TDR 與 stub 算帳：</strong>v = 15 cm/ns。(a) TDR 上距激發點 Δt = 0.4 ns 處有個不連續——距離多少？為什麼除以 2？(b) 一個 5 mm 的通孔 stub：λ/4 陷波頻率？若 8 Gbps PAM 類訊號的有用頻寬延伸到 ~6 GHz，這個陷波致命嗎（用你的判斷講「在不在頻帶裡」）？(c) 背鑽把 stub 剩 1 mm：陷波移到哪裡？(d) 同一颗 via 的焊盤電容 0.15 pF：估算它造成的局部阻抗凹陷量級（用 ΔZ ≈ −Z₀²·ωC·…的直覺或「容性負載」定性），TDR 上該看到上凸還是下凹？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) d = v·Δt/2 = 15×0.4/2 = <strong>3 cm</strong>。除以 2 是因為 TDR 量的是<strong>來回</strong>：波飛到不連續點再飛回來，時間記的是兩趟（雷達原理）。(b) f = v/(4ℓ) = 15 cm/ns ÷ (4×0.5 cm) = 15/2 = <strong>7.5 GHz</strong>。判斷：8 Gbps NRZ 基頻 4 GHz、有效能量約延伸到 3–5 次諧波（~6–10 GHz 邊界模糊，說量級即可）——7.5 GHz <strong>压在頻帶邊緣</strong>：窄陷波吃掉的頻段若含取樣判定的主要能量會傷 BER，「陷波深度×寬度 vs 頻帶」要一起看，不能因為「高於奈奎斯特」就放過——這正是 TDR 看不出、S21 才現形的案例（週 14）。（PAM 的符號率對頻寬更敏感，此處以 NRZ 帳為主即可。）(c) f = 15/(4×0.1) = <strong>37.5 GHz</strong>——推到有用頻帶之外，等效移除；同時把「小天线」剪短，EMI 也好（背鑽是 via 三病的双重藥）。(d) 容性不連續 → <strong>局部 Z 下凹</strong>（Γ<sub>局部</sub> < 0）；量級直覺：在 f 處 ΔZ ≈ −Z₀²·2πfC（小反射近似，f 取邊沿等效 ~1 GHz）：50²×6.28×0.15 pF ≈ 23.5 Ω → 凹陷可觀（幾十 Ω 級），TDR 上一個明顯小下凹——焊盤要「挖 anti-pad 補感」就是拿上凸抵銷這個下凹（週 12–13）。</p>
+</details>
+
+<p><strong>Q10.［週 4］串擾算帳：</strong>同層兩條平行微帶線，aggressor 摆幅 1.8 V。(a) t_r = 1 ns：飽和長度 L<sub>sat</sub>？(b) 實際並行段 3 cm：NEXT 處於飽和值的幾成（飽和前視為線性）？FEXT 呢——它的「長度帳」和 NEXT 的本質差別是什麼？(c) 設計改快：t_r 縮到 0.5 ns、並行段維持 3 cm——NEXT 變成飽和值幾成？FEXT 依「∝ Len/t_r」的帳變幾倍？(d) 由此推出兩條版圖守則（一條對 NEXT、一條對 FEXT）。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) L<sub>sat</sub> = v·t_r/2 = 15×1/2 = <strong>7.5 cm</strong>。(b) 3/7.5 = <strong>40%</strong>——未飽和的 NEXT 近似線性，拿到飽和值的四成。FEXT 沒有封頂：3 cm 的 FEXT 不是「FEXT 飽和值的 40%」，而是「<strong>還在線上爬、再長就再大</strong>」——NEXT 的帳本上限是 t_r（飽和後與長度無關），FEXT 的帳本上限是<strong>損耗</strong>（線性滾到損耗開始吃掉增益為止）。這就是「算 NEXT 敢用封頂值、算 FEXT 必須用實際最長平行段」的原因。(c) L<sub>sat</sub> 減半到 3.75 cm → 3 cm = <strong>80%</strong>——加速把 NEXT 直接推向飽和區。FEXT ∝ Len/t_r：t_r 減半 → <strong>×2</strong>（同一並行段，FEXT 加倍）。一個「只改速度」的決策同時把兩種串擾都往上推——「快是免費的」是最貴的誤解。(d) 守則：<strong>NEXT——設計時直接按飽和值驗</strong>（除非你能保證並行段永遠短於 L<sub>sat</sub>，量產不會幫你保證）；<strong>FEXT——控制「平行長度」本身</strong>：縮短、錯開（offset）、換層正交，比拉間距更能治本（間距治耦合係數，長度治積分窗，兩味都要開，週 19–20）。</p>
+</details>
+
+<p><strong>Q11.［週 5］損耗算帳（新數字）：</strong>2 Gb/s NRZ（奈奎斯特 1 GHz）走 8 cm FR4 微帶線，α<sub>cond</sub> ≈ 0.47·√f(GHz) dB/10cm、α<sub>diel</sub> ≈ 0.32·f(GHz) dB/10cm。(a) 1 GHz 時銅的 skin depth？(b) 1 GHz 處每 10 cm 兩種稅各幾 dB？主犯是誰？（提示：跟 f<sub>x</sub> ≈ 2.2 GHz 對照）(c) 8 cm 總插損？發端差動摆幅 800 mV 到收端剩多少？(d) 升級到 4 Gb/s：總損變成幾 dB？「兩倍速率不只是兩倍損」請用 √f 與 f 的指數各自說明。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) δ ≈ 66/√1000 ≈ <strong>2.1 µm</strong>——比 ½ oz 銅箔（≈17 µm）薄近一個數量級，92% 以上的銅在此頻率是裝飾品。(b) 導體損 0.47 dB、介質損 0.32 dB——1 GHz 在 f<sub>x</sub>（≈2.2 GHz，隨幾何移動）<strong>之下</strong>：銅略勝，是主犯。(c) 合計 0.79 dB/10cm × 0.8 = <strong>約 0.63 dB</strong>；收端摆幅 800×10^(−0.63/20) = 800×0.93 ≈ <strong>744 mV</strong>。(d) 2 GHz：導體損 0.47×√2 ≈ 0.66、介質損 0.32×2 = 0.64 → 1.30 dB/10cm → 8 cm <strong>約 1.04 dB</strong>（+65%，不到兩倍）。指數說明：銅的稅 √f——頻率 ×2 稅 ×1.41；板材的稅 ∝ f——頻率 ×2 稅 ×2。<strong>介質損以更快的斜率追上來</strong>：2 GHz 已接近 f<sub>x</sub>，再往上板材接管——所以 4 Gb/s 以上想省損耗，錢要投資在<strong>板材（tan δ）與銅箔粗糙度</strong>，加寬線寬的邊際效益遞減（週 25–26；MIPI 短通道的「管長度」哲學仍是第一味）。</p>
+</details>
+
+<p><strong>Q12.［週 6］量測算帳（PT2 Ch.16 場景）：</strong>驗證主機板 SRC 100 MHz。(a) 規格要求「1 µs 窗平均週期」：用 25 Gsps 即時取樣、累積 100 個週期，需要多少取樣點與記憶體（8-bit）？(b) 規格表另有「jitter 統計需 ≥100K 週期」：1 ms 窗 @25 Gsps 需要多少記憶體？(c) 5 Gb/s 鏈路的參考時脈 ±300 ppm：換算到 200 ps UI 裡是多少 ps？讀出「ppm 是頻率域帳、jitter 是時間域帳」的含義。(d) LTJ@10 µs 直方圖 p-p = 1.24 ns，門檻 1.3 ns：判定？你的報告還要寫哪三件事才算誠實？</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>解：</strong>(a) 每週期 250 點（10 ns × 25 Gsps）× 100 週期 = <strong>25,000 點 ≈ 25 KB</strong>——小到不像話，但「整個平均窗必須完整進記憶體」這條<strong>定義性要求</strong>要講得出來（Ch.16 原例：100 MHz、20 Gsps → 每週期 200 點 × 100 週期 = 20K 樣本；原書此处算式有筆誤，我們用對的算）。(b) 1 ms × 25 Gsps = <strong>25 M 點 ≈ 25 MB</strong>（8-bit）——這就是 Ch.16 算出「20 MB 起跳」的同一筆帳（書中用 10 Gsps）；現代示波器常規記憶體早已超額滿足，但「先算記憶體、再按 capture」的順序是紀律（週 33/37）。(c) 200 ps × 300 ppm = <strong>0.06 ps</strong>——比任何 jitter 都小三個量級。含義：ppm 是<strong>長期頻率偏移</strong>（振盪器「走快走慢」的帳），影響的是 CDR 的追蹤範圍/頻率偏差容限（比如 PCIe 兩端 ±300 ppm 的規約）；jitter 是<strong>邊沿相對於時刻表的瞬時晃動</strong>（影響眼寬）。同一個時脈、兩本完全不同的帳，<strong>不能用 c2c 數判 ppm、也不能用 ppm 數判眼</strong>。(d) peak = 1.24/2 = 620 ps ≤ 650 ps → <strong>PASS</strong>，但 margin = 30 ps/650 ≈ <strong>4.6%</strong>——「勉強過」等級。誠實報告三件事：①<strong>儀器本底與扣帳方式</strong>（σ_訊號 = √(σ²_讀−σ²_儀器)，以及 p-p 讀值受本底污染的聲明）；②<strong>統計量與條件</strong>（觸發次數 ≥100K、 SSC 狀態、電源模式/溫度）；③<strong>margin 百分比＋角位建議</strong>（margin &lt;10% 應觸發高溫/低電壓 corner 複測，不是簽名了事）——「過與不過」之間還有一整頁工程判斷（週 35/37）。</p>
+</details>
+
+<h2>Part C｜圖示判讀題（Q13–Q15）＋版圖判決（Q16）</h2>
+
+<p><strong>Q13.</strong> 下面是某 5 Gbps 通道（v = 15 cm/ns）的 TDR 曲線示意。四个標記 A–D 各是什麼結構、什麼性質（感性/容性/谐振/終端）？由 Δt 算出 B、C 的距離，並說出你對 C 的下一步動作與工具。</p>
+<figure>
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="26" text-anchor="middle" font-size="18" font-weight="bold">TDR 阻抗曲線（5 Gbps 通道）</text>
+  <!-- axes -->
+  <line x1="80" y1="340" x2="860" y2="340" stroke="#333" stroke-width="2"/>
+  <line x1="80" y1="60" x2="80" y2="340" stroke="#333" stroke-width="2"/>
+  <text x="470" y="378" text-anchor="middle" font-size="14">時間 Δt（ns，來回）</text>
+  <text x="30" y="200" font-size="14" transform="rotate(-90 40 200)">阻抗（Ω）</text>
+  <!-- grid: Z=50 baseline -->
+  <line x1="80" y1="200" x2="860" y2="200" stroke="#bbb" stroke-dasharray="5 4"/>
+  <text x="88" y="195" font-size="12" fill="#888">50 Ω</text>
+  <!-- x ticks: 0..1.2 ns mapped 80..840 -->
+  <line x1="80" y1="340" x2="80" y2="346" stroke="#333"/><text x="80" y="360" text-anchor="middle" font-size="12">0</text>
+  <line x1="207" y1="340" x2="207" y2="346" stroke="#333"/><text x="207" y="360" text-anchor="middle" font-size="12">0.2</text>
+  <line x1="333" y1="340" x2="333" y2="346" stroke="#333"/><text x="333" y="360" text-anchor="middle" font-size="12">0.4</text>
+  <line x1="460" y1="340" x2="460" y2="346" stroke="#333"/><text x="460" y="360" text-anchor="middle" font-size="12">0.6</text>
+  <line x1="587" y1="340" x2="587" y2="346" stroke="#333"/><text x="587" y="360" text-anchor="middle" font-size="12">0.8</text>
+  <line x1="713" y1="340" x2="713" y2="346" stroke="#333"/><text x="713" y="360" text-anchor="middle" font-size="12">1.0</text>
+  <line x1="840" y1="340" x2="840" y2="346" stroke="#333"/><text x="840" y="360" text-anchor="middle" font-size="12">1.2</text>
+  <!-- TDR trace -->
+  <path d="M 80 226 L 100 232 L 120 214 L 150 203 L 333 200 L 353 155 L 373 196 L 440 200 L 447 268 L 453 268 L 460 200 L 713 200 L 733 120 L 745 70 L 840 62" fill="none" stroke="#c0392b" stroke-width="3"/>
+  <!-- markers -->
+  <circle cx="107" cy="228" r="4" fill="#0f4c5c"/><text x="107" y="256" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">A</text>
+  <circle cx="360" cy="180" r="4" fill="#0f4c5c"/><text x="360" y="140" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">B</text>
+  <circle cx="450" cy="268" r="4" fill="#0f4c5c"/><text x="450" y="300" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">C</text>
+  <circle cx="800" cy="66" r="4" fill="#0f4c5c"/><text x="790" y="58" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">D</text>
+  <text x="140" y="285" font-size="12" fill="#555">微下凹</text>
+  <text x="300" y="120" font-size="12" fill="#555">上凸</text>
+  <text x="470" y="318" font-size="12" fill="#555">窄而深的下凹</text>
+  <text x="845" y="90" font-size="12" fill="#555">一路衝頂</text>
+</svg>
+<figcaption>圖 1：TDR 曲線示意（非實測數據，供判讀練習）。x 軸 0–1.2 ns 來回時間，基線 50 Ω。</figcaption>
+</figure>
+<details>
+<summary>看詳解</summary>
+<p><strong>判讀三段式：</strong></p>
+<p><strong>A（t≈0.05 ns，微下凹）</strong>：<strong>容性</strong>——出發端的焊盤/輸入 pad 電容（Z 下凹 = C）。距離太近不建議動手術，用 anti-pad 補償在設計端做。<br>
+<strong>B（Δt = 0.4 ns，上凸）</strong>：<strong>感性不連續</strong>——典型是<strong>連接受體/換層 via</strong>（主幹電感、或 anti-pad 挖過頭）。距離 d = v·Δt/2 = 15×0.4/2 = <strong>3 cm</strong>。處方：via 加回去共地 via、anti-pad 尺寸回調、或 pad 電容補成「平頂」。<br>
+<strong>C（Δt ≈ 0.6 ns，窄而深的下凹）</strong>：<strong>谐振指紋——via stub</strong>（窄＝高 Q、深＝在谐振點附近入口阻抗趨 0）。距離 = 15×0.6/2 = <strong>4.5 cm</strong>。下一步工具：<strong>VNA 量 S21/S11</strong>——找陷波頻率 f<sub>λ/4</sub>，反推 stub 長度（ℓ = v/4f），確認是否落在奈奎斯特 2.5 GHz 附近；處方是背鑽或改走線消除長 stub，不是「把 TDR 曲線抹平」。<br>
+<strong>D（t ≈ 1.0 ns 後衝頂）</strong>：<strong>遠端開路</strong>（Γ→+1）。可能是量測時未端接（正常——TDR 本就该這樣看），或實際斷線/空接頭。若 D 點阻抗收在 0 是短路、收在中間值才是終端阻抗讀數。</p>
+<p><strong>加分句式：</strong>「TDR 給位置與性質（C/L/谐振/終端），頻域決定它是否致命——所以 C 的判決書要由 S21 簽署。」（週 12–14）</p>
+</details>
+
+<p><strong>Q14.</strong> 下面是某 2.5 Gbps 接收端（UI = 400 ps）的眼圖示意（灰度=出現密度）。指出至少三種病理、各自對應的 DJ/RJ 科目與機制，並說出你到公司後的第一刀 A/B 實驗。</p>
+<figure>
+<svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="26" text-anchor="middle" font-size="18" font-weight="bold">2.5 Gbps 接收端眼圖示意（UI = 400 ps）</text>
+  <!-- axes -->
+  <line x1="80" y1="400" x2="860" y2="400" stroke="#333" stroke-width="2"/>
+  <line x1="80" y1="50" x2="80" y2="400" stroke="#333" stroke-width="2"/>
+  <text x="470" y="432" text-anchor="middle" font-size="14">時間（2 UI）</text>
+  <text x="26" y="225" font-size="14" transform="rotate(-90 36 225)">電壓</text>
+  <!-- UI guides -->
+  <line x1="80" y1="50" x2="80" y2="400" stroke="#bbb" stroke-dasharray="6 5"/>
+  <line x1="470" y1="50" x2="470" y2="400" stroke="#bbb" stroke-dasharray="6 5"/>
+  <line x1="860" y1="50" x2="860" y2="400" stroke="#bbb" stroke-dasharray="6 5"/>
+  <text x="275" y="418" text-anchor="middle" font-size="13" fill="#888">UI 1</text>
+  <text x="665" y="418" text-anchor="middle" font-size="13" fill="#888">UI 2</text>
+  <!-- upper level band with reflection notch and ISI split -->
+  <path d="M 80 110 L 200 110 L 212 158 L 224 112 L 470 112 L 700 112 L 860 112" fill="none" stroke="#444" stroke-width="4"/>
+  <path d="M 80 126 L 700 126 L 860 121" fill="none" stroke="#888" stroke-width="3"/>
+  <path d="M 80 140 L 700 141 L 860 133" fill="none" stroke="#aaa" stroke-width="2"/>
+  <!-- lower level band -->
+  <path d="M 80 300 L 860 300" fill="none" stroke="#444" stroke-width="4"/>
+  <path d="M 80 312 L 860 311" fill="none" stroke="#999" stroke-width="3"/>
+  <!-- crossings: wide spread (jitter) at two places -->
+  <g stroke="#5a7fa8" stroke-width="2">
+    <path d="M 230 118 L 300 296" fill="none"/>
+    <path d="M 242 118 L 312 296" fill="none"/>
+    <path d="M 256 120 L 326 298" fill="none"/>
+    <path d="M 270 122 L 340 300" fill="none"/>
+    <path d="M 292 122 L 362 300" fill="none"/>
+    <path d d=""/>
+  </g>
+  <g stroke="#5a7fa8" stroke-width="2">
+    <path d="M 610 118 L 680 298" fill="none"/>
+    <path d="M 622 120 L 692 298" fill="none"/>
+    <path d="M 636 122 L 706 300" fill="none"/>
+    <path d="M 650 124 L 720 302" fill="none"/>
+  </g>
+  <!-- falling edges -->
+  <g stroke="#5a7fa8" stroke-width="2">
+    <path d="M 300 296 L 370 122" fill="none"/>
+    <path d="M 312 298 L 384 126" fill="none"/>
+    <path d="M 326 300 L 400 130" fill="none"/>
+  </g>
+  <!-- mask box hint -->
+  <rect x="440" y="160" width="60" height="90" fill="none" stroke="#c0392b" stroke-dasharray="4 4"/>
+  <text x="470" y="152" text-anchor="middle" font-size="12" fill="#c0392b">取樣點空地</text>
+  <!-- annotations -->
+  <circle cx="218" cy="140" r="4" fill="#c0392b"/><text x="218" y="96" text-anchor="middle" font-size="16" font-weight="bold" fill="#c0392b">①</text>
+  <text x="175" y="80" font-size="12" fill="#555">上軌固定位置咬一口</text>
+  <circle cx="300" cy="210" r="4" fill="#c0392b"/><text x="300" y="215" text-anchor="middle" font-size="16" font-weight="bold" fill="#c0392b" fill-opacity="0.9">②</text>
+  <circle cx="790" cy="128" r="4" fill="#c0392b"/><text x="800" y="96" text-anchor="middle" font-size="16" font-weight="bold" fill="#c0392b">③</text>
+  <text x="838" y="80" font-size="12" fill="#555">右緣分叉兩條軌</text>
+</svg>
+<figcaption>圖 2：眼圖示意（非實測數據）。①上軌固定位置缺口 ②交叉區水平增厚 ③高位階右緣分叉。</figcaption>
+</figure>
+<details>
+<summary>看詳解</summary>
+<p><strong>判讀：</strong>①<strong>上軌固定位置的缺口</strong>＝<strong>反射</strong>：殘波在固定延遲後回來咬軌道（位置 = 2×到不連續點的飛行時間——拿 Q13 的 TDR 反查：缺口在圖中 Δt≈0.33 UI ≈ 133 ps → 對應約 1 m?? 不對——先算：133 ps/2×15 cm/ns ≈ 1 m 太遠，更像是<strong>連接受體前的接頭/refstub 的短腔</strong>，用游標量實際位置再反推距離才是正解；考點在於「固定位置＝確定性反射」這條推理）。科目：<strong>DJ（DDJ/ISI 家族之外，屬電壓域殘波）</strong>。②<strong>交叉區水平增厚（多條交叉線散開）</strong>＝<strong>jitter 分布</strong>：交叉點的水平胖瘦是 DJ+RJ 的混合直方圖——要拆科別得靠 bathtub/直方圖（週 35），但「交叉區胖、眼中央還開」優先懷疑<strong>時脈/驅動端 jitter（上游）</strong>而非通道。③<strong>高位階右緣分叉成有限幾條軌跡</strong>＝<strong>ISI（DDJ）</strong>：bit pattern 歷史不同 → 起跑點不同 → 电平分裂成分身；分身「分得開」= 有界可數，是 DJ 的視覺簽名（高斯霧=RJ 是另一種糊法）。</p>
+<p><strong>第一刀 A/B（順序有道理）：</strong>先送 <strong>clock pattern（0101…）</strong>——ISI 需要 pattern 歷史，分身若合併 → 主因是通道頻寬/ISI，往 flex 長度與損耗查；若交叉糊不變 → 往時脈與電源查。再<strong>關鄰道 aggressor</strong>（含 VCM/OIS 驅動）——眼皮消腫 → 串擾（週 4/27 指紋庫）。報告紀律收尾：<strong>眼圖必附樣本數/BER 與儀器本底扣帳</strong>（週 27/29/35）。</p>
+</details>
+
+<p><strong>Q15.</strong> 下面是某 PCIe SRC 100 MHz 的「週期序列 FFT」（jitter 頻譜，PT2 Ch.16 圖 16.14 的機制）示意。灰色帶是下游發送 PLL 的迴路頻寬（約 7–22 MHz，Ch.16 量級）。(a) 兩根針各自最可能的來源？(b) 哪根真正殺輸出？為什麼？(c) 為什麼同一顆時脈的 c2c jitter 卻「很漂亮」（125 ps 內過規）？(d) 到公司驗證來源的兩個實驗。</p>
+<figure>
+<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="450" y="26" text-anchor="middle" font-size="18" font-weight="bold">SRC 100 MHz 週期序列 FFT（示意）</text>
+  <text x="300" y="52" font-size="13" fill="#555">y：雜訊底（非絕對刻度）｜x：偏移頻率（對數）</text>
+  <!-- axes -->
+  <line x1="80" y1="380" x2="860" y2="380" stroke="#333" stroke-width="2"/>
+  <line x1="80" y1="70" x2="80" y2="380" stroke="#333" stroke-width="2"/>
+  <line x1="80" y1="70" x2="80" y2="376" stroke="#333" stroke-width="2"/>
+  <line x1="60" y1="64" x2="80" y2="70" stroke="#333" stroke-width="2"/>
+  <line x1="80" y1="64" x2="60" y2="70" stroke="#333" stroke-width="2"/>
+  <!-- log freq: 100k at x=80, 100M at x=840 → x = 80 + (logf-5)/3*760 -->
+  <line x1="80" y1="380" x2="80" y2="386" stroke="#333"/><text x="80" y="402" text-anchor="middle" font-size="12">100 kHz</text>
+  <line x1="333" y1="380" x2="333" y2="386" stroke="#333"/><text x="333" y="402" text-anchor="middle" font-size="12">1 MHz</text>
+  <line x1="587" y1="380" x2="587" y2="386" stroke="#333"/><text x="587" y="402" text-anchor="middle" font-size="12">10 MHz</text>
+  <line x1="840" y1="380" x2="840" y2="386" stroke="#333"/><text x="840" y="402" text-anchor="middle" font-size="12">100 MHz</text>
+  <!-- PLL loop band 7-22 MHz: log 6.845→563, 7.342→715 -->
+  <rect x="563" y="70" width="152" height="310" fill="#0f4c5c" opacity="0.12"/>
+  <line x1="563" y1="70" x2="563" y2="380" stroke="#0f4c5c" stroke-dasharray="5 4"/>
+  <line x1="715" y1="70" x2="715" y2="380" stroke="#0f4c5c" stroke-dasharray="5 4"/>
+  <text x="639" y="86" text-anchor="middle" font-size="13" fill="#0f4c5c">下游 PLL 迴路頻寬 ≈ 7–22 MHz</text>
+  <!-- baseline skirt -->
+  <path d="M 80 150 C 200 210, 320 268, 450 296 C 600 322, 740 338, 860 348" fill="none" stroke="#666" stroke-width="2.5"/>
+  <!-- spike 1 at 2.2 MHz (log 6.34 → 409) -->
+  <line x1="409" y1="118" x2="409" y2="288" stroke="#c0392b" stroke-width="3.5"/>
+  <text x="409" y="108" text-anchor="middle" font-size="13" fill="#c0392b" font-weight="bold">2.2 MHz</text>
+  <!-- spike 2 at 40 MHz (log 7.6 → 741) -->
+  <line x1="741" y1="250" x2="741" y2="334" stroke="#c0392b" stroke-width="3"/>
+  <text x="741" y="240" text-anchor="middle" font-size="13" fill="#c0392b" font-weight="bold">40 MHz</text>
+  <!-- annotations -->
+  <text x="250" y="245" font-size="12" fill="#555"> skirts：宽带本底（RJ）</text>
+</svg>
+<figcaption>圖 3：jitter 頻譜示意（重繪 PT2 Ch.16 圖 16.13/16.14 的機制：對週期序列做 FFT 抓spur）。</figcaption>
+</figure>
+<details>
+<summary>看詳解</summary>
+<p>(a) <strong>2.2 MHz</strong>：典型嫌犯是<strong>切換電源</strong>——某路 buck 的開關頻率（或其諧波）透過電源/地耦合進時脈產生器或時脈線（Ch.16 的同款劇本是 33 MHz PCI 輸出耦合；書中另錄 3.592 MHz、13.83 MHz——「針的频率去對嫌疑源的規格書」是通用偵訊術）。<strong>40 MHz</strong>：像<strong>鄰近時脈/振盪器輸出腳的近場耦合</strong>（相鄰走線/相邻腳——Ch.16 的 33 MHz 案例就是「隔壁那根 PCI 輸出」）。(b) <strong>2.2 MHz 是殺手</strong>：它在 PLL 迴路頻寬<strong>以下</strong>——參考 jitter 的 transfer 是低通，低於迴路頻寬的分量被 PLL「全額跟隨並 ×N 進輸出」；40 MHz 遠高於 22 MHz，大部分被發送 PLL 濾除（但它是耦合路徑存在的<strong>證據</strong>，不容忽視——今天濾得掉，換一顆 loop BW 不同的下游 PLL 就濾不掉）。(c) <strong>c2c 對慢飄移不敏感</strong>：相鄰週期差分的頻譜加权恰好在低偏移頻率衰減——2.2 MHz 的調變让週期「慢慢飄」，相鄰週期幾乎等長，c2c 讀數漂亮；這正是 PT2 Ch.4「c2c 看不見低頻漂移」、Ch.16 用「LTJ＋頻譜」補位的理由——<strong>儀器的加权函數就是你的科目表</strong>。(d) 驗證：①<strong>關源試驗</strong>——嫌疑 buck 改電池供電/關掉負載，針消失或下降即破案；②<strong>頻對頻＋探棒法</strong>——拿針的頻率去對嫌疑源 datasheet 的開關頻率，再改探棒點位/換地彈簧排除探棒 pickup 假針。根因對策：電源軌濾波、時脈腳隔走線加護城、給時脈產生器換 spur 更低的 LDO（PT2 Ch.11/16、週 36/37）。</p>
+</details>
+
+<p><strong>Q16.［週 3/4 收官］版圖判決：</strong>實習工程師給你五個 layout 決定，逐條判「對/錯/看情況」並用一句話給理由（理由要點名「哪本帳」）：(a) 高速線換層處，訊號 via 旁 0.5 mm 放一顆回流地 via。(b) 1.8 V GPIO 直連 12 cm 到接收端，兩端都不端接，「因為只有 25 MHz」。(c) 時脈線跨参考平面割縫，但在割縫旁放一顆 100 nF 電容「搭橋」。(d) MIPI 四對 data 排同一排、對間距一律 3W，四對平行 6 cm。(e) 測試點用 0402 pad 直接掛在 5 Gbps 主線中段。</p>
+<details>
+<summary>看詳解</summary>
+<p>(a) <strong>對，而且要做嚴</strong>——高頻回流要跟著訊號換層，0.5 mm 內的地 via 把迴路面積壓到最小（阻抗連續＋EMI＋串擾三本帳一起省）。加分：數量寧多勿少、位置對稱。(b) <strong>錯的機率極高</strong>——判傳輸線用 <strong>t_r 不用頻率</strong>（Q1 考過）：25 MHz 若 t_r ~2 ns，v·t_r/6 = 5 cm → 12 cm = 2.4 倍超標，線性區？不，該端接。先查 driver 規格表的 t_r，再看 Γ 的殘留振鈴有沒有吃掉输入敏感度——「低速總線免端接」是用語法取代物理的謠言。(c) <strong>看情況，デフォルト不及格</strong>——跨縫造成迴路面積暴增與阻抗跳變；AC 橋接電容能給<strong>高頻</strong>回流一個位移電流路徑，是經典「止痛藥」：縫窄（<3 mm）＋單點跨＋補對值（典型 0.1–1 nF 級，視阻抗配平）勉強可用；但它補不了「每個頻率都補平」，正式解是把割縫挪開或改換層＋回流 via（PT2 Ch.6 的反面教材正身）。(d) <strong>錯在平行長度</strong>——3W 治「耦合係數」、治不了「積分窗」：6 cm 平行對 1 ns 級邊沿是 FEXT 的線性滾雪球區（Q10），四對同排讓近端/遠端帳疊加。處方：錯開（offset）、拉開對距、能換層正交就換層。(e) <strong>錯（對高速而言）</strong>——0402 pad＋探測stub 掛主線中段 = 未終端短 stub：反射＋在 λ/4 頻率咬陷波；5 Gbps 級要量測，改用<strong>方向性耦合/專用測試結構（TDR 探點在設計時預留且 stub 極短）</strong>，或接受「量測即改變被測量」（週 13/32 的探棒帳）。判分標準：五條全中 1 分，錯兩條給 0.5。</p>
+</details>
+
+<h2>Part D｜面試實戰情境（Q17–Q18，英文作答練習）</h2>
+
+<p><strong>Q17.</strong> <em>“Your camera MIPI link at 2.5 Gbps passes at room temperature with 80 ps of eye margin, but fails at +70 °C. Walk me through your debug plan and name your top three physical suspects.”</em> 先自己講 3 分鐘（英文、對著空氣也要講），再展開參考答案。</p>
+<details>
+<summary>看詳解（參考答案＋评分要点）</summary>
+<p><strong>Reference answer:</strong> First I'd make sure both measurements are honest: same probe point, same grounding, same settings, and the instrument's own jitter floor subtracted—temperature drift of my conclusion must not be an artifact of setup changes between runs. Then I'd decompose the failure: capture eyes and bathtub curves at both temperatures and split the loss of margin into amplitude (eye height) versus timing (eye width, DJ vs RJ). That split routes the investigation: eye-height-dominated points to the channel or driver—copper resistivity rises with temperature (~0.4 %/°C, order of magnitude, so insertion loss is a bit higher hot), and the TX driver's swing and threshold behavior also shift; RJ-dominated points to the clock/PLL path and to supply noise coupling, because VCO phase noise and supply rejection both degrade hot; DDJ/ISI-dominated means the channel's pulse spreading crossed the cliff with the loss increase—the link was marginally designed at the flat part of the bathtub. Concretely: A/B-swap the flex with a known-good short one; re-measure an S21 test coupon hot vs cold to separate channel loss from silicon; check the RX datasheet's temp specs—threshold and sensitivity drift are legitimate silicon-side suspects. Finally, I'd close with statistics, not anecdotes: how many units, which distribution, and what margin distribution at which corner—because the real question is not 'why did it fail' but 'what is the margin distribution at worst case, and what do we change to move it'.</p>
+<p><strong>評分要點：</strong>①先儀器誠信再結論（升溫前後條件一致）②用 bathtub 拆「幅度 vs 時間、DJ vs RJ」決定路線圖（這是本週的主武器）③三個嫌疑犯各附機制：銅損/板材損溫度漂移＋驅動摆幅（通道側）、PLL/電源雜訊（時鐘側）、ISI 臨界（設計側）④A/B 實驗具名（換 flex、S21 溫度對比）⑤以分布與角位收尾。缺 ②或④ 各扣半分。</p>
+</details>
+
+<p><strong>Q18.</strong> <em>“Two engineers measure the same clock on the same board. One reports 30 ps cycle-to-cycle jitter, the other reports 300 ps. Both are honest and neither instrument is broken. Explain at least four ways this is possible.”</em></p>
+<details>
+<summary>看詳解（參考答案＋評分要點）</summary>
+<p><strong>Reference answer:</strong> Jitter is not an intrinsic property of a signal alone—it's a property of the signal <em>plus the measurement definition</em>. Four (or more) legitimate explanations: (1) <strong>Reference/trigger choice</strong>: Engineer A self-triggers on the same signal—cycle-to-cycle jitter referenced to the previous edge, where slow drift cancels; Engineer B triggers on a clean external source (or uses a CDR with a long time-constant loop), so the slow wander that A's reference absorbed now shows up—10× difference is common between these definitions. (2) <strong>Bandwidth limit and filtering</strong>: a 500 MHz bandwidth limit vs full 8 GHz front-end filters out high-frequency jitter; some scope jitter apps apply a default high-pass. (3) <strong>Statistics</strong>: 30 ps may be an RMS (1σ) number and 300 ps a max pk-pk from millions of edges—different units of speech entirely; or A captured 10K edges and B captured 10M—unbounded RJ keeps growing with sample count. (4) <strong>SSC state</strong>: if the clock has spread-spectrum enabled and B's measurement window resolves the 30-ish kHz modulation (and A's doesn't, or A measures with SSC off), the "jitter" B sees is the intentional modulation. A fifth would be probe/grounding—A used a proper solder-in tip, B used a 6-inch ground lead ringing. Resolution: standardize the definition first—spec-driven thresholds, reference, window, sample count, SSC state—then both numbers become data instead of a fight. “Which definition were you using?” is the highest-leverage sentence in signal integrity.</p>
+<p><strong>評分要點：</strong>四條中每條 0.25 分，收束句（先統一定義再談數字）0.5 分。本題考的不是知識量是「<strong>定義優先於數值</strong>」的世界觀——PT2 Ch.4 對 c2c 定義不統一的警告、週 29 的「同一訊號三種對齊三張臉」、週 37 的「規格怎麼定義你就怎麼量」在這題合流。</p>
+</details>
+
+<h2>Part E｜Perfect Timing II 收官（Q19–Q20）</h2>
+
+<p><strong>Q19.［Ch.16×Ch.3 合體］</strong>(a) Ch.16 的驗證順序第一原則與背後的拓撲邏輯？(b) 「規格書的測量點就是法律」——用上升時間的 0.175/0.525 V 窗口與 LTJ 延遲窗（125 µs / 10 µs）兩個例子說明它分别管什麼。(c) Ch.3 的手冊直加 vs 實測是哪兩個數字？機制名稱？(d) 列三件「2002 年數據要以現代標準上修」的事。</p>
+<details>
+<summary>看詳解</summary>
+<p>(a) <strong>先驗央行（先驗 14.318 MHz 結晶/振盪電路），再逐路驗輸出</strong>——時脈樹每一路都是央行的倍頻分身，源頭誤差會乘以 N 傳遍全樹；央行錯，後面十二路精密度再高也是在錯基準上跳舞。(b) <strong>0.175/0.525 V 窗口管「電壓域的測量點」</strong>：時脈輸出經脈衝成形網路，上升/下降時間只能在規格指定的電壓窗內量，換窗口數字就失去可比性；<strong>延遲窗管「時間域的積分窗」</strong>：USB 48 MHz 取 125 µs（對齊 USB2.0 收端的受害窗）、dot clock 取 10 µs（≈一個 hsync 週期——書中實驗驗證「hsync 上的 c2c ＝ dot clock 上『一段等於 hsync 週期的時間』的 LTJ」）。两句合起來：<strong>延遲/電壓窗必須對齊下游受害機制，不是随便選整數</strong>。(c) 手冊 worst-case 直加 <strong>2.0 ns</strong> vs 整棵樹實測 <strong>917 ps</strong>——機制：<strong>guard band compounding（保護帶複利疊加）</strong>：每個手冊數字自帶保險，直加＝把所有人的保險疊著買（PT2 Ch.3）。(d) 上修三例：① ±6σ 慣例 → 現代 serial link 以 BER 定 TJ（10⁻¹² 約 14σ）；② Ch.16 的 c2c 儀器門檻（10 Gsps、20 MB）是 2002 年規格——現代即時取樣 25 Gsps+/專用 jitter app 已常態，但「整個平均窗完整進記憶體＋累積 100K 週期」的精神不變，且要<strong>多扣儀器本底</strong>這一刀（2002 年書中較少強調）；③量測主力從 TIA 換到即時示波器 jitter 分解＋相位雜訊分析儀；方法論（先央行、按規格定義量、頻譜抓spur）一字不改。</p>
+</details>
+
+<p><strong>Q20.［Phase 1 大統籌］</strong>量產線回報：某 NB 機種的 camera MIPI 2.5 Gbps，約 2% 機子眼圖過不了 mask。你是被叫去收屍的人。把下面六個動作排出<strong>優先順序</strong>，並為每一步標出「用到的工具（哪一週）」與「產出物」：<br>
+（甲）拿 S21/TDR 量測試板與不良機通道、對設計值（週 14）；（乙）檢查量測 setup：探棒補償、地線、儀器本底、觸發定義（週 32/33/29）；（丙）對不良機做眼圖解剖＋bathtub 拆 DJ/RJ（週 27/35）；（丁）查不良機是否集中在某 flex 供應商/某批次（統計分層）；（戊）對嫌疑 aggressor（VCM/OIS/背光）做邻道 idle A/B（週 4/29）；（己）把各成分填進 jitter/眼寬預算表對規格結算（週 30）。</p>
+<details>
+<summary>看詳解</summary>
+<p><strong>參考順序：乙 → 丁 → 丙 → 甲/戊（依丙的分岔走）→ 己。</strong></p>
+<p><strong>乙（先）</strong>：量測不誠實，全案作廢——探棒補償、地線長度、儀器本底、觸發定義（Q18 的四種可能anya一條沒排就都在場）。產出：「量測系統自證清白單」。<br>
+<strong>丁</strong>：2% 是「集中在 2% 的機子」還是「2% 的隨機」？依供應商/批次/產線時段分層——FA 的第一刀永遠是<strong>分佈的形状</strong>（集中在某 flex 批 → 直接進甲；均勻散布 → 嫌疑設計角位）。<br>
+<strong>丙</strong>：眼圖解剖定病理（反射缺口？眼皮？瞇眼？分身？），bathtub 拆 DJ/RJ 定路線：<strong>幅度/ISI 路線 → 甲（通道）；時間 jitter 路線 → 戊＋時脈帳（頻譜/LTJ，週 36/37）</strong>。<br>
+<strong>甲/戊</strong>（並行按分岔）：S21 對設計值——插損超規找 flex 幾何/板材，陷波找 stub/谐振；邻道 idle A/B——眼皮消腫即串擾，點名 aggressor。<br>
+<strong>己（收口）</strong>：確定性直加、隨機 RSS×14，把「不良機 vs 良機 vs 設計值」三行填進同一張預算表——<strong>超支的那一格就是结案陳述書的主詞</strong>；改善對策（縮 flex/加 EQ/加回流 via/換板材）對應回各格算 margin 後才 DOE。</p>
+<p>這題沒有唯一順序（乙一定最先、己一定最後），考的是「<strong>誠信 → 分佈 → 病理 → 根因 → 結算</strong>」的骨架在不在——六週課你手上每樣工具都有對應的格子，面試官要聽的是你<strong>排序背後的理由</strong>。Phase 1 的畢業證詞只有一句：<strong>「任何波形結論之前，先問量測系統；任何改善對策之前，先有預算表。」</strong></p>
+</details>
+
+<h2>評分與行動</h2>
+<div class="card takeaway">
+  <span class="label">評分表（通過線：16/20，Day 37 預告過）</span>
+  <ul>
+    <li><strong>18–20 分</strong>：Phase 1 滿業。你已經能把「邊沿 → 線 → 不連續 → 串擾 → 損耗 → 眼 → 儀器」講成一條因果鏈——這正是 Camera HW EE 面試 SI 深挖題的滿分骨架。錯的題照樣進 Anki，然後<strong>放心進 Phase 2：電源不是理想的，從明天開始</strong>。</li>
+    <li><strong>16–17 分</strong>：過關——達標。錯題的出處課（詳解末標週次）今晚睡前重讀該節；若錯在 Part C，把 Day 35/36 的 bathtub 筆記再讀一輪：判讀題的價值在「推理鏈」不在「答案對」。</li>
+    <li><strong>12–15 分</strong>：有條件及格。週一照常進 PI（新主題會自然蓋舊傷），但<strong>下週三前</strong>完成：錯題對應課重讀＋Anki 補卡＋Part C 三圖向自己各講一次完整三段式（看到→推斷→下一步）。</li>
+    <li><strong>&lt; 12 分</strong>：停一天。Phase 2 的 PI/EMI 全部站在「阻抗、頻域語言、統計記帳」三塊地基上。把速查表六句靈魂＋六週 Anki 卡全刷（Day 3/10/17/24/31/38 各五張），週末補考一次本卷——慢這一天，Phase 2 會快很多。</li>
+  </ul>
+  <p><strong>考後行動（不分數段都要做）：</strong>①把本卷錯題的「出處週次」寫進手機備忘錄（下週睡前 10 分鐘的菜單）；②把「六句靈魂」唸一次並口述「六週故事線」錄音 3 分鐘——三個月後面試前的複習素材，今天就該存檔；③下週開始，Phase 2 第一課（PDN）會用到週 2 的 Z₀ 與週 5 的頻域觀點——把 Q2、Q5 兩題的詳解當睡前讀物。</p>
+</div>
+
+<h2>今日 Anki 卡片（Phase 1 畢業卡）</h2>
+<div class="anki">
+  <p class="q">Q1：Phase 1 六週一句話（故事線版）？</p>
+  <p class="a">A1：<strong>邊沿決定頻寬（0.35/t_r），頻寬決定「線是不是線」（v·t_r/6）；是線就有 Z₀，失配必反射（Γ），端接決定反射去哪裡；via/stub/回流破洞是不連續三兄弟（TDR 定位置、S 參數定罪）；鄰道要收利息（NEXT 飽和、FEXT 線性滾）；通道抽兩種稅（銅 √f、板材 f）；後果全寫在眼上（統計圖附 BER）；jitter 分科記帳（DJ 直加、RJ RSS×14）；一切結論之前先讓儀器與參考源自證清白（PT2 Ch.11/16）。</strong></p>
+
+  <p class="q">Q2：Phase 1 十大必背數字？</p>
+  <p class="a">A2：①0.35/t_r（頻寬）②v≈15 cm/ns（εr≈4.3）③判線：長&gt;λ/6 或 T_D&gt;t_r/6 ④Z₀=√(L′/C′)、Γ=(Z_L−Z₀)/(Z₀+Z_L) ⑤L_sat=v·t_r/2（1ns→7.5cm）⑥stub陷波 f=v/4ℓ ⑦δ≈66µm/√f(MHz) ⑧α_diel≈0.32 dB/10cm/GHz（FR4）、f_x≈2GHz 級 ⑨TJ=DJ_pp+14σ@10⁻¹² ⑩SRC：±300 ppm、c2c 125ps（100K 週期）、LTJ 延遲窗 125µs/10µs、PCIe loop BW 7–22MHz（PT2 Ch.16）。</p>
+
+  <p class="q">Q3：眼圖四病指紋＋第一刀？</p>
+  <p class="a">A3：<strong>反射</strong>＝固定位置咬缺口（d=v·Δt/2 反查 TDR）；<strong>串擾</strong>＝整條眼皮增厚（邻道 idle 消腫）；<strong>損耗</strong>＝均勻瞇眼（隨長度/速率單調）；<strong>ISI</strong>＝交叉點分身分得開（clock pattern 合併）。第一刀依序：量測誠信（觸發/本底/探棒）→ 分佈分層（不良集中嗎）→ clock pattern A/B → 邻道 A/B → S21/TDR 定罪。</p>
+
+  <p class="q">Q4：jitter 記帳＋量測誠信合併版三步？</p>
+  <p class="a">A4：①先統一定義與 setup（參考/觸發、窗、SSC、帶寬濾波、統計量——「你在用哪個定義？」是 SI 最值钱的一句話）②科目分離：DJ（DCD/DDJ/SJ/BUJ）各有 A/B 實驗、pk-pk 直加；RJ 報 σ 取 RSS，@BER 10⁻¹² ×14 ③合成報告三件套：TJ=DJ_pp+14σ＋樣本數/BER＋margin%（&lt;10% 觸發角位複測）。餵 PLL 的參考時脈另開兩本帳：LTJ（延遲窗=受害窗）＋頻譜（spur 對源）。</p>
+
+  <p class="q">Q5：redriver/retimer/EQ/修通道——決策樹一句版？</p>
+  <p class="a">A5：<strong>永遠第一志願修通道</strong>（縮短/換板材/回流紀律——唯一無副作用）；超支只在確定性 ISI 格 → EQ（TX de-emphasis 源頭動手不放大髒東西；RX CTLE 末端動手不分敵我 ×f_p/f_z）或 redriver（CTLE 顆粒，jitter 不重置）；RJ 格也超支 → 只有 retimer（CDR 重取樣，預算表重開）或多花錢修時鐘樹；一切判斷以「預算表哪一格超支」為主詞，不是以「眼好不好看」（PT2 Ch.3：直加 2.0ns vs 實測 917ps——填表用实测、扣帳、貼工作點的數字）。</p>
+</div>
+
+<h2>明日預告</h2>
+<div class="card">
+  <p><strong>Day 39（週一）：Phase 2 開張——PDN I：電源為什麼會「塌」？目標阻抗與去耦的第一性原理</strong></p>
+  <p>Phase 1 你管的是「訊號在銅裡怎麼跑」；Phase 2（週 7–12）改管「能量怎麼送進來、乾淨地送進來」。第一課從最基礎也最常被問倒的問題開始：電源平面不是理想電壓源——它是一個有 Z( f ) 的分配網路（PDN），電流一抽就分壓塌降。將學：電源樹（電池/charger/PMIC/rail → SoC/sensor）怎麼畫、<strong>目標阻抗 Z<sub>target</sub> = 容許漣波 ÷ 瞬態電流需求</strong>怎麼定義與計算、MLCC 的 ESR/ESL 與自諧振讓「一百顆 0.1 µF」為什麼可能全是裝飾品、平面電感與擴散電感的分工——Perfect Timing II Ch.5（電源濾波）的觀念將首次織入（週 7–8 的配套章節）。你修過六週 SI，明天開始：電源也是訊號。</p>
+</div>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

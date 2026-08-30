@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 39｜PDN I——「穩如泰山」的電源為什麼會跳舞：目標阻抗、電源樹與去耦第一性原理</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 7 週・第 39 天（週一新觀念課）</div>
+  <h1>Day 39：PDN I——「穩如泰山」的電源為什麼會跳舞：目標阻抗、電源樹與去耦第一性原理</h1>
+  <div class="meta">2026-08-31（一）｜預估學習時間：90 分鐘｜難度：★★★★☆（Phase 2 開張大課。Perfect Timing II Ch.5「電源濾波」＋Ch.8「去耦電容」雙章配套——書用一整章的實測數據告訴你：電源軌上的雜訊不是背景問題，而是直接寫進 jitter 帳本的「正式科目」；這一天是 SI 世界觀與 PI 世界觀的正式交接）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>過去六週你把「訊號」研究透了。今天開始一個殘酷的事實：<strong>供電給訊號的那條「直流」電源軌，本質上也是一個會抖、會諧振、會塌的訊號通道</strong>。當 SoC 內部一萬顆閘門同時翻轉，電源軌上會出現幾十到幾百 mV 的瞬態——你的 SI 全白做。今天要建立四個地基：</p>
+  <ol>
+    <li>世界觀交接：把電源軌當通道看——<strong>「先問電流的迴路在哪」</strong>（Day 38 畢業考 Q6(d) 的「先驗央行」延伸到電源域）</li>
+    <li>畫得出 NB <strong>電源樹</strong>：battery／charger／PMIC／rail → SoC／記憶體／sensor／VCM，每一層的責任與頻率管轄權</li>
+    <li>會定會算 <strong>目標阻抗 Z<sub>target</sub></strong>：容許漣波 ÷ 瞬態電流需求，以及為什麼它是一條「全頻域都要低於它」的曲線（PT2 Ch.8 例題與保留見解）</li>
+    <li>拆穿 <strong>MLCC 的真面目</strong>：ESR／ESL／自諧振、裝上板諧振點再下移約七成——所以「一百顆 0.1 µF 可能全是裝飾品」；以及電源雜訊怎麼直接換算成 jitter（PT2 Ch.5 量測方法論）</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要——畢業考的四個錨點，今天就用</h2>
+<ul>
+  <li><strong>Day 38 考卷 Q2（Z₀＝√(L′/C′)＋端接）：</strong>阻抗的語言不會因為你換到電源域就失靈。電源平面對本身就是一條「未端接的傳輸線」（PT2 Ch.8 原文原話），一樣有反射、駐波、諧振——週 2–3 的全套直覺原封不動搬過來。</li>
+  <li><strong>Day 38 考卷 Q5（頻域兩種稅）：</strong>導體損與介質損告訴我們「通道對高頻更貴」。電源分配網路（PDN）也是一個通道：DC-DC 穩壓器只在低頻稱王，頻率一高它的輸出阻抗一路上升——去耦階梯就是為不同頻段「各繳各的稅」。</li>
+  <li><strong>Day 38 考卷 Q6(d)＋Q19（先驗央行）：</strong>「所有輸出都是參考的倍數，所以先驗參考源」。今天升級成：<strong>電源是整塊板子的「源」——訊號髒先查時脈，時脈髒先查電源</strong>。而查的方法，今天順便學書本的一套（主動注入、全頻掃描、用受害指標判定）。</li>
+  <li><strong>Day 38 考卷 Q18（定義優先於數值）：</strong>「規格怎麼定義測量點，你就怎麼量」。電源漣波規格更是重災區：pp 還是 rms？哪個頻寬下量的？地線怎麼接的？——同一條軌，四種量法四個數字。</li>
+  <li><strong>Day 32（探棒三宗罪＋地線 pickup）：</strong>今天練習 5 要還帳：你「量到的電源漣波」有多少是探棒地線從空氣中借來的？</li>
+  <li><strong>週 1 的分壓直覺：</strong>今天所有電壓跌落的本體，仍是那條國中公式的交流版：ΔV＝ΔI×Z。差別只在於：電源路的 Z 是<strong>頻率的函數</strong>，而且你要對「每個頻率」都負責。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：水塔、加壓罐與水鎚</span>
+  <p>把電源系統想成一棟大樓的自來水系統。<strong>水塔</strong>（電池＋充電器＋PMIC）位在高處，名義上給你「恆定水壓」（直流電壓）。但水塔離每一戶很遠，中間是<strong>又長又細的水管</strong>（電源平面、過孔、封裝引線腳——全都是電感）。平時的慢用水（靜態電流），水塔的水位調節器（迴路補償，反應很慢）從容補得上，沒問題。<br>
+  問題出在<strong>「突然全樓沖水」</strong>：SoC 內部幾萬顆電晶體在同一個 clock edge 齊齊切換，等於全樓馬桶同時沖——這股「瞬態電流」要得很急（µs 甚至 ns 級），水塔根本來不及反應。這時候靠什麼？靠<strong>每一層樓的加壓罐</strong>（去耦電容）就近放水。加壓罐夠近夠多，水壓只晃一下；不夠，水壓整個塌下去——對電路來說就是「電源塌了」，取樣錯誤、jitter 暴增。<br>
+  還有一個更陰的：<strong>水管本身有質量</strong>。水流突然被截斷，管裡的水會因慣性繼續衝，產生<strong>水鎚</strong>（電感上的 V＝L·di/dt）——電流變化的「急迫程度」本身就會在阻抗上敲出電壓尖刺。所以電源工程師的口頭禪是：<strong>「我不怕你要多少電，我怕你多快要。」</strong>（ΔI 不可怕，ΔI/Δt 才致命）<br>
+  最後，「目標阻抗」就是自來水公司的服務承諾：<strong>「不管你怎麼沖水，水壓波動不超過 X」</strong>。把承諾反推回去，就得到水管最寬要多少（阻抗上限）；而水塔管低頻、樓頂水塔管中頻、每戶加壓罐管高頻——一家管不全部，這就是「去耦階梯」。</p>
+  <p><em>公式全部遮住，這段話就是今天的結論：電源不是理想電壓源，它有隨頻率上升的阻抗；負載要的電流是「又急又猛」的；所以必須用一階又一階的儲能元件，在每個頻段輪流接棒，把「阻抗×電流突變」壓在規格之內。</em></p>
+</div>
+
+<h2>1. 世界觀交接：電源軌也是一條通道（PT2 Ch.5 的實證）</h2>
+
+<p>Perfect Timing II Ch.5 的第一句話就是今天的綱領（原文大意）：<strong>「電源是提供最佳時脈訊號性能的基礎。電壓供應的品質一退化，訊號完整性就跟著退化——電源雜訊會影響時脈緩衝器的 jitter 與 skew。」</strong>書裡還點出設計者的立場：<em>你要自己決定這個時序退化量在總預算裡能不能接受</em>——換言之，電源雜訊不是「有沒有」的問題，是「你打算為它花多少預算」的問題。這句話就是 Phase 2 的存在理由。</p>
+
+<h3>1.1 書中實驗一：把電源軌當信號源，主動注入掃描</h3>
+
+<p>Ch.5 最珍貴的不是結論，是<strong>實驗設計</strong>。量電源雜訊影響的传统做法是「守株待兔」：接上示波器，碰運氣抓系統裡恰好出現的擾動。書中的測試座（圖 5.1）改成「主動审讯」：</p>
+<ul>
+  <li>待測元件（DUT，各種 PLL／緩衝器）照常供電，但供電路徑上串了一顆電阻（圖中 5 Ω），讓<strong>整個供電平面可以被一個正弦波源「整體調變」</strong>——把已知的、幅度可控的「假雜訊」直接攪進電源裡；</li>
+  <li>掃描範圍 <strong>10 kHz–5 MHz</strong>。原文特別強調：「每次測試都要掃整個範圍，因為雜訊不會只出現在單一頻率」——你永遠不知道真系統裡的雜訊住在哪個頻段；</li>
+  <li>DUT 每一顆 VCC 腳旁的 <strong>0.1 µF 去耦電容照常焊著</strong>——「讓它像真實工作環境一樣運作」，不拆掉裝飾來騙自己；</li>
+  <li>注入的雜訊先經過一顆 22 µF 大電容再壓過來（模擬「雜訊先過電源平面、再壓穿去耦電容到晶片腳」的真實路徑）；主供電刻意調高一點，補償電阻上的直流壓降，保證 DUT 供電不超限；</li>
+  <li>判定不靠「看電壓波形」，而是用<strong>下游受害者指標</strong>：時序分析儀（TIA）量 PLL 輸出多出來的 jitter／緩衝器多出來的延遲。</li>
+</ul>
+
+<div class="card takeaway">
+  <span class="label">把 Ch.5 測試哲學打包帶走（四條，全部可遷移到你的 NB／模組工作）</span>
+  <p>① <strong>主動注入已知干擾</strong>，不靠運氣抓——量敏感度曲線（輸出惡化量 vs 注入量）才是可比較、可結案的數據；② <strong>掃全頻段</strong>，因為你事先不知道敵人住哪；③ <strong>在「真實裝載狀態」下量</strong>（去耦電容照焊、負載照常跑），拆掉裝飾品的量測是自我催眠；④ <strong>用受害指標結案</strong>——電源雜訊的代價要翻譯成 jitter／skew／誤碼，才算進系統預算（呼應 Day 38 Q20 的預算表哲學）。你的版本：用訊號產生器＋注入變壓器（或pulser），把已知紋波攪進 sensor AVDD，量 MIPI 眼圖或影像條紋——這個實驗值得排進之後的實作日。</p>
+</div>
+
+<h3>1.2 一個把「電壓→時間」直接換算的公式</h3>
+
+<div class="formula">
+Ch.5 的核心換算式（原文照錄）：<br><br>
+<strong>額外 jitter（ns）＝ 電源雜訊幅度（V）÷ 訊號邊沿的切換速率（V/ns）</strong><br><br>
+白話翻譯：電路判讀 0 和 1 靠「穿越門檻電壓的時刻」。電源一抖，門檻的「穿越時刻」就被推早或推晚——
+雜訊越大抖得越多；訊號邊沿越陡（V/ns 越大），同樣的雜訊能推動的時間越少。<br>
+所以：<strong>慢邊沿的訊號對電源雜訊特別沒有抵抗力</strong>——這解釋了為什麼低速、小擺幅的訊號反而常常在電源問题上翻車。<br>
+書中還補了一句重要的：注入 300 mV 雜訊時，PLL 輸出「幅度與相位偏移同時受影響」；而且這種電源注噪 jitter 的直方圖是<strong>雙峰分佈、有界、決定性（deterministic, bounded）</strong>的——因為它由一個幅度已知的有限雜訊源注入。還記得週 5 嗎：DJ 可以直接相加、RJ 要開方——<strong>認出 jitter 的「戶籍」，帳才記得對</strong>。
+</div>
+
+<h3>1.3 同一碗雜訊，兩個 PLL 吃得差很多——而且規格書不告訴你</h3>
+
+<p>Ch.5 拿兩顆 PLL 做同一套注入測試（100／50／25 mV 三檔、全頻掃描），結果值得你記住這組書中數字：</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">條件（PT2 Ch.5 實測）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">PLL1（Comp2308）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">PLL2（CY2308）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">白話</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">注入 100 mV、雜訊頻率 200 kHz</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>&gt; 350 ps</strong> 額外 jitter</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>約 100 ps</strong></td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">同一碗雜訊，一個吐到 3.5 倍難吃——「電源抑制」是元件個資</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">注入 25 mV</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">峰值近 100 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">峰值約 50 ps</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">低幅度下差距變成 2 倍——非線性，不能只用一檔雜訊外推</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;">最差頻率點的位置</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">約 200 kHz</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">約 5 MHz</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">連「怕哪個頻段」都不同——所以必須掃頻，不能只測一點</td>
+</tr>
+</table>
+
+<p>Ch.5 接著落下 today's 最重要的一行批註（原文大意）：<strong>「可惜，這些噪音抑制資料通常不列在標準規格書上，對設計者並不明顯。」</strong>——两颗同規格書的元件，對電源雜訊的抵抗力可以差 3 倍以上，而你翻遍 datasheet 看不到這件事。<em>這是 PI 世界的第一條職業準則：電源域的性能是「測出來的」，不是「規格書讀出來的」。你未來面試講「我會用注入法建立元件的電源敏感度曲線」，跟「我看規格書選料」是兩個段位。</em></p>
+
+<p>非 PLL 的一般緩衝器也一樣中招：Ch.5 實測供電調變會同時改變輸入級的「閘極切換點」與內部的傳播延遲 t<sub>PD</sub>，淨效果是輸出 jitter。一個有用的細節：對簡單緩衝器，<strong>雜訊對所有輸出腳的影響是一樣的，所以「輸出對輸出」的 skew 維持恆定</strong>——受害的是「對共同參考的時間」，不是輸出彼此。但如果緩衝器內部delay 路徑不對稱（複雜功能件），輸出間 skew 也會被攪渾。<em>現代延伸：你鏡頭模組的 sensor 就是一顆「複雜功能件」——電源抖動對它內部類比／數位路徑的影響不對稱，所以 AVDD 乾淨度會被單獨列規格。</em></p>
+
+<p><strong>差動訊號也不能逃單（Ch.5 LVPECL 實測）：</strong>一顆 1 GHz 的 LVPECL 扇出緩衝器，注入 25 mV～300 mV 電源雜訊：低幅度下交叉點 jitter 小於約 5 ps，300 mV 時逼近約 6 ps。數字小，但原文點出兩個關鍵判讀：① LVPECL 的共模電壓本來就隨 VDD 移動，<strong>真正要盯的是「交叉點在時間上的擾動」而不是共模晃動</strong>；② 用單端探棒看差分對「很難判斷交叉點到底被擾了多少」，要用高性能差動探棒或差動式時間量測——<strong>「差動免疫電源雜訊」是入門課的童話：它免疫的是共模耦合，不免疫「供電本身變形」。</strong>你週 4 學的「差動兩破口」，這是第三個破口的預告。</p>
+
+<h2>2. 電源樹：NB 的「自來水系統」怎麼畫</h2>
+
+<figure>
+<svg viewBox="0 0 920 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：NB 電源樹——從電池／USB-C 到每一顆晶片的「自來水系統」（示意，電壓值為常見量級）</text>
+
+  <defs>
+    <marker id="arr39" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <polygon points="0 0, 9 4.5, 0 9" fill="#0f4c5c"/>
+    </marker>
+    <marker id="arr39r" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <polygon points="0 0, 9 4.5, 0 9" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- Sources -->
+  <rect x="30" y="70" width="165" height="70" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="112" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400e">USB-C 充電器</text>
+  <text x="112" y="116" text-anchor="middle" font-size="10" fill="#92400e">5/9/15/20 V 協商</text>
+
+  <rect x="30" y="170" width="165" height="70" rx="10" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="112" y="197" text-anchor="middle" font-size="13" font-weight="bold" fill="#92400e">電池</text>
+  <text x="112" y="216" text-anchor="middle" font-size="10" fill="#92400e">單芯約 3.6–4.4 V</text>
+
+  <!-- Charger / EC -->
+  <rect x="250" y="115" width="160" height="95" rx="10" fill="#0f4c5c" stroke="#0f4c5c" stroke-width="2"/>
+  <text x="330" y="145" text-anchor="middle" font-size="14" font-weight="bold" fill="white">充電器 IC／路徑管理</text>
+  <text x="330" y="165" text-anchor="middle" font-size="9" fill="#cbd5e1">選擇電源來源、系統母線</text>
+  <text x="330" y="180" text-anchor="middle" font-size="9" fill="#cbd5e1">VBUS／PWR_BRIDGE</text>
+  <text x="330" y="197" text-anchor="middle" font-size="9" fill="#cbd5e1">（大電流、開關噪聲重災區）</text>
+  <line x1="195" y1="105" x2="250" y2="140" stroke="#d97706" stroke-width="2.5" marker-end="url(#arr39)"/>
+  <line x1="195" y1="205" x2="250" y2="185" stroke="#d97706" stroke-width="2.5" marker-end="url(#arr39)"/>
+
+  <!-- PMIC -->
+  <rect x="465" y="90" width="185" height="150" rx="10" fill="#155e75" stroke="#155e75" stroke-width="2"/>
+  <text x="557" y="118" text-anchor="middle" font-size="14" font-weight="bold" fill="white">PMIC／多相 DC-DC</text>
+  <text x="557" y="138" text-anchor="middle" font-size="9" fill="#cbd5e1">把母線降成十几條 rail</text>
+  <text x="557" y="155" text-anchor="middle" font-size="9" fill="#cbd5e1">含上電順序（sequence）控制</text>
+  <text x="557" y="172" text-anchor="middle" font-size="9" fill="#cbd5e1">迴路頻寬：約 kHz 量級</text>
+  <text x="557" y="189" text-anchor="middle" font-size="9" fill="#fda4af">＝水塔：只管得動「慢用水」</text>
+  <text x="557" y="212" text-anchor="middle" font-size="9" fill="#cbd5e1">高頻瞬態？概不負責（→去耦）</text>
+  <line x1="410" y1="160" x2="465" y2="160" stroke="#0f4c5c" stroke-width="2.5" marker-end="url(#arr39)"/>
+
+  <!-- Rails -->
+  <g font-size="10.5">
+    <line x1="650" y1="110" x2="710" y2="70" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr39)"/>
+    <rect x="715" y="45" width="180" height="62" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="805" y="63" text-anchor="middle" font-weight="bold" fill="#991b1b">VCC_CORE 約 0.6–1.1 V</text>
+    <text x="805" y="78" text-anchor="middle" fill="#991b1b">SoC 核心｜靜態 A 級、瞬態可達數十 A</text>
+    <text x="805" y="93" text-anchor="middle" font-size="9" fill="#64748b">Ztarget 最苛：mΩ 以下（量級）</text>
+
+    <line x1="650" y1="135" x2="710" y2="132" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr39)"/>
+    <rect x="715" y="112" width="180" height="56" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="805" y="130" text-anchor="middle" font-weight="bold" fill="#166534">記憶體 VDD／VDDQ 約 1.1–1.8 V</text>
+    <text x="805" y="145" text-anchor="middle" fill="#166534">讀寫 burst＝整齊的週期性電流</text>
+    <text x="805" y="160" text-anchor="middle" font-size="9" fill="#64748b">漣波集中在burst 速率與其諧波</text>
+
+    <line x1="650" y1="165" x2="710" y2="205" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr39)"/>
+    <rect x="715" y="180" width="180" height="62" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="805" y="198" text-anchor="middle" font-weight="bold" fill="#075985">Sensor 三軌（典型）</text>
+    <text x="805" y="213" text-anchor="middle" fill="#075985">AVDD 2.8／DVDD 1.2／DOVDD 1.8 V（約）</text>
+    <text x="805" y="228" text-anchor="middle" font-size="9" fill="#64748b">類比軌最髒 → 影像條紋、SNR 掉</text>
+
+    <line x1="650" y1="195" x2="710" y2="280" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr39)"/>
+    <rect x="715" y="255" width="180" height="62" rx="8" fill="#f3e8ff" stroke="#9333ea" stroke-width="1.5"/>
+    <text x="805" y="273" text-anchor="middle" font-weight="bold" fill="#6b21a8">VCM／AF／OIS 驅動 約 3 V</text>
+    <text x="805" y="288" text-anchor="middle" fill="#6b21a8">AF 收對焦＝規律電流脈衝（ms 級）</text>
+    <text x="805" y="303" text-anchor="middle" font-size="9" fill="#64748b">共軌時會「震」到鄰居＝電源域串擾</text>
+
+    <line x1="650" y1="225" x2="710" y2="355" stroke="#0f4c5c" stroke-width="2" marker-end="url(#arr39)"/>
+    <rect x="715" y="330" width="180" height="62" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="805" y="348" text-anchor="middle" font-weight="bold" fill="#334155">3.3V 常開域／I/O／EEPROM</text>
+    <text x="805" y="363" text-anchor="middle" fill="#334155">待機電流小、但「永遠在」</text>
+    <text x="805" y="378" text-anchor="middle" font-size="9" fill="#64748b">休眠漏電、待機抖動的舞台</text>
+  </g>
+
+  <!-- bottom: the question -->
+  <rect x="30" y="420" width="860" height="115" rx="10" fill="#0b1220"/>
+  <text x="52" y="448" font-size="13" font-weight="bold" fill="#fbbf24">畫電源樹的儀式：每看到一顆負載，問三個問題——</text>
+  <text x="52" y="472" font-size="11" fill="#e2e8f0">① 它的電「從哪條 rail 來、經過幾個開關、幾個過孔、多長的平面」？（阻抗路徑）</text>
+  <text x="52" y="491" font-size="11" fill="#e2e8f0">② 它「多快要」這些電（ΔI 與 di/dt、最壞 pattern 是什麼）？（需求頻譜）</text>
+  <text x="52" y="510" font-size="11" fill="#e2e8f0">③ 這條 rail 上還有誰？它的瞬態會不會經「共同阻抗」敲到我的受害者？（共犯結構——週 4 串擾的電源版）</text>
+  <text x="52" y="528" font-size="11" fill="#7dd3fc">這就是 Day 38「先問電流的迴路在哪」在電源域的完全體。</text>
+</svg>
+<figcaption>圖 1：NB 電源樹（示意）。關鍵不是背元件名，而是三個動作：畫出「阻抗路徑」、標出「需求頻譜」、找出「共犯結構」。電壓數值是常见量級，實際以你手上平台規格為準。</figcaption>
+</figure>
+
+<p><strong>讀樹三層經：</strong>① <strong>來源層</strong>（電池／charger）管「能量」，不管品質——它是全板最大的開關雜訊源之一；② <strong>調節層</strong>（PMIC／DC-DC）管「穩壓」，但它的負迴路只能追到 kHz～約百 kHz 量級（書中 2002 年語境是「kHz 或數十 kHz」；<em>現代上修：現代 NB 的 buck 開關頻率常在數百 kHz～1 MHz+，迴路頻寬約十分之一開關頻率的量級——但「調節器只顧低頻」的結論一字不改</em>）；③ <strong>分配層</strong>（平面、過孔、封裝）＋<strong>儲能層</strong>（去耦電容家族）負責調節器管不動的中高頻。<strong>PDN（Power Delivery Network）就是第②＋③＋④層的總和，而它的品質指標只有一張臉：阻抗隨頻率的曲線。</strong></p>
+
+<div class="card pitfall">
+  <span class="label">坑：DC 電壓量到 1.80 V ≠ 電源好</span>
+  <p>你用三用電表（或示波器 DC 檔）量 rail，1.800 V，收工——這個動作品質約等於零。因為規格在意的<strong>全部是「交流分量」</strong>：漣波、瞬態塌陷、諧振尖刺，它們疊在漂亮的直流上。你過去五年「量電壓過規」的經驗要重標：<strong>那是 DC 驗證，不是 PI 驗證。</strong>PI 驗證的起手式是：規格怎麼定義漣波（pp？頻寬？負載條件？量測點？）→ 再決定儀器與探測方法（Day 38 Q18：定義優先於數值）。</p>
+</div>
+
+<h2>3. 目標阻抗 Z<sub>target</sub>：把「容許塌多少」翻譯成「阻抗上限」</h2>
+
+<p>PT2 Ch.8「Power Distribution System Impedance」一節的模型：理想電源是全頻域 Z＝0 Ω 的定壓源；現實的電源<strong>只在低頻阻抗夠低，頻率一高阻抗就（因電感性）一路上升</strong>——所以「高頻部分必須靠去耦電容把總阻抗壓下來」。而「壓到多低才算低」，由一個定義清晰的數字說話：</p>
+
+<div class="formula">
+<strong>Z<sub>target</sub> ＝ ΔV ÷ ΔI ＝ (V<sub>DD</sub> × 容許漣波百分比) ÷ 瞬態電流需求</strong><br><br>
+書中例題（Ch.8 照錄）：3.3 V 電源，允許漣波 2%，負載電流變化 4 A：<br>
+Z<sub>target</sub> ＝ 3.3 V × 2% ÷ 4 A ＝ 66 mV ÷ 4 A ＝ <strong>17 mΩ</strong>（原書印 17 mΩ，即 0.017 Ω）<br><br>
+白話翻譯：「你允許這條軌塌 66 mV、而你隨時可能多要 4 A——那麼從 DC 到整個 관심頻段，
+電流必經的這条路阻抗都不准超過 17 mΩ，超過了就注定塌給你好看（ΔV＝ΔI×Z，國中公式還給你了）。」<br><br>
+書中另外兩條眉角（重要，面試聊到這層就是分岔嶺）：<br>
+① 原文註記：實務上電流瞬態「大約是最大電流的一半」，所以用全額 ΔI 計算「可能高估需求（保守一倍）」——
+要不要放寬，取決於你對「板子電流本質」的理解，這是<em>工程判斷不是公式</em>；<br>
+② Z<sub>target</sub> 的規則是「<strong>在預期會發生電流瞬態的整個頻率範圍內都不准超過</strong>」——
+不是某一個頻率，是一整條曲線。這才是 PDN 設計真正的軍令狀。
+</div>
+
+<p><em>現代標準需上修（量級）：書中 17 mΩ 是 2002 年 3.3 V／4 A 的世道。現代 NB 的核心軌動輒 0.7–1.0 V、靜態十餘 A、瞬態數十至上百 A、容許漣波常常只有額定電壓的 ±2%～±5%（各平台自訂）——算下來 Z<sub>target</sub> 落在<strong>個位數 mΩ 甚至 sub-mΩ 量級</strong>。數字變兇了十倍百倍，但「ΔV＝ΔI×Z(f) 全頻域負責」這句憲法反而更常被人拿顯微鏡看。</em></p>
+
+<h3>3.1 為什麼「直流夠壓」和「交流夠穩」是兩回事——頻域分工的必然性</h3>
+
+<p>Ch.8 的圖 8.8 是本課最重要的一張概念圖的原始版本：把<strong>電源本身的阻抗曲線</strong>（低頻很低的電感斜坡）和<strong>去耦電容的阻抗曲線</strong>（高頻很好的電容斜坡）並列畫出來——前者低頻稱王、後者高頻稱王，兩條線在中間「交棒」之後，<strong>並聯的總阻抗全頻域都被壓低</strong>。書中例子的規模（照錄）：DC-DC 電源建模為 ESR＝1 mΩ、ESL＝60 nH；四顆並聯的鉭電容每顆 ESR＝30 mΩ、ESL＝4 nH、300 µF——電源在約 40 kHz 前守住 17 mΩ，鉭電容把接力棒帶到約 2.5 MHz，再後面交給更小的陶瓷電容。</p>
+
+<figure>
+<svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：PDN 阻抗階梯——去耦是「四個跑者的接力賽」（依 PT2 Ch.8 圖 8.8/8.12/8.18 精神繪製，示意）</text>
+
+  <defs>
+    <marker id="arr39b" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- axes -->
+  <line x1="90" y1="400" x2="870" y2="400" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="90" y1="400" x2="90" y2="70" stroke="#64748b" stroke-width="1.5"/>
+  <text x="480" y="428" text-anchor="middle" font-size="11" fill="#374151">頻率（對數）：10 Hz → 10 GHz</text>
+  <text x="58" y="235" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 58 235)">阻抗（對數）</text>
+  <g font-size="9.5" fill="#64748b" text-anchor="middle">
+    <text x="110" y="415">10</text><text x="250" y="415">10³</text><text x="390" y="415">10⁵</text><text x="530" y="415">10⁷</text><text x="670" y="415">10⁹</text><text x="810" y="415">→ Hz</text>
+  </g>
+
+  <!-- Ztarget line -->
+  <line x1="95" y1="330" x2="820" y2="330" stroke="#dc2626" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="130" y="322" font-size="11" font-weight="bold" fill="#dc2626">Ztarget（全頻域不得逾越的地板，書例 17 mΩ／現代核心軌更兇）</text>
+
+  <!-- supply: inductive rising from low left -->
+  <path d="M100,392 L140,390 L250,382 L390,355 L530,290 L670,205 L810,110" stroke="#0f4c5c" stroke-width="2.5" fill="none"/>
+  <text x="150" y="378" font-size="11" fill="#0f4c5c" font-weight="bold">電源（DC-DC）：低頻稱王，之後 jωL 一路上升（ESL≈60 nH 量級，Ch.8）</text>
+
+  <!-- bulk tantalum: V shape dip around 10^5-10^6 -->
+  <path d="M240,120 L330,200 L420,290 L460,310 L520,300 L600,240 L700,150" stroke="#16a34a" stroke-width="2.2" fill="none" stroke-dasharray="1 0"/>
+  <text x="300" y="185" font-size="11" fill="#16a34a" font-weight="bold">Bulk（鉭／ Polymer，百 µF 級）：接到棒約到 MHz 級（書例 2.5 MHz）</text>
+
+  <!-- ceramic 0.1uF dip around 10^7 -->
+  <path d="M470,95 L545,200 L590,280 L615,300 L645,285 L700,210" stroke="#9333ea" stroke-width="2.2" fill="none"/>
+  <text x="500" y="118" font-size="11" fill="#6b21a8" font-weight="bold">陶瓷 MLCC（µF→nF 各級接力）：書中說可守到約 200 MHz</text>
+
+  <!-- plane cap: flat low to right then rising with resonances -->
+  <path d="M650,345 L720,338 L790,330 L820,300 L840,240 L850,180" stroke="#ea580c" stroke-width="2.2" fill="none"/>
+  <path d="M780,332 L790,300 L800,332" stroke="#ea580c" stroke-width="1.6" fill="none"/>
+  <path d="M838,260 L848,210 L856,260" stroke="#ea580c" stroke-width="1.6" fill="none"/>
+  <text x="700" y="362" font-size="11" fill="#c2410c" font-weight="bold">平面電容（電源─地面對）：200 MHz 以上接棒；</text>
+  <text x="704" y="377" font-size="10" fill="#c2410c">但平面是未端接傳輸線→ 高頻長出諧振尖刺（圖中小山峰）</text>
+
+  <!-- relay zone shading -->
+  <rect x="330" y="70" width="90" height="330" fill="#fbbf24" opacity="0.12"/>
+  <rect x="545" y="70" width="70" height="330" fill="#fbbf24" opacity="0.12"/>
+  <text x="375" y="86" text-anchor="middle" font-size="10" fill="#92400e">交棒區</text>
+  <text x="580" y="86" text-anchor="middle" font-size="10" fill="#92400e">交棒區</text>
+
+  <!-- notes -->
+  <rect x="90" y="440" width="780" height="48" rx="8" fill="#0b1220"/>
+  <text x="105" y="460" font-size="10.5" fill="#e2e8f0">接力賽的殘酷規則：① 交棒區（兩跑者阻抗交叉處附近）容易阻抗抬升——反諧振的溫床（明日 Day 40 主課）；</text>
+  <text x="105" y="478" font-size="10.5" fill="#e2e8f0">② 每個跑者的「谷底」由 ESR 決定、谷的位置由 1/√(ESL·C) 決定；③ 任何一棒掉棒（該頻段 impedance 竄上 Ztarget 之上），塌方就發生在那個頻段的負載事件上。</text>
+</svg>
+<figcaption>圖 2：去耦階梯＝接力賽（PT2 Ch.8「四件式系統」：電源／bulk 電容／陶瓷電容／板內固有電容，各守各自的頻段，「各頻段交接處的起伏無可避免、只能挪動」（原文大意））。200 MHz 的陶瓷棒次上限是 2002 年口徑；現代設計要一路守到 GHz 級，最後一棒交給埋入式平面電容與晶片內建電容。</figcaption>
+</figure>
+
+<h3>3.2 「高頻」由邊沿速度決定，不由時脈頻率決定——你的 sensor 早就「高頻」了</h3>
+
+<p>Ch.8 有一節標題就叫「How High is High Frequency?」：0.25 µm 以下製程的電晶體開關太快，<strong>「高速」的分類標準已經從時脈頻率改寫成邊沿速度（edge rates）</strong>——一個 1 MHz 的控制訊號，只要邊沿夠陡，它的頻譜就踏進 GHz，供電也必須按高頻規格處理（原文附圖 8.11：一支 50 MHz 時脈的頻譜包絡（sinc 形）延伸到 4 GHz 以上，到約 500 MHz 都還有可觀能量）。書中給的設計頻寬粗估式：</p>
+
+<div class="formula">
+<strong>f<sub>BYPASS</sub> ＝ 0.5 ÷ 最快的邊沿時間（transition rate）</strong><br><br>
+書中例：邊沿 0.5 ns → 去耦要守到 0.5/0.5 ns ＝ 1 GHz。<br>
+換你板上的數字的：MIPI D-PHY HS 邊沿約 100 ps 量級 → f<sub>BYPASS</sub> 約 5 GHz（量級估算）——
+這已經超出「焊得下 discrete 電容」的物理極限，<br>所以現代 SoC 的對策是：埋入式電容（embedded cap）、
+die 上 MIM 電容、power/ground 直接相鄰的薄介質層——把「最後一棒」做進板材與晶粒裡。<br>
+白話翻譯：<strong>去耦要做到多高頻，不取決於你的時脈多快，取決於你的邊沿多陡。</strong>
+</div>
+
+<h2>4. MLCC 的真面目：它是一條 R-L-C 三明治，不是一顆電容</h2>
+
+<div class="card intuition">
+  <span class="label">白话版：加壓罐的進水管</span>
+  <p>你以為的去耦電容：一只能進出無阻的水庫。真正的它：水庫（C）前面接了一段<strong>進水管</strong>（ESL，內部電極與端子的引線電感）和一個<strong>生鏽的閥門</strong>（ESR，介質與導體的損耗）。低頻時水管裡的水慢慢流沒感覺，閥門損耗也無所謂，「水庫」稱職；頻率一高，水管的慣性（感抗）先發難——水想進進出出，管内的水自己晃了起來（諧振）；諧振點上只剩生鏽閥門（ESR）撐場，那是它能做到的<strong>最低阻抗、一生的尊嚴底線</strong>；諧振點之後更扯，整顆元件變成「一根會進水的電感」——你請它去壓高頻雜訊，它反手幫雜訊開門。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：MLCC 的等效電路與阻抗 V 字曲線（PT2 Ch.8 圖 8.1/8.2/8.3 數據精神＋裝機效應）</text>
+
+  <defs>
+    <marker id="arr39c" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <polygon points="0 0, 8 4, 0 8" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- Equivalent circuit row -->
+  <rect x="40" y="50" width="840" height="92" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="74" font-size="12" font-weight="bold" fill="#0f4c5c">等效電路（Ch.8 圖 8.1：電容＝C 串 ESL 串 ESR）——「Decoupling caps are more than a capacitor」</text>
+  <line x1="110" y1="115" x2="200" y2="115" stroke="#334155" stroke-width="2"/>
+  <!-- ESR zigzag -->
+  <path d="M200,115 L212,115 L218,103 L230,127 L242,103 L254,127 L260,115 L272,115" stroke="#dc2626" stroke-width="2" fill="none"/>
+  <text x="236" y="92" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="bold">ESR（生鏽閥門）</text>
+  <!-- ESL coil -->
+  <path d="M272,115 q6,-14 12,0 q6,-14 12,0 q6,-14 12,0 q6,-14 12,0 L332,115" stroke="#2563eb" stroke-width="2" fill="none"/>
+  <text x="302" y="92" text-anchor="middle" font-size="11" fill="#2563eb" font-weight="bold">ESL（進水管，約 nH 級）</text>
+  <!-- C plates -->
+  <line x1="360" y1="97" x2="360" y2="133" stroke="#16a34a" stroke-width="3"/>
+  <line x1="378" y1="97" x2="378" y2="133" stroke="#16a34a" stroke-width="3"/>
+  <text x="369" y="88" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="bold">C（水庫本體）</text>
+  <line x1="378" y1="115" x2="470" y2="115" stroke="#334155" stroke-width="2"/>
+  <text x="128" y="108" font-size="11" fill="#334155" text-anchor="middle">端 1</text>
+  <text x="452" y="108" font-size="11" fill="#334155" text-anchor="middle">端 2</text>
+  <text x="690" y="105" font-size="10.5" fill="#475569">Z = √( ESR² + (ωL − 1/ωC)² )</text>
+  <text x="690" y="124" font-size="10.5" fill="#475569">f₀ = 1 / (2π√(ESL·C))</text>
+
+  <!-- V curve panel -->
+  <line x1="120" y1="400" x2="860" y2="400" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="120" y1="400" x2="120" y2="180" stroke="#64748b" stroke-width="1.5"/>
+  <text x="490" y="432" text-anchor="middle" font-size="11" fill="#374151">頻率（對數）</text>
+  <text x="92" y="290" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 92 290)">阻抗（對數）</text>
+  <g font-size="9.5" fill="#64748b" text-anchor="middle">
+    <text x="170" y="415">10⁴</text><text x="330" y="415">10⁶</text><text x="490" y="415">10⁸</text><text x="650" y="415">10¹⁰</text><text x="810" y="415">→ Hz</text>
+  </g>
+
+  <!-- ideal cap (dashed falling) -->
+  <path d="M135,195 L560,392" stroke="#94a3b8" stroke-width="1.6" fill="none" stroke-dasharray="5 4"/>
+  <text x="150" y="215" font-size="10" fill="#64748b">理想電容（−20 dB/dec 一路走低）——「教科書裡的它」</text>
+
+  <!-- real cap V curve -->
+  <path d="M135,198 L430,360 Q470,378 500,372 Q545,358 590,315 L700,215 L820,120" stroke="#0f4c5c" stroke-width="2.6" fill="none"/>
+  <!-- ESR floor tick -->
+  <line x1="420" y1="378" x2="530" y2="378" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <text x="300" y="366" font-size="11" fill="#166534" font-weight="bold">容性區（稱職水庫）</text>
+  <circle cx="472" cy="376" r="5" fill="#dc2626"/>
+  <text x="472" y="356" text-anchor="middle" font-size="11" font-weight="bold" fill="#dc2626">f₀ 串聯諧振：谷底＝ESR，元件一生的最低阻抗</text>
+  <text x="700" y="188" font-size="11" font-weight="bold" fill="#b91c1c">感性區：「會進水的電感」——</text>
+  <text x="700" y="203" font-size="10" fill="#b91c1c">對高頻雜訊而言它不但不擋，阻抗還隨頻率上升</text>
+
+  <!-- mounted shift -->
+  <path d="M135,210 L400,362 Q432,377 455,371 Q500,357 545,318 L650,220" stroke="#9333ea" stroke-width="2" fill="none" stroke-dasharray="7 4"/>
+  <text x="150" y="248" font-size="10.5" fill="#6b21a8" font-weight="bold">焊上板之後：pad＋via 的裝機電感串進來 → f₀ 再下移到約 70%（Ch.8 原文：down to roughly 70%）</text>
+
+  <!-- callout -->
+  <rect x="120" y="443" width="740" height="30" rx="8" fill="#0b1220"/>
+  <text x="135" y="462" font-size="10.5" fill="#e2e8f0">Ch.8 圖 8.3 的實證：ESL 減到 1/4（2 nH→0.5 nH），不只是 f₀ 右移，「整個頻段的阻抗都降低」——減裝機電感比換大電容更值得投資。</text>
+</svg>
+<figcaption>圖 3：MLCC 阻抗 V 字曲線。三句話讀完它：① 谷底（f₀）的深淺由 ESR 決定，你永遠挖不穿它；② 谷底的位置由 √(ESL·C) 決定，焊上板子再往左移約三成；③ f₀ 之後你是電感——用錯頻段，去耦變耦合。</figcaption>
+</figure>
+
+<h3>4.1 「一百顆 0.1 µF 可能全是裝飾品」——把口號算給你聽</h3>
+
+<p>Ch.8 給了一組 1 µF 陶瓷電容的典型參數（圖 8.2：ESR＝15 mΩ、ESL＝2 nH）。把它放進 f₀＝1/(2π√(ESL·C))：</p>
+
+<div class="formula">
+1 µF、ESL 2 nH → f₀ ＝ 1/(2π√(2×10⁻⁹ × 1×10⁻⁶)) ≈ 1/(2π×4.5×10⁻⁸) ≈ <strong>3.6 MHz</strong>（書圖同量級）<br>
+裝上板（裝機電感再串約 1–2 nH，約值）→ f₀ 掉到約 <strong>2.5 MHz 以下</strong>——呼應「約 70% 法則」。<br><br>
+推論一：你要對付 100 MHz 的邊沿噪音，這顆 1 µF 早在 30 倍頻率之外當了 97 微秒的電感。<br>
+推論二：並聯 N 顆「同值」電容，阻抗減為 1/N（Ch.8 圖 8.13：doubling the number halves the impedance）——
+但注意，是「整條曲線一起除以 N」，<strong>V 字的形狀與谷底位置完全不動</strong>。
+一百顆同值 0.1 µF 並在一起，谷底還是那個谷底、諧振還是那個諧振、該變感的地方集體變感。<br>
+推論三（今天先埋地雷，明天收帳）：<strong>不同值</strong>的電容並聯，一個在容性區、另一個已進感性區，
+兩座「水庫」開始互相振盪——反諧振尖峰，而且尖得比兩條單曲線任何一條都高（Ch.8 圖 8.14）。<br>
+「一百顆 0.1 µF」真正錯在哪：錯的不是顆數，是<strong>階梯上只剩一根棒次</strong>——
+接力賽一百個人全跑同一棒，第二棒之後沒人接，交棒區全靠緣分。
+</div>
+
+<h3>4.2 陶瓷電容的四種「变質」方式（Ch.8 材料課，選型必讀）</h3>
+
+<ul>
+  <li><strong>溫度／老化（Class 分野）：</strong>Ch.8 原文分級——Class 1（C0G/NP0）溫度係數可預測、基本不老化，最穩；Class 2 的 X7R 在 −55～125 °C 變化 ±15%；Class 3 的 Y5V 在 −30～85 °C 可以從 +22% 掉到 <strong>−82%</strong>（原文數字）。<em>實務判讀：標稱同為「1 µF 0402」，選錯介質質，你的「水庫」從頭到尾就只有兩成水。</em>（現代上修：今日 NB 量產早已把去耦固定在 X7R/X6S 以上、關鍵類比軌用 C0G，Y5V/Z5U 在去耦場合基本出局——但供應商 BOM 偷渡回來的案例，你我在 BOM review 都要抓得出來。）</li>
+  <li><strong>直流偏壓（DC bias）：</strong>Ch.8 圖 8.5：Class 2 介質加 DC 電壓會「縮水」。書圖顯示 X7R 在接近額定電壓時掉約十幾個百分點。<em>現代上修：小封裝高容值（如 0201/0402 的 10 µF 級）在額定偏壓下實剩容值可低到標稱的一半以下（廠商工具圖可查，量級）——「買 10 µF 用 3 µF」是現代 PI 的隱形稅。</em></li>
+  <li><strong>AC 振幅與時間：</strong>AC 電壓反而讓容值微升（圖 8.4）；Class 2 會隨時間指數老化（aging，圖 8.6），回爐加熱過居里點可「reset」——這段冷知識的用途：你的板子過完 reflow 之後容值是新的，但會一路老下去，量測數據要標「出爐後多久」。</li>
+</ul>
+
+<h2>5. 把電源「洗乾淨」：磁珠、電阻濾波與它們的脾氣（PT2 Ch.5 主場）</h2>
+
+<p>階梯把阻抗壓低是「守」；當髒的軌和乾淨的軌必須共存（感測器的 AVDD 之於 DC-DC 髒軌），還要「隔」。Ch.5 的處方是鐵氧體磁珠（ferrite bead），並用一整章的數據告訴你這顆「兩腳元件」有多難選。</p>
+
+<h3>5.1 磁珠不是電感：它是「高頻才醒來的電阻」</h3>
+
+<p>Ch.5 原文邏輯：磁珠勝過普通電感的原因是<strong>「較佳的高頻隔離」——它把一部分磁場存進鐵氧體材質裡</strong>（損耗機制），等效電路是「電感串一顆隨頻率變化的電阻 R(f)」（圖 5.8）；高頻下它<strong>呈現電阻性</strong>（雜訊被「燒掉」而非「反射回去」）；而且<strong>同阻抗下 DCR（直流電阻）比電感更低</strong>——直流壓降是電源路徑的原罪，能省必省。</p>
+
+<p>選珠三原則（Ch.5 原文整理）：<strong>DCR 越小越好（省壓降）、目標頻段阻抗越大越好（擋得住）、電抗性分量 X 要小</strong>——X 太大會扭曲濾波效果，而且<strong>「容易發生諧振條件」</strong>。然後書中落下打臉句：<strong>「實務測試發現：挑最低 DCR 並不總是最佳選擇。」</strong></p>
+
+<h3>5.2 書中血案：一顆「 amplify（放大）雜訊」的磁珠</h3>
+
+<p>Ch.5 的濾波器測試座（圖 5.10）：訊號產生器以 10 kHz–1 MHz 掃頻注入磁珠+C（10 µF 低 ESR 陶瓷）濾波器，示波器兩通道各量濾波前（VIN）／後（VOUT），畫出：</p>
+
+<div class="formula">
+<strong>衰減（dB）＝ 20 × log (V<sub>OUT</sub> / V<sub>IN</sub>)</strong><br><br>
+白話翻譯：濾波後電壓比濾波前小多少，取對數。負的越多＝濾得越乾淨；<strong>正值＝這颗磁珠在幫雜訊开香槟</strong>。<br>
+書中實測五顆磁珠，其中一顆「<strong>因接近 100 kHz 處的諧振，雜訊比例不減反增</strong>」——直接列入黑名單。
+</div>
+
+<p>更喪氣的是數據的「指紋辨識難度」：把「推薦」與「不推薦」兩顆磁珠的廠家 Z 曲線（圖 5.12／5.13）並排放——原文：「<strong>從製造商的規格曲線看不出哪顆適合做濾波器，差異很細微。</strong>」書中總結的黑名單三特徵（原文照錄要點）：</p>
+
+<ol>
+  <li><strong>低頻（如 10 kHz）無特性資料</strong>的磁珠——濾波器最賣力的頻段剛好沒人驗證過；</li>
+  <li><strong>DCR 極低（&lt; 0.1 Ω）</strong>——低 DCR 常常意味著高 Q：諧振起來又尖又會放大；</li>
+  <li>阻抗曲線有<strong>延伸到低頻的長電感性「尾巴」</strong>（long inductive tail）——書中黑名單珠的指紋。</li>
+</ol>
+
+<p>效果值得：書中把「過關」的磁珠裝回 PLL 供電路，50 mV 注入下，PLL1 的峰值 jitter 從沒濾波時的約 200 ps 降到 <strong>125 ps～25 ps 以下</strong>（視磁珠型號）；本身內建噪聲抑制的 PLL2 從約 150 ps 降到「極小、可忽略」。<strong>一顆兩腳元件，換一個數量級的 jitter。</strong>書中還特别提醒：正弦注入過關不算完，要再灌「switching power supply 的真雜訊」（書例：250 kHz 開關、週期內有陡階躍、諧波上到 MHz），用頻譜儀看 PLL 輸出載波（書例 66 MHz）的「峰是不是又尖又乾淨」——<strong>峰变胖＝jitter 变多</strong>。這跟你 Day 37 學的相位雜訊判讀完全同構。</p>
+
+<h3>5.3 電阻濾波：越「爛」越有效的反直覺處方</h3>
+
+<p>Ch.5 最後一發：當電流小到一定程度，<strong>直接用電阻取代磁珠做電源濾波</strong>。書例：PLL 有獨立的 VDDA 腳、datasheet 標 IDDA 最大 15 mA → 串 8 Ω 只掉 0.12 V（3.3 V 軌變 3.18 V，多半仍在規格內），搭配 0.1 µF／10 µF 就是一階 RC 低通。<strong>電阻的好處：低頻濾得比磁珠深得多</strong>——磁珠阻抗在低頻會塌（那是它的死區），電阻不分頻段一視同仁。原文點名受害場景：長期抖動（LTJ，定義在 20 µs 以上）敏感的應用——graphics dot clock 與序列連結時脈。<em>代價計算你已經會了：V＝I×R、P＝I²R，DCR 是常態稅、電阻壓降是「永遠在」的——所以這招只配小電流專用軌。你的 sensor AVDD（十幾 mA 量級）正是它的主場。</em></p>
+
+<div class="card pitfall">
+  <span class="label">坑：把磁珠當「直流導通、交流隔斷」的開關用</span>
+  <p>三個磁珠常見的認知錯誤：① 以為「600 Ω@100 MHz」是阻抗規格的全部——那顆珠在 100 kHz 可能只有 0.5 Ω（死區），也可能正好坐在諧振上變成噪聲增幅器；② 只看額定電流不看 DCR 發熱與<strong>阻抗隨溫度／直流偏載的衰減</strong>（大電流直流偏載會把鐵氧體「泡軟」，阻抗下滑——供應商曲線要查 Irated 那條）；③ 忘了磁珠＋負載電容是<strong>低通濾波器每顆都有諧振與 Q</strong>——「加顆珠總沒壞事」在電源域是危險口號，Ch.5 那顆放大雜訊的珠就是人證。<em>現代補充：NB 量產選珠還要看 SRf（自諧振）、額定電流降額、與後端去耦的諧振點計算——但 Ch.5 那張 2002 年的 blacklist 三特徵，今天依然是最快的初篩指紋。</em></p>
+</div>
+
+<h2>6. 實務案例連結</h2>
+
+<h3>6.1 NB 主機板（你的本行，PI 視角重看）</h3>
+<ul>
+  <li><strong>「CPU 全核衝載板子重啟」的 PI 腳本：</strong>瞬態 ΔI 巨大（數十 A、µs 內）→ 先問路徑阻抗（供電相位夠不夠、平面與過孔 contributions）→ 再問「需求頻譜」落在誰的管轄區（kHz 塌陷找迴路補償與 bulk；百 kHz–MHz 塌陷找陶瓷階梯；MHz 以上找平面）。你以前 debug「掉電重啟」只能换板試，現在你有頻域問卷。</li>
+  <li><strong>「1.8 V 軌量到 150 mV spike」的真身：</strong>先別改電路——換彈簧地/焊接式探頭重量（Day 32 三宗罪），十有八九是地線 pickup（練習 5 詳談）。PI 的 debug 第一步常常是「抓仪器的謊」，不是改設計。</li>
+  <li><strong>記憶體 rail 的「整齊漣波」：</strong>DDR 讀寫 burst 以整齐的速率抽電流，漣波會集中在 burst 速率與諧波上——頻域上一根根「整齊的針」呼之欲出（跟 Day 37 jitter 頻譜同一套偵探手法：針的位置＝嫌犯名單）。</li>
+  <li><strong>充電器／電池大電流域：</strong>PD 協商、負載切換的 ms 級大階躍，是「水塔本身晃」的層級——這是 PDN 頻譜最左端（DC～kHz）的戰事，靠大 bulk 與迴路補償；跟 MHz 級的戰事是不同的兵種，預算分開編。</li>
+</ul>
+
+<h3>6.2 鏡頭模組（camera 語言的 PDN）</h3>
+<ul>
+  <li><strong>三軌分工就是電源樹的縮影：</strong>sensor 的 AVDD（類比前端，約 2.8 V）／DVDD（核心數位，約 1.2 V）／DOVDD（介面，約 1.8 V）——數位轨的開關噪聲「借道共軌」敲類比轨，就是本章第 2 節三問第③條（共犯結構）的本體。AVDD 髒的成像證據：竖紋、水平帶、暗場 SNR 掉——你解過的「影像條紋」case，一大半最後是電源域的。</li>
+  <li><strong>VCM/OIS 驅動是「全樓沖水」模範生：</strong>AF 搜索時 ms 級規律脈衝、OIS 手震補償是「寬帶隨機用水」——它的電流頻譜正好落在「PMIC 管不動、小電容管不遠」的中間帶。跟 sensor 共軌時，影像上會看到「對焦搜索期間的亮度紋波」——電源域串擾的完美教科書（週 15 正式收帳）。</li>
+  <li><strong>MCLK 供電就是 Ch.5 的原型場景：</strong>sensor 主頻是時脈（Day 37 的微型央行），它的供電干不乾淨直接寫進 HS 眼圖（Additional Jitter＝Noise/SR 算給你：MCLK 擺幅 0.6 V/邊沿 0.5 ns＝1.2 V/ns；AVDD 上 30 mV 抖動→ 約 25 ps jitter 進場——量級自己按）。處方也是書中同款：小電流 → 8–10 Ω 電阻或低頻特性好的磁珠＋就近 LDO，把「濾波」做在感測器腳邊。</li>
+  <li><strong>EEPROM/I²C 上拉共軌：</strong>小電流但「永远在切換」，上拉電流脈衝在共用 rail 上的壓降，對高增益類比轨是小聲但持久的背景雜訊——共犯結構排查時，它是那個容易被放過的共犯。</li>
+</ul>
+
+<h2>7. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：Z<sub>target</sub> 白板計算（現代版）</strong>——某 SoC 核心軌 0.85 V，容許漣波 ±2%，最壞瞬態電流需求 30 A。(a) Z<sub>target</sub> 多少？(b) 依 Ch.8「瞬態約為最大電流一半」的見解放寬，值變成多少？(c) 你打算在報告裡怎麼呈現這個數字？</summary>
+<div class="answer">
+<p>(a) ΔV＝0.85 V×2%＝17 mV；Z<sub>target</sub>＝17 mV ÷ 30 A ≈ <strong>0.57 mΩ</strong>。</p>
+<p>(b) 用半額瞬態（15 A）：17 mV ÷ 15 A ≈ <strong>1.13 mΩ</strong>——寬一倍。Ch.8 的原話精神：全額計算「可能高估需求兩倍」，但要不要放寬取決於你對板上電流本質的理解。</p>
+<p>(c) 正確姿勢不是二選一，而是<strong>把假設寫進結論</strong>：「Ztarget＝0.57 mΩ（以全額 30 A 瞬態定義）；若平台證實同時切換機率受工作負載限制（半額場景），放寬至 1.1 mΩ——此假設需以實際 di/dt 量測（電流探棒／磁感應環）背書。」——一個數字＋它背後的兩條假設＋一條驗證計畫，這就是 Day 38 Q20 預算表哲學的 PI 版。順便注意：mΩ 等級的 impedance，PCB 上一段普通走線的 nH 都會在高頻搗亂——「零阻抗的銅」是童話，平面也會翹。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：算穿「裝飾品」</strong>——0402 100 nF MLCC，ESL 約 0.5 nH（典型量級）。(a) f₀ 多少？(b) 裝機後 pad＋via 再加約 0.5 nH，f₀ 變多少？跟 Ch.8 的「約 70% 法則」對得上嗎？(c) 你的 MIPI 邊沿約 100 ps，這顆電容能守到交棒區嗎？</summary>
+<div class="answer">
+<p>(a) f₀＝1/(2π√(0.5 nH × 100 nF))＝1/(2π√(5×10⁻¹⁷))≈ <strong>22.5 MHz</strong>。</p>
+<p>(b) 總 ESL≈1 nH：f₀≈1/(2π×1×10⁻⁸)≈<strong>15.9 MHz</strong>。15.9/22.5≈<strong>71%</strong>——跟書中「裝機電感讓諧振點降到約 70%」精確吻合（這不是巧合，是 √2 倍的電感就是 70.7%）。</p>
+<p>(c) f<sub>BYPASS</sub>＝0.5/100 ps＝<strong>5 GHz</strong>（量級）。0.1 µF 在 22.5 MHz 之後變電感、在 5 GHz 處感抗約 ωL≈2π×5×10⁹×1×10⁻⁹≈31 Ω——它不只沒在守，它已是阻抗牆。結論：<strong>100 ps 級邊沿的高頻去耦，只能靠「極低 ESL 的小封裝（0201/01005）＋via-in-pad 就近打地＋平面與 die 電容」</strong>；一百顆 0402 擺在錯的位置，等於一百個 31 Ω 的裝飾品。位置（裝機電感）比顆數值錢——Ch.8 圖 8.3 的結論。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：電源抖動→jitter 的匯率</strong>（Ch.5 公式）——sensor MCLK 擺幅 0.6 V、上升時間 0.5 ns（約值）。AVDD 上量到 30 mV 電源抖動（假設完全耦合進緩衝路徑）。(a) 額外 jitter 約多少？(b) 若 MCLK 驅動器改用更陡的邊沿（0.15 ns），jitter 變多少？(c) 改善電源（30→5 mV）和加快邊沿，哪邊划算？</summary>
+<div class="answer">
+<p>(a) Slew＝0.6 V ÷ 0.5 ns＝1.2 V/ns；Additional Jitter＝30 mV ÷ 1.2 V/ns＝<strong>25 ps</strong>。30 mV 看不見的抖動，直接吃掉 25 ps 時序預算——對比 Day 38 的 Src 規格 c2c 125 ps，這一項就佔兩成。</p>
+<p>(b) Slew＝0.6/0.15＝4 V/ns → 30 mV ÷ 4 V/ns＝<strong>7.5 ps</strong>。邊沿陡 2.7 倍，jitter 同比例縮。</p>
+<p>(c) 分帳算：電源 30→5 mV（加 LDO/磁珠+C，花 BOM＋壓降）效果同為 7.5 ps——兩條路「數字」一樣，但代價不同：陡邊沿的代價是 <strong>EMI（週 9 主課：諧波能量往上推）＋過衝/反射（週 2–3 的帳）</strong>；改善電源的代價是壓降、成本、靜態功耗。面试標答：「這是匯率問題——jitter＝雜訊÷slew。兩端都能付，但邊沿端的付款（EMI、SI）常常比電源端貴，所以低擺幅高速介面寧可把電源洗乾淨，也不靠推陡邊沿贖時間。」</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：磁珠選型判卷</strong>——AVDD 2.8 V／15 mA 的 sensor 類比轨，要用磁珠＋後端電容從髒的 2.8 V 數位域隔離。三候選（數據假設情境）：A：DCR 0.03 Ω，Z 曲線有延伸到 10 kHz 的長電感尾巴；B：DCR 0.2 Ω，Z 在 0.1–10 MHz 平緩上升、低頻有資料；C：DCR 0.02 Ω，Z＝600 Ω@100 MHz，1 MHz 以下無資料。(a) 依 Ch.5 黑名單三特徵選型？(b) 裝機後實測「衰減曲線」在 120 kHz 出現＋6 dB（正值）——你剛上線的 OIS 影像偶爾抖，兩件事有關係嗎？</summary>
+<div class="answer">
+<p>(a) <strong>選 B。</strong>A 中兩槍：DCR 極低（&lt;0.1 Ω，黑名單特徵②）＋低頻長電感尾巴（特徵③）；C 中一槍：低頻無特性資料（特徵①）——而你的敵人像 VCM 脈衝恰恰住低頻段。B 的 DCR 0.2 Ω 壓降＝15 mA×0.2 Ω＝3 mV，對 2.8 V 軌可忽略——小電流軌上 DCR 根本不是瓶頸（呼應 Ch.5「低 DCR 不總是最優」）。加分答：15 mA 這個電流甚至可以直接走 Ch.5 的<strong>電阻濾波</strong>路線（8 Ω 掉 0.12 V 的比例換算到這里也可評估），低頻濾得比磁珠深。</p>
+<p>(b) 高度可疑，而且你手上有完整證據鏈：＋6 dB 表示這颗磁珠與後端電容在 120 kHz 附近諧振，把該頻段的電源雜訊<strong>放大 2 倍</strong>（20log 反推：10^(6/20)≈2）送進 AVDD。而 OIS/VCM 驅動的工作頻段正是數 kHz～百 kHz 級——激發源與諧振點同頻，「偶爾抖」是必然不偶遇。對策：換回 B 型（低頻平坦、低 Q）或調低後端電容把諧振點挪開/加阻尼（ESR 提高降 Q——Ch.8 的反諧振三板斧，明天正式教）。這個 case 的元教訓：<strong>「衰減曲線上任何一段正值，都是定時炸彈」——濾波器驗收要掃頻，不能只挑一個頻點量。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：抓仪器的謊（Day 32 帳本還願）</strong>——1.8 V rail「漣波規格 ≤ 36 mVpp（2%，全頻）」。同事用 10× 探棒、10 cm 長地線測得 150 mVpp，判 FAIL 要改電路；你改用彈簧短地重測得 28 mVpp。你怎麼下結論？還要補哪些量測才能簽核？</summary>
+<div class="answer">
+<p>結論方向：<strong>150 mV 大部分是「借來的」</strong>——長地線大迴路面拾取空間磁場（Day 32：探棒地線是一匝天線），量的是「訊號＋pickup」的總和，不可判案。28 mVpp 短地量法才是候選答案，但簽核前補四件事：</p>
+<p>① <strong>定義校對</strong>（Day 38 Q18）：規格的 36 mVpp 是什麼頻寬下定義的？你的示波器開著 20 MHz BWL 的話，高頻分量被濾掉了——全頻規格就全頻量，分頻段各報各的（DC～1 MHz 一段、1 MHz～帶寬頂一段）。</p>
+<p>② <strong>儀器本底</strong>：探棒×衰減下示波器自身噪聲floor 多少？28 mV 裡要扣掉儀器貢獻（Day 33 三把尺）；必要時用焊接式同軸探測（solder-in tip）把探測環節的本底再壓低。</p>
+<p>③ <strong>最壞條件</strong>：靜態下 28 mV 不代表過——要在最壞 load pattern（全核衝載、DDR burst、VCM 動作、充電器插入…各別與複合）下重測，並且看漣波的<strong>頻譜形狀</strong>：低頻大鼓包＝迴路/bulk 問題；高頻針＝耦合（找源頭）； broadband 抬升＝接地/回流問題。這一步就是本章三問（路徑/頻譜/共犯）的落地。</p>
+<p>④ <strong>量測點位置</strong>：規格定義的量測點（die-side？pin 邊？）你在哪裡量的？隔著一段走線，你量到的比晶片腳邊的「小」——去耦之後雜訊在平面上也會衰減，量錯點＝替晶片藏病灶（Ch.16「測量點是法律」的電源版）。</p>
+<p>面試句式：「Before I change a single component, I prove the measurement: probe grounding, bandwidth, noise floor, worst-case stimulus, and the spec-defined measurement point.」——先把儀器變成可信的，再談待測物。</p>
+</div>
+</details>
+
+<h2>8. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "What is target impedance in a power delivery network? Why can't one big capacitor—or one hundred identical capacitors—cover the whole frequency range?"</strong><br><br>
+  <strong>Reference answer:</strong> Target impedance translates a voltage-quality spec into an impedance bound: Z_target = ΔV/ΔI = (V_DD × allowable ripple) / worst-case load transient, and the PDN must stay below it across the entire frequency range where current transients occur—the book's worked example is 3.3 V × 2% / 4 A ≈ 17 mΩ; modern core rails run an order of magnitude lower. A regulator is only low-impedance at low frequencies—its control loop reaches perhaps tens of kHz and beyond that its output is inductive—so decoupling is a relay race: bulk capacitors carry the baton to the MHz region, ceramic caps to roughly 200 MHz (book-era figure; today we push toward GHz with embedded and on-die capacitance). One capacitor value can't run multiple legs because its own ESL puts a floor under how deep it goes (the dip equals ESR) and turns it into an inductor above self-resonance—f₀ = 1/(2π√(ESL·C)), shifted down to roughly 70% once mounted on the board. Paralleling N identical caps divides the impedance by N but doesn't move the resonance or fix the inductive region—so a hundred 0.1 µF caps with one missing leg is still a broken relay. Different values are needed, and their hand-off zones must be managed to avoid anti-resonance peaks, which is actually a topic for the next design step. I'd also size the required band from edge rate, not clock frequency: f ≈ 0.5/t_r, which for sub-100 ps edges lands in the GHz—exactly where discrete caps can't reach alone.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "A 1.8 V rail passes ripple spec at idle but fails when the camera module starts autofocus bursts. Walk me through your debug."</strong><br><br>
+  <strong>Reference answer:</strong> First, I'd make the measurement trustworthy before touching the circuit: probe ground spring instead of a long pigtail—pickup can fabricate a failure by itself; verify bandwidth and noise floor against the spec's definition, and confirm I'm probing at the spec-defined location, near the victim's pins. Then I'd characterize, not just read a number: look at the ripple's spectrum and time correlation with the AF activity—VCM drive currents live in the kHz-to-hundreds-of-kHz band, which is exactly the dead zone between the regulator's loop bandwidth and where small ceramics dominate. If the failure shows up as slow droop envelopes synchronized to focus search, the diagnosis is shared-impedance coupling: the AF driver and the analog rail share resistance/inductance, and ΔV = ΔI × Z_common. Fixes in order of least disruption: separate the analog rail's current path or move the AF driver to its own domain; add damping or bulk at the coupling band (and check for bead/cap resonance—inject swept noise and look for any positive gain in the attenuation curve; a ferrite bead can amplify noise at its resonance); for a small analog load, a series resistor or small-signal LDO beats a bead for low-frequency rejection. Finally, verify the fix at worst-case stimulus, document stimulus conditions, and keep the before/after spectra as evidence. The framework: verify instrument, verify spec definition, find the frequency where victim and aggressor meet, kill the shared impedance, re-verify.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「電源完整性是頻域問題：我不問『電源穩不穩』，我問『 impedance 曲線在哪個頻段交出 Z<sub>target</sub> 以上的答卷』」；「元件的電源噪聲抑制能力不在 datasheet 上——我會用掃頻注入法把它們排名」（PT2 Ch.5 的核心訊息）；「去耦的投資報酬率排序是：先減裝機電感（位置），再排棒次（值梯度），最後才加顆數」；「磁珠是頻率選擇性元件不是開關——驗收要掃頻，曲線上任何正值都是炸彈」。這四句在任何 Camera HW EE 的 PI 問題上都通用。</p>
+</div>
+
+<h2>9. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：Z<sub>target</sub> 的定義式與 PT2 Ch.8 例題？書中對「用全額電流計算」保留了什麼見解？</p>
+  <p class="a">A1：Z<sub>target</sub>＝ΔV÷ΔI＝(V<sub>DD</sub>×容許漣波%)÷瞬態電流需求。例：3.3 V×2%÷4 A＝17 mΩ，要求「預期有電流瞬態的整個頻域」不得超越。見解：實務瞬態約為最大電流的一半，全額計算可能保守一倍——是否放寬取決於對板子電流本質的理解（判斷，不是公式）。現代核心軌：mΩ 級以下（量級）。</p>
+
+  <p class="q">Q2：PDN 接力賽的四個跑者與各自頻段（PT2 Ch.8）？2002 數字哪裡要上修？</p>
+  <p class="a">A2：①開關電源（DC～kHz/數十 kHz，書例 40 kHz 守 17 mΩ）②bulk 電容（接棒到 MHz，書例 2.5 MHz）③陶瓷 MLCC（到約 200 MHz）④平面固有電容（200 MHz 以上）。上修：現代 buck 開關頻率高一個量級；「200 MHz 上限」在 sub-100 ps 邊沿的時代不夠，要靠埋入式電容與 die 電容守到 GHz。永不過時：交接處起伏無可避免、只能挪動（原文）。</p>
+
+  <p class="q">Q3：MLCC 的 f₀ 公式？焊上 PCB 後諧振點怎麼移動（Ch.8 數據）？「一百顆同值電容」能改變什麼、不能改變什麼？</p>
+  <p class="a">A3：f₀＝1/(2π√(ESL·C))；谷底阻抗＝ESR（挖不穿）。裝機電感（pad＋via 主導）讓 f₀ 降到約 70%（Ch.8 原文）。N 顆同值並聯：整條曲線÷N，但諧振點、谷底、感性區「形狀不動」——補不了缺的棒次。減 ESL（0201/01005、via-in-pad、就近打地）比加顆數有效。</p>
+
+  <p class="q">Q4：電源雜訊換算成 jitter 的公式（PT2 Ch.5）？這種 jitter 的統計特徵？以及關於 datasheet 的殘酷事實？</p>
+  <p class="a">A4：Additional Jitter(ns)＝Noise(V)÷Slew Rate(V/ns)——雜訊把門檻穿越時刻推早/推晚，邊沿越陡越免疫。分佈：雙峰、有界、決定性（DJ，直接相加不入 RJ 帳）。殘酷事實：元件的電源噪聲抑制力通常不在規格書上——書中兩顆 PLL 同注 100 mV@200 kHz，350+ ps vs 100 ps——要自己用掃頻注入量（10 kHz–5 MHz 掃描、去耦照常焊、用受害指標結案）。</p>
+
+  <p class="q">Q5：磁珠的等效電路與「黑名單三特徵」（PT2 Ch.5）？那顆珠子的著名血案？</p>
+  <p class="a">A5：電感＋隨頻變電阻 R(f)，高頻呈電阻性（燒掉雜訊）、同阻抗下 DCR 低於電感。黑名單：①低頻（10 kHz 級）無特性資料②DCR&lt;0.1 Ω（低 Q、易諧振放大）③低頻長電感尾巴。血案：某珠在 100 kHz 附近諧振，雜訊比例不減反增（Attenuation＝20log(Vout/Vin) 出現正值）——濾波器變增幅器。效果參考：50 mV 注入、PLL 峰值 jitter 200 ps→125～&lt;25 ps（視珠型）。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+
+<p><strong>Day 40（週二・PDN II：反諧振數學與去耦階梯的設計學）：</strong>今天埋的地雷全部起爆——為什麼「一個容性＋一個感性」並聯會振出比兩條單曲線都高的尖峰（Ch.8 圖 8.14 逐點拆）、Q 值與 ESR 的阻尼三角習題（為什麼低 ESR 電容反而要更低的裝機電感）、十進制棒次表（0.1/0.01/0.001 µF）的取捨、平面電容與standing wave（書例：Er＝4、10 英吋板→150/300/450/600 MHz 的諧振算式，以及「平面諧振就是 EMI 的前奏」）、以及 Ch.8 完整的去耦設計例（25 mΩ 案例十一條帳）。週 8 開始我們就把「擺放幾何」和「值梯度」排成一張可以帶去 layout review 的檢查表。今晚 Anki 五張照掃，特別是 Q3、Q5——明天直接要用。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 41｜DC-DC 與去耦的交互——電源端這棒怎麼接（週 8 收官）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 8 週・第 41 天（週三新觀念課・週 8 收官）</div>
+  <h1>Day 41：DC-DC 與去耦的交互——電源端這棒怎麼接（Perfect Timing II Ch.5／Ch.12・週 8 收官）</h1>
+  <div class="meta">2026-09-02（三）｜預估學習時間：90 分鐘｜難度：★★★★☆（前兩天你把接力賽的「第二棒、第三棒」——去耦電容牆與平面——拆到骨頭裡了，但第一棒選手本人：開關電源（buck），我們一直只把它當一條會爬坡的阻抗曲線。今天進駐它的黑箱：控制迴路為什麼「低頻萬能、過帶裝聾」、它怎麼「看」你那一大牆電容、以及 Ch.5 的磁珠/電阻濾波器要縫在哪一道接縫上。收官禮：一張你手寫得出的「PDN 單頁決策文件」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>週 8 的最後一塊拼圖，不是新元件、是新<strong>觀點</strong>：PDN 不是「電容的故事」，是「<strong>電源迴路與被動網路的接力</strong>」。今天要能講、能算、能查四件事：</p>
+  <ol>
+    <li><strong>看懂 buck 黑箱</strong>：開關節點＝全板最髒的雜訊源；輸出濾波器（L＋C）負責把它「磨平」；控制迴路負責「盯住電壓」——三件事、三筆帳，分開結。</li>
+    <li><strong>畫出電源端的阻抗曲線</strong>：buck 輸出阻抗為什麼低頻只有毫歐級、過了<strong>交越頻率 f<sub>c</sub></strong>（約 f<sub>sw</sub>/10～f<sub>sw</sub>/20 的量級）開始「裝死」、再上去變成 2πf·L 的感性爬坡——以及中間那顆 LC 共振包什麼條件下會「原形畢露」。</li>
+    <li><strong>講清容性牆的愛恨</strong>：控制迴路「看」你去耦牆的方式——輸出極點 f<sub>p</sub>＝1/(2π√(LC))、為什麼 datasheet 會寫「最大負載電容」、為什麼「隨手多焊兩顆大容」是新手最愛的穩定性殺手。</li>
+    <li><strong>縫合接縫</strong>：Ch.5 磁珠/電阻二階濾波＋後端電容，要縫在 DC-DC 頻寬邊界的哪一側、怎麼驗（Attenuation＝20·log(V<sub>OUT</sub>/V<sub>IN</sub>) 全頻掃描、曲線<strong>不得變正</strong>）——並用書中實測（同一雜訊、兩顆 PLL：350 ps vs 100 ps；PSRR 不在 datasheet 上）證明「驗」比「信」值錢。最後把整週所學壓成一頁決策文件。</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要——接力賽已經講到第三棒，今天訪談第一棒</h2>
+<ul>
+  <li><strong>Day 39 接力賽：</strong>「電源系統＝接力賽：bulk 跑低頻、陶瓷棒接中段、平面衝高頻」，Z<sub>target</sub> 是整隊的計時線。但第一棒（開關電源本體）我們只画了它在 100 kHz 以下的一小段——今天進駐它的身體：迴路頻寬就是那位第一棒選手的「反應速度」，反應不及的瞬間，球必須已經在你手裡。</li>
+  <li><strong>Day 39 練習 4（磁珠＋後端電容 120 kHz 出現 ＋6 dB）：</strong>當時說「那是反諧振的表親」。今天把表親的戶籍謄本攤開：那是<strong>磁珠的感性尾巴 × 後端電容</strong>的濾波器諧振，書中 Ch.5 圖 5.11 有一模一樣的實測（「near the 100 kHz frequency, the bead actually increased the noise ratio rather than attenuating it」）——而且書還給了避免清單三條。今天你能用 Q＝√(L/C)/R 把它算出來。</li>
+  <li><strong>Day 40 Q∝L/R 萬有引力：</strong>「低 ESR 配高裝機電感＝高 Q＝尖峰」。今天的版本：磁珠 DCR 越低、後端電容損耗越小，濾波器諧振包越高——書中實測「最低 DCR 不是最佳選擇」就是這條定律的濾波器分身。</li>
+  <li><strong>Day 40 反諧振＝棒次之間的戶籍：</strong>今天多一戶：<strong>「DC-DC 與 PDN 之間」也是一個棒次交接區</strong>——迴路阻抗爬坡（往上）碰上電容牆（往下），加上佈線電感，照樣能開出你認識的那種包。週 8 的三大諧振家族（串聯／並聯／平面）今天全部在系統層會師。</li>
+  <li><strong>Day 38 Q18（定義優先）＋ Day 39「量測點是法律」：</strong>今天兩處直接沿用——「迴路補償設計假設的輸出電容」是法律、「remote sense 點在哪」是法律。換了定義再吵。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：定時巡邏的保全、你手上的水壺、與轉角那扇門</span>
+  <p>把 buck 的<strong>控制迴路</strong>想成大樓保全：他每隔固定時間巡邏一次（每個開關週期「看一眼」電壓、調一次占空比——現代電源一個週期只能改一次指令，這是寫死在硬體裡的節奏）。<br>
+  <strong>慢慢來的問題他全包了</strong>：樓裡有人 gradually 多用水（負載緩升）、進水管水壓慢慢掉（電池電量降）——他每次巡邏都能微調，水壓穩得像直的。這就是「低頻輸出阻抗只有毫歐級」的白話版：<em>有保全在盯，低頻的擾動根本長不起來</em>。<br>
+  <strong>但他對「快事」完全裝聾</strong>：某樓層突然 0.5 秒全樓開水龍（感測器陣列爆發性抽電），事件比他下次巡邏快一個數量級——他<strong>想幫也來不及</strong>，而且他一個週期只能改一次指令，改了的指令還要過好幾個週期才產生效果。這一切只能靠<strong>该楼層自己囤的水</strong>（近端電容）先撐住。這就是「過了迴路頻寬，電源裝死、電容獨扛」的白話版。<br>
+  可是保全自己也是雜訊源！他的對讲機（開關節點，電壓每秒跳幾十萬次的大方波）嗶嗶作響，干擾沿著水管傳遍全樓。LC 濾波器是把嗶聲衰減成蚊子叫的第一道<strong>牆內隔音</strong>；而 Ch.5 交給我們的磁珠/電阻，是敏感房間（PLL、感測器模擬電源）轉角那扇<strong>門</strong>——門要選得對：書中實測有一顆「門」不但不隔聲，還在 100 kHz 附近把聲音放大（共振）。選門的秘訣不是看它「隔音標示」最大，而是<strong>親自拿訊號產生器站門兩側量</strong>：衰减曲線有任何一段是正的（輸出比輸入大），這顆門就不能進敏感房。<br>
+  最後是新手最容易犯的錯：<strong>「多囤水總不會錯吧」</strong>——你在樓下囤了一座水塔（一大牆電容）、還用長水管接進來。結果保全的巡邏節奏跟這座水塔的晃動週期對不上，開始<strong>越調越抖</strong>（迴路穩定性被容性負載與佈線電感改寫）。囤水是必要的，但<strong>水塔規格在保全手冊（datasheet 的最大負載電容窗）裡</strong>；超出窗的水塔，要嘛保全重新訓練（重新補償）、要嘛你自己在樓層分倉——這就是「容性牆與控制迴路的愛恨」。</p>
+  <p><em>公式全部遮住，這四段就是今天的結論：電源迴路是一個「反應有限速」的自動修正器，低頻它扛、快事電容扛；它本身（開關）還是雜訊源，得靠濾波把嗶聲擋在敏感房外；濾波器（磁珠）選錯會在低頻把雜訊放大，所以要實測衰減曲線、不許變正；而電容不是隨手亂加的——它是控制迴路補償的一部份，加牆要加在規格窗內、並且分倉就近放。</em></p>
+</div>
+
+<h2>1. 先把 buck 拆開：一個黑箱的三張身分</h2>
+
+<p>你的本行 NB 主機板上滿是 buck（CPU VCC、DDR、PCH、各感測器軌），鏡頭模組的 PMIC 裡也是。週 19 會把它們的手繪波形練到肌肉記憶，今天只需要把「PI 觀點」的三張身分立起來：</p>
+
+<ul>
+  <li><strong>身分一：降壓轉換器。</strong>開關（MOSFET）把輸入電壓切成方波脈衝，電感＋輸出電容把脈衝「抹平」成直流；控制迴路比較輸出電壓與基準（通常 0.6～0.8 V 量級），調整每次脈衝的寬度（PWM 占空比 D），讓平均輸出＝目標值。直覺：水電廠用「開閘—關閘」的節奏控制平均水位，不靠閥門半開。</li>
+  <li><strong>身分二：雜訊源。</strong>開關節點（switch node）的電壓每個週期從 0 跳到 V<sub>IN</sub>（或反向），邊框速度是 ns 甚至 sub-ns 級——<strong>一個週期僅幾百 ns 的方波，它的頻譜從開關頻率一路延伸到數百 MHz～GHz</strong>。PT2 Ch.5 用 2002 年的交換電源實測講了同一件事：「operating frequency 250 kHz… within each switcher period, there is an initial step where the voltage changes abruptly and contains harmonics into the MHz region（開關週期內電壓突變的階躍，諧波一路進到 MHz 區）」。</li>
+  <li><strong>身分三：一個「頻寬有限」的電壓伺服器。</strong>控制迴路只能「修正來得及看到的誤差」。這是今天的正戲，§3 展開。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：buck 黑箱解剖——三張身分畫在同一張圖上</text>
+
+  <!-- schematic -->
+  <rect x="40" y="60" width="840" height="230" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="60" y="84" font-size="12" font-weight="bold" fill="#334155">① 線路本體：Vin → 開關 → L → 輸出；迴路「盯著」Vout</text>
+
+  <!-- Vin -->
+  <line x1="70" y1="130" x2="70" y2="170" stroke="#16a34a" stroke-width="2.5"/>
+  <line x1="64" y1="140" x2="76" y2="140" stroke="#16a34a" stroke-width="2"/>
+  <line x1="64" y1="160" x2="76" y2="160" stroke="#16a34a" stroke-width="2"/>
+  <text x="68" y="120" text-anchor="middle" font-size="11" fill="#166534">Vin</text>
+  <line x1="70" y1="130" x2="150" y2="130" stroke="#334155" stroke-width="2"/>
+
+  <!-- switch -->
+  <rect x="150" y="112" width="90" height="36" rx="6" fill="#dc2626"/>
+  <text x="195" y="135" text-anchor="middle" font-size="12" fill="white" font-weight="bold">開關 SW</text>
+  <text x="195" y="98" text-anchor="middle" font-size="10.5" fill="#dc2626">每秒跳幾萬~百萬次</text>
+  <text x="195" y="170" text-anchor="middle" font-size="10.5" fill="#dc2626">＝開關節點：全板最髒節點</text>
+  <line x1="240" y1="130" x2="330" y2="130" stroke="#334155" stroke-width="2"/>
+
+  <!-- inductor -->
+  <path d="M330,130 q10,-14 20,0 q10,-14 20,0 q10,-14 20,0 q10,-14 20,0 q10,-14 20,0" stroke="#334155" stroke-width="2.5" fill="none"/>
+  <text x="380" y="112" text-anchor="middle" font-size="11" fill="#334155">L（輸出電感）</text>
+  <line x1="430" y1="130" x2="620" y2="130" stroke="#334155" stroke-width="2"/>
+  <circle cx="470" cy="130" r="4" fill="#0e7490"/>
+  <text x="470" y="118" text-anchor="middle" font-size="10" fill="#0e7490">Vout</text>
+
+  <!-- Cout -->
+  <line x1="520" y1="130" x2="520" y2="160" stroke="#334155" stroke-width="2"/>
+  <line x1="506" y1="160" x2="534" y2="160" stroke="#9333ea" stroke-width="3"/>
+  <line x1="506" y1="170" x2="534" y2="170" stroke="#9333ea" stroke-width="3"/>
+  <text x="560" y="172" font-size="11" fill="#6b21a8">Cout（輸出電容牆）</text>
+  <line x1="520" y1="170" x2="520" y2="196" stroke="#334155" stroke-width="2"/>
+  <line x1="508" y1="196" x2="532" y2="196" stroke="#334155" stroke-width="2.5"/>
+  <line x1="512" y1="201" x2="528" y2="201" stroke="#334155" stroke-width="2"/>
+  <line x1="515" y1="206" x2="525" y2="206" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- load -->
+  <line x1="620" y1="130" x2="620" y2="150" stroke="#334155" stroke-width="2"/>
+  <rect x="606" y="150" width="28" height="46" rx="4" fill="#475569"/>
+  <text x="620" y="178" text-anchor="middle" font-size="10" fill="white">負載</text>
+  <text x="620" y="216" text-anchor="middle" font-size="10" fill="#334155">（你的 PDN＋晶片）</text>
+  <line x1="620" y1="196" x2="620" y2="196" stroke="#334155"/>
+  <line x1="606" y1="173" x2="520" y2="173" stroke="none"/>
+  <line x1="620" y1="196" x2="700" y2="196" stroke="#334155" stroke-width="2"/>
+  <line x1="520" y1="196" x2="700" y2="196" stroke="#334155" stroke-width="2"/>
+  <line x1="700" y1="196" x2="700" y2="150" stroke="#334155" stroke-width="0"/>
+
+  <!-- error amp -->
+  <rect x="720" y="110" width="80" height="44" rx="8" fill="#0e7490"/>
+  <text x="760" y="128" text-anchor="middle" font-size="10.5" fill="white">誤差放大器</text>
+  <text x="760" y="144" text-anchor="middle" font-size="10.5" fill="white">＋PWM 心跳</text>
+  <line x1="720" y1="132" x2="650" y2="132" stroke="#0e7490" stroke-width="2" stroke-dasharray="5 3"/>
+  <line x1="650" y1="132" x2="650" y2="130" stroke="#0e7490" stroke-width="0"/>
+  <line x1="470" y1="130" x2="470" y2="90" stroke="#0e7490" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <line x1="470" y1="90" x2="760" y2="90" stroke="#0e7490" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <line x1="760" y1="90" x2="760" y2="110" stroke="#0e7490" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <text x="600" y="84" text-anchor="middle" font-size="10" fill="#0e7490">回饋（每顆心跳看一眼）</text>
+  <line x1="195" y1="148" x2="195" y2="240" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="5 3"/>
+  <text x="288" y="252" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="bold">一個開關週期＝一次修正機會；快過這個節奏的事，迴路「看」不見</text>
+
+  <!-- waveform band -->
+  <rect x="40" y="300" width="840" height="180" rx="10" fill="#0b1220"/>
+  <text x="60" y="324" font-size="12" font-weight="bold" fill="#fbbf24">② 三條波形的「髒→乾淨」旅程（同時間軸）</text>
+
+  <!-- switch node square -->
+  <path d="M70,380 L70,350 L110,350 L110,380 L150,380 L150,350 L190,350 L190,380 L230,380 L230,350 L270,350 L270,380 L310,380 L310,350 L350,350 L350,380 L390,380" stroke="#dc2626" stroke-width="2.2" fill="none"/>
+  <text x="150" y="342" font-size="10.5" fill="#f87171">開關節點：0↔Vin 大方波（邊框 ns 級→諧波無限期）</text>
+
+  <!-- inductor current triangle -->
+  <path d="M70,428 L150,416 L230,428 L310,416 L390,428" stroke="#fbbf24" stroke-width="2.2" fill="none"/>
+  <text x="150" y="448" font-size="10.5" fill="#fbbf24">電感電流：三角漣波（被 L 磨成鋸齒，幅度 ΔI 見 §3 算式）</text>
+
+  <!-- vout ripple -->
+  <path d="M70,466 Q110,462 150,466 T230,466 T310,466 T390,466" stroke="#4ade80" stroke-width="2.2" fill="none"/>
+  <text x="150" y="484" font-size="10.5" fill="#4ade80">Vout：只剩小漣波＋開關殘響（殘響的高頻部分迴路完全不管，§3）</text>
+
+  <!-- spectrum arrow -->
+  <rect x="430" y="340" width="430" height="128" rx="8" fill="#111827"/>
+  <text x="645" y="362" text-anchor="middle" font-size="11" font-weight="bold" fill="#e2e8f0">頻譜視角（PT2 Ch.5 的非正弦雜訊測試精神）</text>
+  <text x="450" y="382" font-size="10.5" fill="#f87171">開關階躍：f_sw 的諧波族「into the MHz region」</text>
+  <text x="450" y="400" font-size="10.5" fill="#fbbf24">（書例 250 kHz——2002 年量級；現代 NB 的 buck 多落在</text>
+  <text x="450" y="416" font-size="10.5" fill="#fbbf24">約 0.5～2 MHz、邊框更陡，諧波更高，以現代標準需上修）</text>
+  <text x="450" y="436" font-size="10.5" fill="#4ade80">LC 濾波器只壓得住 f_p 以上的部分；f_p 以下的殘留與</text>
+  <text x="450" y="452" font-size="10.5" fill="#4ade80">迴路修正範圍之外的東西，就交給「門」（磁珠/電阻）與牆。</text>
+
+  <text x="460" y="520" text-anchor="middle" font-size="10.5" fill="#334155">讀圖重點：buck 同時是「穩壓的英雄」與「雜訊的嫌犯」。PI 工程師的職責就是把兩張身分分開結帳——</text>
+  <text x="460" y="538" text-anchor="middle" font-size="10.5" fill="#334155">低頻誤差交給迴路（它快得來）、高頻諧波交給濾波與去耦（它來不及）、二階接縫（磁珠）交給量測驗證。</text>
+</svg>
+<figcaption>圖 1：同一個 buck 的三張身分——降壓器（左電路）、雜訊源（開關節點方波與頻譜）、頻寬有限的伺服器（迴路＋心跳）。今天全部的課程都在處理「三張身分的帳怎麼分」。</figcaption>
+</figure>
+
+<h2>2. 控制迴路＝伺服器：低頻為什麼「萬能」，高頻為什麼「裝死」</h2>
+
+<h3>2.1 白話→原理：修正有節奏、節奏有上限</h3>
+<p>控制迴路（誤差放大器＋PWM 調變器）本質是一個<strong>負回授伺服</strong>：量到輸出偏了 → 調整占空比 → 把偏差壓回去。它能壓回去的「最快偏差」，由兩個硬限制決定：</p>
+<ul>
+  <li><strong>節奏限制：</strong>多數控制器<strong>一個開關週期只有一次修改指令的機會</strong>（數位控制還有取樣—運算—輸出的額外延遲）。開關頻率 750 kHz（量級）→ 心跳週期 ≈1.3 µs；事件發生到第一次修正生效，至少一拍、加上迴路累積效果實際要數十拍的<strong>時間常數</strong>。</li>
+  <li><strong>增益限制：</strong>迴路增益不是無限大，而且隨頻率滾降（設計上約以 20 dB/十倍頻的斜率落到 0 dB）。增益降到「剛好不放大」的那個頻率叫<strong>交越頻率 f<sub>c</sub></strong>（crossover，單位 Hz）——過了它，迴路對誤差「說不上話」。<strong>f<sub>c</sub> 的常見量級是 f<sub>sw</sub>/10～f<sub>sw</sub>/20</strong>（保守類比控制；現代數位控制可拉到 f<sub>sw</sub>/5 上下，標「約」、以現代標準視設計而異）。例：f<sub>sw</sub>＝750 kHz → f<sub>c</sub> 約 37～75 kHz。</li>
+</ul>
+<p>PT2 Ch.12 講頻率合成器時有一段話，正好把這個「頻寬即視力」的觀念講穿（原文大意）：Fractional-N 在多組分頻比之間來回跳，<strong>「The average… is filtered by the FTG loop bandwidth to prevent jitter」——平均化的動作只在迴路頻寬之內發生</strong>。buck 與 PLL 是同一類動物：<strong>控制迴路只能在它頻寬之內「看見並抹平」誤差；頻寬之外，它是透明人</strong>。</p>
+
+<h3>2.2 數學：把「裝死」寫成阻抗</h3>
+<div class="formula">
+Z<sub>out,buck</sub>(f) ≈<br>
+<strong>f ≪ f<sub>c</sub>：</strong>毫歐～十分之一歐級（迴路高增益把輸出「按」在基準上；白話：保全盯得到的時段，水壓波動長不起來）<br>
+<strong>f ≈ f<sub>c</sub> 之上：</strong>Z 以約 20 dB/十倍頻爬坡（增益滚降的直接後果）<br>
+<strong>f ≫ f<sub>c</sub> 且濾波器共振之上：</strong>Z ≈ 2πf·L（從負載看回去：電感串到一個「硬」節點，感抗獨大）
+</div>
+<p><strong>白話翻譯：</strong>低頻「有人管」所以阻抗低；高頻「沒人管」，你看到的只是被動零件——L 在高頻就是一條越搖越沉的水管。代個數：L＝2.2 µH（量級），在 f＝750 kHz 時 2πfL≈<strong>10 Ω</strong>——跟低頻那零點幾歐比，差四五個數量級。<strong>「同一顆電源，低頻是海綿、高頻是水管」</strong>，這就是為什麼 Day 39 要把去耦牆立在負載旁邊：高頻的帳，電源本體一分錢都不出。</p>
+
+<h3>2.3 那顆 LC 共振包：f<sub>c</sub> 與 f<sub>p</sub> 的地盤之爭</h3>
+<p>輸出濾波器本身有個極點 f<sub>p</sub>＝1/(2π√(LC<sub>out</sub>))（§4 細拆）。它與 f<sub>c</sub> 的相對位置決定你量到的 Z<sub>out</sub> 樣貌：</p>
+<ul>
+  <li><strong>f<sub>c</sub> 在 f<sub>p</sub> 之下（傳統大電容設計）：</strong>迴路管不到 LC 共振——負載看到的輸出阻抗在 f<sub>p</sub> 長出一顆<strong>並聯共振包</strong>（和 Day 40 反諧振同一物理）。包的高度由總損耗（ESR＋DCR）決定，又是 Q∝1/R。</li>
+  <li><strong>f<sub>c</sub> 在 f<sub>p</sub> 之上（現代陶瓷輸出設計常如此，因為 MLCC 讓 C 很大、f<sub>p</sub> 掉得很低）：</strong>迴路「跨過」極點去補償，共振包被增益壓住/整形——<strong>但這前提是迴路「以為」的 C 就是你給的 C</strong>。這是 §4 容性牆風暴的伏筆。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：系統阻抗接力全曲線——電源端（今天）＋去耦端（前两天）接成同一條線</text>
+
+  <!-- axes -->
+  <line x1="140" y1="430" x2="880" y2="430" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="140" y1="430" x2="140" y2="70" stroke="#64748b" stroke-width="1.5"/>
+  <text x="510" y="458" text-anchor="middle" font-size="11" fill="#374151">頻率（對數）：100 Hz → 10 GHz</text>
+  <text x="108" y="250" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 108 250)">阻抗（對數）</text>
+  <g font-size="9.5" fill="#64748b" text-anchor="middle">
+    <text x="140" y="446">100</text><text x="232" y="446">1k</text><text x="325" y="446">10k</text><text x="417" y="446">100k</text>
+    <text x="510" y="446">1M</text><text x="602" y="446">10M</text><text x="695" y="446">100M</text><text x="787" y="446">1G</text><text x="878" y="446">10G</text>
+  </g>
+
+  <!-- fc / fsw markers -->
+  <line x1="408" y1="70" x2="408" y2="430" stroke="#0e7490" stroke-width="1.4" stroke-dasharray="7 4"/>
+  <text x="404" y="84" text-anchor="end" font-size="10.5" fill="#0e7490" font-weight="bold">f_c ≈ f_sw/10～/20（約）</text>
+  <text x="404" y="98" text-anchor="end" font-size="10" fill="#0e7490">右側＝迴路裝死區</text>
+  <line x1="499" y1="70" x2="499" y2="430" stroke="#dc2626" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="503" y="84" font-size="10.5" fill="#dc2626" font-weight="bold">f_sw（例 750 kHz）</text>
+  <text x="503" y="98" font-size="10" fill="#dc2626">開關諧波族由此向上（Ch.5：250 kHz→MHz 級，現代上修）</text>
+
+  <!-- buck closed loop segment + rise + LC hump -->
+  <path d="M148,396 L400,392 Q470,380 512,300 L536,246" stroke="#0e7490" stroke-width="2.8" fill="none"/>
+  <path d="M536,246 Q548,214 560,246 L590,286" stroke="#0e7490" stroke-width="2.8" fill="none"/>
+  <text x="230" y="382" font-size="11" fill="#0e7490" font-weight="bold">buck 閉環：mΩ 級「海綿」</text>
+  <text x="230" y="368" font-size="10" fill="#0e7490">（保全盯得住的頻段）</text>
+  <text x="608" y="252" font-size="10.5" fill="#0e7490" font-weight="bold">爬坡＋LC 共振包</text>
+  <text x="608" y="268" font-size="10" fill="#0e7490">（f_c 管不到時原形畢露；高度＝Q 決定）</text>
+  <path d="M560,246 L700,120" stroke="#0e7490" stroke-width="2.8" fill="none" opacity="0.35"/>
+  <text x="640" y="140" font-size="10" fill="#0e7490" opacity="0.9">「高頻是水管」段：Z≈2πfL——但先別慌，牆在這裡接手：</text>
+
+  <!-- PDN ceramic segment with anti-resonance -->
+  <path d="M540,436 Q560,438 574,420 L606,268 Q616,240 626,268 L648,392 Q664,418 680,404" stroke="#dc2626" stroke-width="2.6" fill="none"/>
+  <text x="524" y="416" font-size="10.5" fill="#dc2626" font-weight="bold">陶瓷牆（Day 39/40）</text>
+  <text x="608" y="236" text-anchor="middle" font-size="10" fill="#dc2626">反諧振包：交棒區戶籍（Day 40）</text>
+
+  <!-- plane segment -->
+  <path d="M680,404 Q700,396 712,404 L736,416 Q750,420 762,404 L786,340" stroke="#9333ea" stroke-width="2.6" fill="none"/>
+  <text x="700" y="436" font-size="10.5" fill="#6b21a8" font-weight="bold">平面電容（Day 40）</text>
+  <text x="800" y="330" font-size="10" fill="#6b21a8">平面駐波包</text>
+  <text x="800" y="344" font-size="10" fill="#6b21a8">（EMI 前奏，週 9）</text>
+
+  <!-- Ztarget -->
+  <line x1="145" y1="412" x2="875" y2="412" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.7"/>
+  <text x="160" y="426" font-size="10" fill="#166534">Z_target（Day 39 計時線）——全頻不得穿越</text>
+
+  <!-- seam boxes -->
+  <rect x="150" y="470" width="730" height="72" rx="8" fill="#0b1220"/>
+  <text x="165" y="492" font-size="10.5" font-weight="bold" fill="#fbbf24">今天新增的兩條「接縫紀律」：</text>
+  <text x="165" y="510" font-size="10" fill="#e2e8f0">① f_c 右側的每個頻率，都必須有被動元件簽收（電容/磁珠後端牆），否則就是 Z_target 上的黑洞；</text>
+  <text x="165" y="528" font-size="10" fill="#e2e8f0">② 電源端爬坡（↑）與電容牆（↓）的交叉區＝第四戶諧振家族住處：電源↔PDN 接縫反諧振，照樣用三板斧治理。</text>
+</svg>
+<figcaption>圖 2：把前三天的曲線接上電源端，就是 PDN 的「全頻地圖」。注意青色（buck）爬坡與紅色（陶瓷牆）下降段的交叉——那是接力交棒點，也是最容易開包的地方。面試題「畫一下 system-level impedance」要的就是這張圖（手繪版）。</figcaption>
+</figure>
+
+<h2>3. 漣波與諧波：為什麼「迴路擦不掉」的東西比想像多</h2>
+
+<h3>3.1 白話：保全的對讲機</h3>
+<p>直覺上會期待：「輸出電壓偏了，迴路把它調回來就好。」問題是迴路<strong>調的是下一個週期的占空比</strong>——開關嗶聲發生在本週期的頭幾十 ns，等它「看見」平均值的偏差時，這拍的雜訊早就打出去了。所以 buck 的輸出漣波天然分兩層：<strong>低頻層</strong>（回路易修正的三角漣波包絡）歸迴路管、<strong>高頻殘響</strong>（開關階躍的諧波「毛振鈴」）迴路碰都不碰，只剩 L、C、磁珠、走線這些<strong>物理過濾</strong>。</p>
+
+<h3>3.2 數學：電感漣波電流與「誰扛高頻帳」</h3>
+<p>連續導通模式下，電感電流的三角摆幅（教科書式，與器件無關的通用推導）：</p>
+<div class="formula">
+ΔI<sub>L</sub> ＝ V<sub>OUT</sub> × (V<sub>IN</sub> − V<sub>OUT</sub>) ／ (V<sub>IN</sub> × f<sub>sw</sub> × L)　　（白話：壓差越大、頻率越低、電感越小，三角越大）
+</div>
+<p>例：V<sub>IN</sub>＝5 V、V<sub>OUT</sub>＝3.3 V、f<sub>sw</sub>＝750 kHz（量級）、L＝2.2 µH：ΔI<sub>L</sub>＝3.3×1.7／(5×0.75×2.2)≈<strong>0.68 A 峰對峰</strong>。這個三角電流在<strong>輸出電容上往返</strong>（RMS 約 ΔI<sub>L</sub>/√12≈0.2 A 量級）。關鍵在「往返路徑」：<strong>750 kHz 的電流選擇走「感覺電感最小」的路</strong>——也就是<b>離 buck 最近的 MLCC</b>，而不是 15 cm 外、經長銅皮的大 bulk（長路的感抗 2πfL 太大）。兩個實務推論：</p>
+<ul>
+  <li><strong>高頻漣波電流預留給陶瓷：</strong>buck 輸出端一定要留 MLCC 位置扛 f<sub>sw</sub> 電流（溫度寿命、層數耐漣波是選型欄位）；只給一顆鋁聚合物＝讓它做不擅長的事。</li>
+  <li><strong>PT2 Ch.5 測試治具的深意：</strong>書中把雜訊源經 22 µF bulk 注入、再「overdrive 0.1 µF 去耦」，並刻意保留 DUT 的 0.1 µF（模擬真實環境）——它示範的就是高頻能量「bulk 攔不住、小容先吃」的路徑，以及<strong>治具要保留真實去耦配置，量出來的才作數</strong>（呼應 Day 39「量測點是法律」）。</li>
+</ul>
+
+<h3>3.3 書中數據：兩顆 PLL 對同一電源雜訊的修為差 3.5 倍</h3>
+<p>Ch.5 的注入實驗（正弦雜訊 10 kHz～5 MHz 掃頻、100/50/25 mV 三檔）量到：</p>
+<table>
+<tr><th>裝置（書中型號）</th><th>100 mV 注入、200 kHz 處 jitter</th><th>25 mV 注入時峰值</th><th>峰值頻率位置</th></tr>
+<tr><td>PLL1（Comp2308）</td><td>＞350 ps</td><td>約 100 ps</td><td>約 200 kHz</td></tr>
+<tr><td>PLL2（CY2308）</td><td>約 100 ps</td><td>約 50 ps</td><td>約 5 MHz</td></tr>
+</table>
+<p>兩個重點：① <strong>「Additional Jitter (ns) ＝ Noise (V)／Slew Rate (V/ns)」</strong>（Ch.5 原文公式）——電源雜訊除以訊號邊框速度就是偷走的時間；邊框越陡、被偷越少（這公式的 jitter 分佈是<strong>雙峰、確定性、有界</strong>的——Day 28 的 DJ 家譜在此會師）。② 書中原話：<strong>「數據 to determine noise rejection 不在標準 datasheet 上列」</strong>——同一檔雜訊，兩顆晶片差 3.5 倍、且峰值頻率完全不同，<strong>PSRR 要自己掃出來</strong>（方法學今天先立，週 13/15 在 MIPI 與 OIS 上反覆用）。</p>
+<div class="card pitfall">
+  <span class="label">踩雷區</span>
+  <p><strong>「datasheet 沒寫＝不存在」是 PI 界最貴的信仰。</strong>PLL 的電源抑噪、磁珠的低頻特性（書：「Not characterized at lower frequencies such as 10 kHz」直接列為避免項）都是教訓：<strong>供應商只保證他量過的欄位</strong>。你的 rail 噪聲頻譜如果落在 datasheet 沒描述的地帶，那個地帶就是你的責任區——要么自己掃，要么在設計上避開（挪 f_sw、加後級濾波、換料號實測）。</p>
+</div>
+
+<h2>4. 容性牆的愛恨：控制迴路怎麼「看」你的一大牆電容</h2>
+
+<h3>4.1 白話：水塔與巡邏節奏</h3>
+<p>輸出濾波器的極點 f<sub>p</sub>＝1/(2π√(LC)) 是迴路「看見」的最大一颗星：它的左邊輸出很硬、右邊變軟，還附帶 180° 的相位大滑坡——補償網路（Type II/III 之類）的全部工作，就是讓迴路在跨過這颗星時<strong>腳步還站得住</strong>（相位邊際）。所以 datasheet 的「<strong>最大負載電容</strong>」不是客气話：C 超出設計窗，星星搬家、補償的節拍對不上，症狀是<strong>輸出振鈴變大、過衝、甚至自激</strong>——電源自己變成雜訊源。</p>
+
+<h3>4.2 數學＋直覺：三個連鎖反應</h3>
+<div class="formula">
+f<sub>p</sub> ＝ 1 ／ (2π√(L·C<sub>out</sub>))　　（白話：水塔越大，水面晃動的週期越慢；迴路的巡邏節奏必須繞開或壓住這個晃動）
+</div>
+<ol>
+  <li><strong>加 C ＝ f<sub>p</sub> 下移 ＝ 補償重新對表。</strong>例：L＝2.2 µH、C＝220 µF → f<sub>p</sub>≈7.2 kHz；再併 470 µF → f<sub>p</sub>≈4.1 kHz。若原本 f<sub>c</sub> 設計在 f<sub>p</sub> 之上（跨極點補償），星星往低頻挪，它偷走的相位改在交越點附近生效 → 相位邊際縮水。</li>
+  <li><strong>MLCC 時代的「ESR 救援失蹤」。</strong>早期輸出電容（鋁/鉭）的 ESR 會在約 1/(2πR<sub>ESR</sub>C) 開一個「零點」，把相位拉回來一程；現代 MLCC 的 ESR 只有 mΩ 級，零點推到極高頻、形同不在——所以今天的控制器本來就假設低 ESR 輸出，<strong>但你換上一顆「ESR 剛好有點年紀」的料，補償同樣會被改寫</strong>（老板改料的經典坑）。</li>
+  <li><strong>「遠端水塔」是雙重身代價。</strong>把大容塞在板上遠處（近 load 卻離 converter 遠），佈線/via 電感把牆切成兩段：對 DC-DC，近端看到的 C 沒變多少、對負載，高頻卻由遠端牆接住——兩段中間又長出一個「佈線 L × 兩段 C」的<strong>接縫反諧振</strong>（Day 40 第一斧在此的新戰場）。另外 remote sense（_remote 回饋感測點）若沒接在 load point，IR drop 補償與穩定性的判斷基准都會錯位——again，量測點是法律。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">踩雷區</span>
+  <p><strong>「多並幾顆大容總不會錯」——會，而且錯得隱蔽：</strong>① 超出最大負載電容窗：軟啟動電流受限、輸出爬升出現雙峰/震盪，甚至上電-lockup；② 穩態相位邊際被吃：負載暫態時振鈴變大，你以為是 PDN 不足、再加容，越加越振（負回授式的錯！）；③ 遠端大容與近端小容經佈線電感結義：接縫反諧振包準時登場。正確順序：<strong>先查 datasheet 的 C<sub>out</sub> 窗與補償建議 → 加容必須「近、短、分倉」→ 上板後重測上電與暫態波形</strong>。Ch.8 的 Q∝1/R 管尖峰高度，今天這條管「誰來定義振盪的節拍」。</p>
+</div>
+
+<h2>5. 縫合接縫：磁珠／電阻二階濾波怎麼跟 DC-DC 頻寬邊界無縫接軌</h2>
+
+<h3>5.1 定位：二階濾波是「門」，不是「牆」</h3>
+<p>Ch.5 的世界觀（整理大意）：電源平面雜訊源有三類——<strong>交換電路的切換成分、匯流排同步切換（SSO）、以及時鐘本身</strong>；對策是在敏感裝置（PLL/緩衝器/感測器模擬域）的電源入口裝一道<strong>磁珠＋後端電容</strong>的濾波：磁珠提供 AC 隔離——平面雜訊進不來、裝置自己的 SSO 也出不去（雙向單價，這是它優於普通電感的理由之一：等阻抗下 DCR 更低、且高頻呈阻性把能量<strong>燒掉</strong>而不是彈回去）。等效電路：L＋R(f) 串聯（圖 5.8），高頻「看起來像電阻」。</p>
+<p>放在今天的系統圖裡：這道門要縫在「<strong>迴路管不到的頻段</strong>」上——也就是 f<sub>c</sub> 右側的殘響與諧波路。因此它的設計檢查是兩面：<strong>① 在雜訊能量顯著的整個頻段（含 f<sub>sw</sub> 與諧波族），衰減夠；② 在 10 kHz 起跳的任何頻段，衰減不得變正</strong>（書中治具掃 10 kHz～1 MHz；jitter 治具掃到 5 MHz，理由：「noise isn't limited to a single frequency」——雜訊不守單點，掃描也不許只掃單點）。</p>
+
+<h3>5.2 數學：把書中「＋noise 的磁珠」重新算一次</h3>
+<p>磁珠（有效感值 L）＋後端電容 C 構成二階 low-pass，諧振與尖峰高度：</p>
+<div class="formula">
+f<sub>filter</sub> ＝ 1／(2π√(L·C))；　Q ＝ (1/R<sub>loop</sub>)·√(L/C)；　諧振處衰減 ≈ −20·log Q（Q＞1 時是<strong>正值＝放大</strong>）<br>
+<span style="font-size:.9em;color:#6b7280">白話：門（L）轉角配水庫（C）必有一個共振節奏；兩邊損耗（磁珠 DCR＋電容 ESR）就是減震海綿，海綿太薄，門會被搖得比風還大。</span>
+</div>
+<p>書中圖 5.11 的五顆磁珠之一，就在 <strong>100 kHz 附近共振、把雜訊比例放大</strong>（「increased the noise ratio rather than attenuating it」），直接獲得不推薦。放大機制與避免清單（原文三條）完全對得上物理：</p>
+<ul>
+  <li><strong>不在低頻（如 10 kHz）做特性曲線</strong>——你不知道自己的門在低頻會不會開包；</li>
+  <li><strong>DCR 極低（＜0.1 Ω）</strong>——Q＝√(L/C)/R 的分母沒了，包必然尖；書明言「最低 DCR 不總是最佳選擇」；</li>
+  <li><strong>感性長尾延伸到低頻</strong>——門在低頻段是一根純感（X 大），與後端 C 形成高 Q 振盪（圖 5.13 的「not recommended」曲線特徵）。</li>
+</ul>
+<p class="formula" style="text-align:left">驗證公式（書中原文）：<strong>Attenuation (dB) ＝ 20·log(V<sub>OUT</sub>/V<sub>IN</sub>)</strong>——治具（圖 5.10）＝訊號產生器注入＋示波器兩通道比振幅；jitter 端再用頻譜儀看「峰值銳不銳」（圖 5.16：同一 66 MHz 時鐘，好磁珠的載波峰尖銳、壞磁珠的峰變胖——雜訊邊帶＝jitter）。這套「注入掃描＋衰減曲線」方法學 Day 39 已用，今天的升級是：<strong>掃描區間必須覆蓋 DC-DC 的 f<sub>sw</sub> 諧波族與迴路頻寬邊界兩側</strong>。</p>
+
+<figure>
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;font-family:inherit;">
+  <rect width="900" height="400" fill="#f8f9fb" rx="8"/>
+  <text x="450" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：門的驗圖——「放大包」怎麼出現、怎麼壓掉（重現書中圖 5.11 的教訓）</text>
+
+  <!-- plot frame -->
+  <line x1="90" y1="60" x2="90" y2="310" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="90" y1="185" x2="840" y2="185" stroke="#111827" stroke-width="1.5"/>
+  <text x="848" y="180" font-size="12" fill="#374151">0 dB</text>
+  <text x="848" y="85" font-size="12" fill="#374151">增益＞0＝放大！</text>
+  <text x="848" y="300" font-size="12" fill="#374151">衰減（正常該在這邊）</text>
+  <line x1="90" y1="80" x2="840" y2="80" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="90" y1="290" x2="840" y2="290" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="80" y="66" text-anchor="end" font-size="12" fill="#6b7280">＋10 dB</text>
+  <text x="80" y="312" text-anchor="end" font-size="12" fill="#6b7280">−10 dB</text>
+
+  <!-- x labels log-ish 10k..100M -->
+  <text x="105" y="330" font-size="12" fill="#374151">10 kHz</text>
+  <text x="290" y="330" font-size="12" fill="#374151">100 kHz</text>
+  <text x="480" y="330" font-size="12" fill="#374151">1 MHz</text>
+  <text x="650" y="330" font-size="12" fill="#374151">10 MHz</text>
+  <text x="795" y="330" font-size="12" fill="#374151">100 MHz</text>
+
+  <!-- bad bead: hump above 0 line near 100k (positive = amplification plotted upward) -->
+  <path d="M95,183 L250,180 Q285,178 300,95 Q310,70 322,95 Q335,170 380,180 L840,285" fill="none" stroke="#c92a2a" stroke-width="2.8"/>
+  <text x="330" y="62" font-size="13" fill="#c92a2a" font-weight="bold">「長感性尾巴＋DCR&lt;0.1 Ω」：f_filter 附近 Q 高 → 增益＋10 dB</text>
+  <text x="330" y="80" font-size="12" fill="#c92a2a">曲線跑到 0 dB 線以上＝輸出比輸入大（書中圖 5.11 那顆被拒磁珠的曲線特徵）</text>
+
+  <!-- good bead: damped monotonic -->
+  <path d="M95,192 Q300,196 500,215 L840,272" fill="none" stroke="#2b8a3e" stroke-width="3" stroke-dasharray="1 0"/>
+  <text x="520" y="255" font-size="13" fill="#2b8a3e" font-weight="bold">「有損耗＋低頻有 characterization」：全程位於 0 以下、單調</text>
+
+  <!-- shaded scan band -->
+  <rect x="100" y="88" width="185" height="220" fill="#fdecef" opacity=".55"/>
+  <text x="112" y="300" font-size="12" fill="#9d1c1c">書中掃描區 10 kHz～1 MHz</text>
+  <text x="112" y="316" font-size="12" fill="#9d1c1c">（「雜訊不只單一頻率」）</text>
+
+  <!-- annotation to hump peak -->
+  <line x1="310" y1="95" x2="310" y2="185" stroke="#c92a2a" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="252" y="205" font-size="12" fill="#9d1c1c">f_filter＝1/(2π√LC)</text>
+  <text x="252" y="220" font-size="12" fill="#9d1c1c">包高＝20logQ</text>
+</svg>
+<figcaption>圖 3：磁珠＋後端電容「門」的衰減曲線（紅：低 DCR／長感性尾巴，在 f_filter 附近把雜訊放大約 Q 倍——書中 100 kHz 附近實測到的就是這條紅線；綠：損耗足夠的門，全程單調遞減才是合格門）。驗收方法＝書中治具：訊號產生器注入＋雙通道比振幅，Attenuation(dB)＝20·log(V<sub>OUT</sub>/V<sub>IN</sub>)，掃描必覆蓋低頻。</figcaption>
+</figure>
+
+<h3>5.3 電阻濾波：小電流軌的低頻利器（書中數據）</h3>
+<p>Ch.5 的 Resistive Filters 節給了一個常被忘的選項：當 VDDA 之類模擬腳電流很小（書例：max 15 mA），<strong>一顆 8 Ω 電阻</strong>只掉 0.12 V（3.3→3.18 V），換來的是一個與頻率無關、永不共振的隔離電阻——「<strong>比磁珠更好地過濾低頻</strong>」。書中還點名<strong>長期 jitter</strong>（長期抖動：幾十 µs 以上尺度的邊沿漂移，書例 20 µs 或更長）受低頻電源雜訊影響——這正是磁珠低頻失效、電阻在行的地盤。</p>
+<p>camera 語言直譯：AVDD 1.8 V／感測器類比域通常幾 mA～幾十 mA——「小 R（幾 Ω～十幾 Ω）＋後端兩段 C」對低頻（1/f、DC-DC 打嗝、負載步進殘留）的抑制往往勝過磁珠；而且電阻沒有感性尾巴，<strong>結構上不可能開反諧振包</strong>（R 就是天生海綿）。代價：負載電流變動大時壓降隨 I 漂（PSR 式的 trade：R 越大低頻濾得越好、直流誤差越大）——大電流軌（DVDD 陣列、OIS 驅動瞬間電流）就撐不起來了，那等軌用「低損耗磁珠＋選對 Q」或 LDO 思路。</p>
+<div class="card intuition">
+  <span class="label">白話收編：三種「門」的選型一句通</span>
+  <p><strong>電阻門</strong>＝小房間专用的厚簾：誰都隔一點、永不共振、但風大（電流大）會被吹飛（壓降）。<strong>磁珠門</strong>＝頻率選擇性轉門：高頻擋得狠、低頻幾乎形同虛設（且挑料不當會自己晃）——所以低頻段要嘛靠 Q 設計、要嘛靠後端 C 與迴路接手。<strong>LDO門</strong>（週 19 正課，這裡先挂鈎）＝主動隔音室：低頻高頻都隔、代价是功耗與自身噪聲。選型第一步永遠是問：<strong>要隔的那團雜訊住在哪個頻段、這軌電流多大</strong>——Ch.5 的磁珠推薦清單（BLM21BD601SN1 等）是 2002 年的參考答案，方法（掃頻＋衰減曲線不許變正）才是永不過期的資產。</p>
+</div>
+
+<h2>6. 週 8 收官：PDN 單頁決策文件（模板＋範例）</h2>
+
+<p>把 Day 39–41 三天的知識壓成一頁紙：接到一條新軌（rail），照表由上往下填，填不出來的欄位就是你要補的功課/模擬/量測。<strong>七個區塊、一條主線：預算 → 元件 → 幾何 → 電源端 → 驗證。</strong></p>
+
+<table>
+<tr><th style="width:14%">區塊</th><th style="width:38%">要決定的事（關鍵問題）</th><th style="width:24%">公式/判準（出處）</th><th style="width:24%">範例：模組 AVDD 1.8 V</th></tr>
+<tr>
+  <td><strong>① 預算</strong></td>
+  <td>負載電流與暫態（ΔI、Δt）？容許紋波（datasheet ±%）？Z<sub>target</sub>＝紋波÷ΔI？雜訊敏感頻譜（3A、影像頻段、f<sub>sw</sub> 諧波）落在哪？</td>
+  <td>Z<sub>target</sub>＝ΔV<sub>ripple</sub>/ΔI<sub>max</sub>（Day 39）</td>
+  <td>ΔI≈80 mA／Δt 百 ns 級→Z<sub>target</sub> 百 mΩ 級（約）；敏感區重點盯 f<sub>sw</sub> 與 1/f 區</td>
+</tr>
+<tr>
+  <td><strong>② 電源端</strong></td>
+  <td>由哪顆 buck/LDO 供？f<sub>sw</sub>、f<sub>c</sub>（約）？輸出漣波頻譜（含毛振鈴）？最大負載電容窗、補償類型？remote sense 點位置？</td>
+  <td>f<sub>c</sub>≈f<sub>sw</sub>/10～20（量級）；ΔI<sub>L</sub>＝V<sub>OUT</sub>(V<sub>IN</sub>−V<sub>OUT</sub>)/(V<sub>IN</sub>f<sub>sw</sub>L)；C<sub>out</sub> 窗（datasheet）</td>
+  <td>PMIC buck f<sub>sw</sub>≈2 MHz（約）→f<sub>c</sub> 約百 kHz 級；上電與暫態重測列入 case</td>
+</tr>
+<tr>
+  <td><strong>③ 門（隔離）</strong></td>
+  <td>電阻 or 磁珠 or LDO？（電流量級＋雜訊頻段）若磁珠：DCR 不能極低、低頻曲線要有、感性尾巴要短；後端 C 兩段分壓；衰減曲線全頻不許正</td>
+  <td>f<sub>filter</sub>＝1/(2π√(LC))、Q＝√(L/C)/R；Attenuation＝20log(V<sub>OUT</sub>/V<sub>IN</sub>)（Ch.5）；電阻壓降＝I×R 對照裕度</td>
+  <td>電流小→10 Ω（約）＋前後端 10 µF/1 µF 兩段（值距內收）；磁珠方案則先掃 10 kHz～50 MHz</td>
+</tr>
+<tr>
+  <td><strong>④ 值梯度（牆）</strong></td>
+  <td>棒次表：bulk→中大→小→超小；相鄰值距≤2–5 倍（現代）；每對交棒區合成尖峰≤Z<sub>target</sub>？阻尼腳色誰當（高 ESR 料）？同料號加顆數<strong>不治尖峰</strong>（Q 不變）</td>
+  <td>f<sub>ar</sub>≈1/(2π√(ESL<sub>大</sub>·C<sub>小</sub>))；Z<sub>peak</sub>≈√(L/C)×Q（Day 40／Ch.8）</td>
+  <td>22 µF→4.7 µF→1 µF→100 nF→22 nF（0201/01005）；1 µF 取高介損料當海綿（注意 DC 偏壓後仍守住角色）</td>
+</tr>
+<tr>
+  <td><strong>⑤ 幾何（板/flex）</strong></td>
+  <td>平面電容夠不夠（C、dV 判定）？駐波查表（板邊長→1/4λ 族）與板上面規（時鐘諧波）有無撞點？地面切口清單？回流跨分割處補橋？</td>
+  <td>C＝ε₀ErA/T；dV＝(C<sub>lines</sub>/C<sub>plane</sub>)V<sub>DD</sub>；f<sub>1λ</sub>＝v/L、v≈6 in/ns（Ch.6/Ch.8）</td>
+  <td>小板 2.5 in→f<sub>1λ</sub>≈2.4 GHz、開路點 1.2 GHz★：暫離面規，記錄在案；OIS 開槽區重算</td>
+</tr>
+<tr>
+  <td><strong>⑥ 佈局紀律</strong></td>
+  <td>接序正義：平面→via→電容 pad→元件腳（保護島）；小容貼腳、via-in-pad/短寬連帶（裝機電感）；Ch.8 八條＋自補三條逐項打勾；bounce 預算 L<sub>pkg</sub>·di/dt</td>
+  <td>Day 40 檢查表⑨⑩⑪；V<sub>bounce</sub>＝L·di/dt（Ch.8）</td>
+  <td>sensor 腳前插隊 01005；flex 掛尾式全部重排；power via 感度檢查</td>
+</tr>
+<tr>
+  <td><strong>⑦ 驗證</strong></td>
+  <td>上電波形（雙峰/振鈴？）、f<sub>sw</sub> 諧波頻譜（頻譜儀/示波器）、注入掃描（10 kHz～≥50 MHz，含 f<sub>c</sub> 兩側）、負載暫態（di/dt 比迴路快的那種）、敏感端 jitter（Noise/SR 對帳）——量測點全部標在 load point／晶片側</td>
+  <td>Ch.5 治具方法學（保留真實去耦配置）；Additional Jitter＝Noise/SR</td>
+  <td>注入掃出任何正值衰減＝退回③重選；30 mV@MHz 級＋SR 2 V/ns→約 15 ps 入 jitter 帳</td>
+</tr>
+</table>
+
+<p><strong>這張表的使用紀律：</strong>①→⑦ 是有依賴順序的（預算不定，元件無從談起；電源端不查，牆設計等於瞎子摸魚）；任何一欄的數字來路要嘛是 datasheet、要嘛是自己量（標「約」）、要嘛是模擬（標工具與假設）——<strong>沒有出處的數字視為未填</strong>。面試被問 walk me through your PDN design，拿這頁講，就是「做過的人」的答法。</p>
+
+<h2>7. 實務案例連結</h2>
+
+<h3>7.1 NB 主機板（你的本行）</h3>
+<ul>
+  <li><strong>「加容之後暫態反而更振」考古：</strong>以前遇到會懷疑人生——今天你有一完整嫌疑名單：超出 C<sub>out</sub> 窗（§4.2-1）、ESR 零點消失/出現（§4.2-2）、遠端牆接縫反諧振（§4.2-3）。查案順序：先上電看軟啟動波形（振鈴＝補償線）、再小步加容看暫態包络（節拍改變＝極點搬家）、最後兩端口掃 load point 阻抗找包（反諧振）。</li>
+  <li><strong>USB 供電的「打嗝」與低頻地盤：</strong>熱插拔載入瞬間電壓塌陷、控制器重試（打嗝）——頻率在kHz 級以下，磁珠形同虛設、去耦牆也只能撐時間；這地盤歸迴路與電源路徑電阻（線損、MOS）管。你的角色是把「塌陷持續多久、多深」量化給電源端——f<sub>c</sub> 以下的帳，找回第一棒算（今天的白話：水壓跌得比巡邏慢，就是保全的事）。</li>
+  <li><strong>EMC pre-scan 的「電源端嫌犯」欄位：</strong>週 6 查表法（平面駐波）之外，今天加一欄：<strong>f<sub>sw</sub> 與其諧波族</strong>（現代 NB buck 多在百 kHz～幾 MHz，諧波族上數百 MHz——失敗頻點落在 f<sub>sw</sub>×n 的整數列上嗎？）。對策光譜：濾波器（門）補強、振鈴壓制（R/C snubber）、Layout（迴路面積）——注意 f<sub>sw</sub> 改頻（某些控制器可-sync）是把整族諧波搬家的系統級旋鈕（標：視器件能力）。</li>
+  <li><strong>跨板/經連接器供電＝天然長尾：</strong>NB 主板→子板（IO 板、camera 子板）經 board-to-board 連接器，電源路徑電感讓「主板端的牆」對子板高頻形同不存在——子板必须自带完整值梯度＋就近回路面（Day 40 接序＋今天「遠端水塔」的系統版）；連接器各 pin 的分配與感測點是這個界面上的「量測點法律」。</li>
+</ul>
+
+<h3>7.2 鏡頭模組（camera 語言）</h3>
+<ul>
+  <li><strong>AVDD 的「門」選型實務：</strong>幾 mA～幾十 mA 的模擬軌——書中 8 Ω/15 mA 的電阻濾波器思路直接可用（§5.3）：低壓差軌用幾 Ω，後端兩段 C；電流再小、軌更敏感（例如 OIS 驅動參考、EEPROM I²C 上拉的電源域）也同理。磁珠方案務必要求供應商給<strong>含低頻（10 kHz 級）的 Z(f)/R(f) 曲線</strong>，並拿書中三條 avoid 清單對照——這是你今天對供應商開會能提的新要求。</li>
+  <li><strong>PMIC 在主板、sensor 在模組：最極端的接力：</strong>電源端（buck）→長 FPC（數 ohm 級感抗＋直流壓降）→模組牆。DC 壓降吃 headroom、交流帳幾乎全由模組端牆獨扛——為什麼模組板小、元件只能 0201/01005、值距又必須內收：全部預算都壓在同一塊小板上（§6 表格填一填就懂這種軌的難處）。改版時 FPC 長度／層序一動，接縫反諧振表要重算（Day 40 練習 4 的「改版重算」纪律在接縫版的重演）。</li>
+  <li><strong>影像條紋的頻率指紋：</strong>橫紋週期（行頻/場頻 vs f<sub>sw</sub>）對得上嗎？Ch.5 的啟示是<strong>雜訊不守單點</strong>：buck 基頻在 2 MHz，但邊框毛刺的 MHz 級諧波照樣可以經 AVDD 進像素域（PSRR 不在 datasheet！）——所以「條紋頻率≠f<sub>sw</sub>」不能排除 buck 嫌疑，注入掃描（在 f<sub>sw</sub> 諧波處打小信號，看影像條紋是否變大）才是定罪程序。</li>
+  <li><strong>長期 jitter 與「20 µs 以外的穩定度」：</strong>書中把長期 jitter（20 µs 或更長）點名為低頻濾波（電阻 vs 磁珠）的受益場景；MIPI D-PHY 的時鐘恢復與影像 sensor 的 exposure 時序對低頻電源漂移的敏感度帳，週 13/15 會正式打開——今天先在單頁文件的「⑦ 驗證」預留欄位：Noise/SR 換算的 ps 數。</li>
+</ul>
+
+<h2>8. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：迴路的責任邊界</strong>——某 buck：f<sub>sw</sub>＝750 kHz（量級），迴路交越 f<sub>c</sub> 設計在 f<sub>sw</sub>/10。(a) f<sub>c</sub> 約多少？迴路的「有效反應時間」量級（1/f<sub>c</sub>）約多少？(b) 負載（感測器陣列）抽出一個 0.5 A、寬 2 µs 的電流脈衝：迴路能修正它嗎？(c) 這 2 µs 由 load point 的 100 µF 獨扛，ΔV 約多少？若只有 22 µF 呢？(d) 一句話總結「誰對哪個頻段負責」。</summary>
+<div class="answer">
+<p>(a) f<sub>c</sub>≈750 kHz/10＝<strong>75 kHz</strong>；反應時間量級 1/f<sub>c</sub>≈<strong>13 µs</strong>（真正拉回還要幾個時間常數；心跳本身一拍就已 1.3 µs——快事件連「被看見」都要等）。</p>
+<p>(b) 修正不了：事件 2 µs ≪ 13 µs。等迴路的修正指令生效，脈衝早已結束——它只會「事後」在平均電壓上看到一點痕跡。這就是「過了 f<sub>c</sub> 迴路裝死」的具體畫面（Ch.12 的原話精神：控制迴路的動作只發生在它的頻寬之內）。</p>
+<p>(c) ΔQ＝I·t＝0.5 A×2 µs＝1 µC。100 µF：ΔV＝1 µC/100 µF＝<strong>10 mV</strong>；22 µF：ΔV≈<strong>45 mV</strong>。1.8 V 軌容許 ±5%＝90 mV 的話兩個都過，但 45 mV 已經吃掉一半預算——還不算高頻 ESL 的份（實際尖峰會再高一截，Day 39/40 的帳）。結論：這種事件「能不能活」在牆的選型上就決定了，迴路到時候連旁聽都不是。</p>
+<p>(d) 約 75 kHz 以下：迴路主扛（電壓穩定性、緩變負載）；75 kHz 以上：只有被動網絡（輸出牆＋值梯度＋平面）在場——設計上「f<sub>c</sub> 兩側都要有元件簽收」，量測上「注入掃描要掃過 f<sub>c</sub> 兩側」。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：容性牆的極點搬家</strong>——buck：L＝2.2 µH、C<sub>out</sub>＝220 µF（原廠設計窗內）。(a) 輸出極點 f<sub>p</sub> 約多少？(b) 你「好心」在遠端又焊了一組 470 µF：新 f<sub>p</sub>？(c) 原廠若探 f<sub>c</sub>＝75 kHz（跨極點補償），極點從 7→4 kHz 為什麼是壞消息（定性說相位邊際）？(d) 遠端大容除了改 f<sub>p</sub>，還會製造什麼新戶籍？（用 Day 40 詞彙回答）</summary>
+<div class="answer">
+<p>(a) f<sub>p</sub>＝1/(2π√(2.2 µH×220 µF))＝1/(2π√(4.84×10⁻¹⁰))＝1/(2π×2.2×10⁻⁵)≈<strong>7.2 kHz</strong>。</p>
+<p>(b) C＝690 µF：√(2.2e-6×6.9e-4)＝√(1.518e-9)≈3.9×10⁻⁵ → f<sub>p</sub>≈<strong>4.1 kHz</strong>。星星自己搬到更低頻。</p>
+<p>(c) 補償網路是按「極點在 7.2 kHz」對表的：極點每往低挪一個 decade，它在<em>同一個頻率</em>上偷走的相位提前出現、且在交越點附近贡献更多滞後——75 kHz 處的相位邊際縮水，症狀是暫態振鈴變大、穩定性裕度（phase margin）吃緊，極端時自激。白話：保全按旧水塔的晃動節拍練的步法，水塔換大，他的腳步剛好踩在晃動的順風車上，越補越晃。</p>
+<p>(d) 遠端牆與近端牆之間的佈線/via 電感 × 兩段電容＝<strong>電源↔PDN 接縫反諧振</strong>（Day 40 並聯 LC 振盪槽的系統版）：在負載看去的 Z 曲線上加一顆新包，位置常落在 MHz 級。所以「加牆」的正確姿势是<strong>近、短、分倉、重掃曲線</strong>，不是遠端一塞了事。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：把書中「放大雜訊的磁珠」重新算一次</strong>——二階濾波：磁珠有效感值 L≈1 µH（假設量級）、後端低 ESR 陶瓷 10 µF（書中治具同款量值）、迴路總損耗 R<sub>loop</sub>（DCR＋ESR）≈0.1 Ω。(a) f<sub>filter</sub> 約多少？(b) Q 與諧振處增益（≈20logQ）？和書中圖 5.11「near 100 kHz 放大」對照。(c) 要把包壓平（Q≤1），R<sub>loop</sub> 至少要多少？現實中從哪裡拿？(d) 為什麼「DCR＜0.1 Ω」會被列進避免清單、而「Z@100 MHz 很大」卻會被列進亮點規格——供應商規格表為什麼「誠實但不完整」？</summary>
+<div class="answer">
+<p>(a) f<sub>filter</sub>＝1/(2π√(1 µH×10 µF))＝1/(2π×3.16×10⁻⁶)≈<strong>50 kHz</strong>——與書中實測的「100 kHz 附近」同一量級、同一地盤（10 kHz～1 MHz 掃描區正中央）。</p>
+<p>(b) Q＝√(L/C)/R＝√(1e-6/1e-5)/0.1＝0.316/0.1≈<strong>3.2</strong>；諧振處增益≈20log(3.2)≈<strong>＋10 dB</strong>——輸出比輸入大 3 倍：這不是濾波器，是雜訊擴音器（書中那顆被拒的磁珠就長這樣）。你 Day 39 練習 4 的「＋6 dB」就是 Q≈2 的同款。</p>
+<p>(c) Q≤1 → R≥√(L/C)＝0.316 Ω，取<strong>約 0.32 Ω 以上</strong>（要 Butterworth 級平坦 Q≤0.707 則要 ≥0.45 Ω）。現實取得：選 DCR 更高的磁珠（書：最低 DCR 不是最佳）、或後端改一顆帶天然損耗的料（高介損陶瓷／聚合物當阻尼腳色，DC 偏壓後容值仍守角色——Day 40 的紀律）、或（電流允許時）乾脆換電阻門（§5.3，結構性無包）。</p>
+<p>(d) 供應商的「亮點規格」（600 Ω@100 MHz、DCR 低）都是<strong>對它最有利的切面</strong>：高頻阻抗大＝濾波賣點、DCR 低＝效率賣點；但濾波器的成敗取決於<em>整個曲線的形狀與損耗</em>（低頻尾巴、Q、自諧振），這些沒人在行銷。Ch.5 的教訓不是供應商說謊，而是<strong>規格書的采樣點不是你的工作頻段</strong>——所以「拿回 10 kHz～百 MHz 的 Z(f)、R(f) 甚至實測衰減曲線」才是選型本體（⑦ 區塊）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：高頻漣波電流誰扛</strong>——接練習 1 的 buck（V<sub>IN</sub>＝5 V、V<sub>OUT</sub>＝3.3 V、f<sub>sw</sub>＝750 kHz、L＝2.2 µH）。(a) ΔI<sub>L</sub> 峰對峰？RMS 量級？(b) 板上佈局：C 近端 4 顆 22 µF MLCC 貼 buck、30 cm 外一顆 220 µF 聚合物（路徑電感約 30 nH 量級假設）。750 kHz 的漣波電流主要走哪條？用 2πfL 算兩條路徑的感抗對比。(c) 這題對「buck 輸出端留位」的 layout 紀律有什麼直接含義？</summary>
+<div class="answer">
+<p>(a) ΔI<sub>L</sub>＝V<sub>OUT</sub>(V<sub>IN</sub>−V<sub>OUT</sub>)/(V<sub>IN</sub>·f<sub>sw</sub>·L)＝3.3×1.7／(5×7.5×10⁵×2.2×10⁻⁶)＝5.61／8.25≈<strong>0.68 A pp</strong>；RMS≈ΔI/√12≈<strong>0.2 A</strong>（約值，CCM 近似）。數字不大，但它 750 kHz 來回一次、天天不變——MLCC 的漣波電流壽命與溫升就是在這算。</p>
+<p>(b) 遠路感抗：2π×7.5×10⁵×30×10⁻⁹≈<strong>0.14 Ω</strong>；近端路徑（幾 nH 級）感抗約 0.01–0.05 Ω 量級，還疊加容抗優勢（4×22 µF 在 750 kHz 容抗≈1/(2π×7.5e5×8.8e-5)≈0.24 Ω；220 µF 容抗小但被 0.14 Ω 的路徑感抗卡住進出）。結論：<strong>高頻分量按「阻抗最低」分配，近端 MLCC 吃掉大頭</strong>；聚合物主要在低頻與暫態出力。這不是誰規定，是物理分帳。</p>
+<p>(c) 含義：① buck 輸出端的 MLCC 位置是<strong>功能性預留</strong>（扛 f<sub>sw</sub> 電流），layout 不能因「空間緊張」挪走或合併到負載端；② 遠端大容救不了 buck 的漣波帳（路徑感抗擋路）——它只對低頻/暫態有效；③ review 時看到「buck 輸出只有聚合物没有 MLCC」＝直接開單。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：Noise/SR 的 jitter 記帳（Ch.5 公式實戰）</strong>——模組 MCLK 24 MHz 由緩衝器輸出，邊框速度 SR≈2 V/ns（量級假設），其驅動電源腳測得紋波 30 mV（集中在 1 MHz 附近，正是 buck 諧波地盤）。(a) 用書中公式估算額外 jitter？這是 DJ 還是 RJ？分佈什麼形状？(b) 若把 SR 升到 4 V/ns 或把 30 mV 濾到 5 mV，各自 jitter 多少？哪條路在 camera 上更可行（線索：MIPI/影像對邊框輻射的態度，週 13 見）？(c) 書中兩顆 PLL 對同檔雜訊差 3.5 倍且峰值頻率不同——這教你對「新料號」做什麼？</summary>
+<div class="answer">
+<p>(a) Additional Jitter＝Noise/SR＝30 mV ÷ 2 V/ns＝<strong>15 ps</strong>。這是<strong>確定性抖動</strong>（電源雜訊注入、幅度有限、週期性）——書中描述其分佈為<strong>雙峰（bimodal）、有界</strong>：直覺是把雜訊週期内的兩個「常被推早/被推晚」的極端疊在眼圖上，形成左右兩個胖肩。Day 28 的家譜在此落地：<em>眼圖上出現與電源頻率同步的雙峰＝順藤摸到 power 的路</em>。</p>
+<p>(b) SR 4 V/ns→7.5 ps；Noise 5 mV→2.5 ps。兩條路都有效，但方向相反：升 SR＝邊框更陡＝更多高頻輻射與過衝（EMI/信號完整性開新帳，camera 對邊框輻射尤其敏感——MIPI 線就在旁邊，週 13 的帳本先借你看）；<strong>濾 Noise 不碰訊號品質</strong>，通常是 camera 模組上更乾淨的解（電阻門＋後端牆，§5.3）。面試時能把「為什麼選濾不選陡」講成 trade-off，就是系統級答法。</p>
+<p>(c) 「PSRR 不在 datasheet」的行動版：新料號進敏感軌之前，<strong>按 Ch.5 方法自建小驗證</strong>——注入 10 kHz～數 MHz（至少蓋 f<sub>sw</sub> 諧波）正弦雜訊幾十 mV，量輸出 jitter/相位（TIA/頻譜儀），拿到「jitter vs 雜訊頻率」曲線與峰值位置，才決定它能不能吃敏感軌、要不要補門。兩顆 PLL 峰值一個 200 kHz、一個 5 MHz：同系列都不保證，更別說跨廠 pin-to-pin 替代品（供應鏈換料時的必做題）。</p>
+</div>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "Sketch the output impedance of a buck converter from DC to high frequency. Where does the control loop stop helping, and what takes over? Why can't the loop fix switching ripple?"</strong><br><br>
+  <strong>Reference answer:</strong> From DC to the loop crossover frequency—typically f_sw/10 to f_sw/20, so tens to low hundreds of kHz for common converters—the closed loop holds output impedance at milliohm level: high loop gain actively nulls errors, like a servo. At crossover, loop gain falls to unity; above it the regulator stops responding—the fastest thing it can do is change duty on the next switching cycle, so events faster than roughly 1/f_c are invisible to it. Above that boundary the output impedance rises, and eventually looks inductive, roughly 2πf·L_out, because the load sees the output inductor reaching back to a switching node; if the loop crossover is below the output-filter pole 1/(2π√(LC)), the LC parallel resonance also appears as a peak in Z_out whose height is set by losses, Q. What takes over is passive: the output capacitor bank right at the converter, then the decoupling ladder and planes at the load—the handoff must be continuous against Z_target; the seam between the regulator's rising impedance and the decoupling wall is itself an anti-resonance candidate through trace inductance, so I simulate/measure the combined curve across the seam, not just each side. The loop can't fix switching ripple because ripple is born within the cycle and the loop only acts cycle-by-cycle on averaged error; the high-frequency step and ringing on the switch node (classic measurement: abrupt steps on a 250 kHz switcher radiating harmonics into the MHz region—modern converters switch faster with sharper edges, so worse) are filtered by physics—L, C, ferrite/resistive filters—not by feedback. That's why datasheets specify an output-capacitor window and why arbitrarily adding bulk caps can move the filter pole, erode phase margin and even make the supply ring: the capacitors are part of the compensation, not just a storage tank. I'd verify on hardware: startup and load-transient waveforms, ripple spectrum including f_sw harmonics, and an injected-noise attenuation sweep across the crossover on both sides.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "The PDN is your design; the DC-DC converter is chosen by the power team. What interface questions do you ask, and what measurements prove the source-to-PDN handoff works?"</strong><br><br>
+  <strong>Reference answer:</strong> Questions first, five of them: switching frequency and its operating range (and any frequency-modulation/spread feature), because its harmonics define noise lines I must budget; control-loop crossover or transient response spec (impedance-vs-frequency curves if they exist); the allowed output-capacitor window and compensation type—my additional bulk and their design have to agree, or stability is a rumor; where the remote sense point is, so regulation and my load-point measurements refer to the same law; and ripple current ratings plus the layout keep-out for their output capacitors, since high-frequency ripple current lands on the nearest MLCCs. Measurements: startup waveforms for ringing/double-humps (compensation mismatch signature); load transient at di/dt deliberately faster than the loop so I prove the passive network alone holds Z_target in that window—probe at the load point, chip side; ripple spectrum on a spectrum analyzer covering f_sw and its harmonics (a scope FFT is fine for screening); two-port insertion-loss or impedance sweeps that start below the loop bandwidth (tens of kHz—legacy Cypress-era test setups swept 10 kHz to MHz because noise isn't limited to one frequency) and run high enough to reach plane resonances; and at sensitive consumers, an injected-noise test producing a jitter-vs-frequency curve, because supply-noise rejection (PSRR of the noise path) often isn't in the datasheet at all—I've seen two parts under identical injection differ by 3.5× with peaks at completely different frequencies. Any peaking in the handoff curve is a joint ticket with the power team—damping value, sense point, or crossover retune—documented with before/after evidence, not solved by adding capacitors and hoping.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「控制迴路只活在自己的頻寬裡：f<sub>c</sub> 以下我是旁觀者、以上我是責任人——PDN 設計就是讓每個頻率都有元件簽收」；「buck 低頻是海綿、高頻是水管（Z≈2πfL），同一顆電源兩張臉，帳要分開結」；「電容牆不是倉庫、是補償的一部份：超出 C<sub>out</sub> 窗的『好心加容』是穩定性殺手」；「磁珠選型看曲線不看行銷：DCR 不是越低越好、規格沒掃的頻段就是你的責任區、衰減曲線不得變正」；「PSRR 不在 datasheet 上——同檔雜訊差 3.5 倍是我見過的常態，不是例外」。這五句加上 Day 40 那五句，週 8 的「做過的人指紋」湊齊了。</p>
+</div>
+
+<h2>10. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：buck 輸出阻抗從 DC 到高頻的三段樣貌？交越頻率 f<sub>c</sub> 的量級與由來？為什麼「高頻帳迴路一分不出」？</p>
+  <p class="a">A1：三段：f≪f<sub>c</sub> 閉環毫歐級（高增益把輸出按在基準上）；f≈f<sub>c</sub> 起以約 20 dB/dec 爬坡（增益滚降）；更高頻 Z≈2πfL_out（被動感性爬坡，例 2.2 µH@750 kHz≈10 Ω）。f<sub>c</sub>＝迴路增益降到 1 的頻率，常見設計 f<sub>sw</sub>/10～f<sub>sw</sub>/20（量級；數位控制可更高）。控制器一個開關週期只有一次修正機會＋增益滚降 → 快於 1/f<sub>c</sub> 的事件它既看不全也趕不及（PT2 Ch.12 同理：控制迴路的動作只發生在頻寬之內）。高頻只能靠被動網絡：輸出牆→值梯度→平面。</p>
+</div>
+<div class="anki">
+  <p class="q">Q2：為什麼 buck 的開關諧波「註定」要濾波器處理？PT2 Ch.5 的實測數據與現代上修？</p>
+  <p class="a">A2：開關節點是 ns 級大階躍：頻譜＝f<sub>sw</sub> 諧波族一路延伸（書：250 kHz switcher「abrupt step, harmonics into the MHz region」），全部位在迴路頻寬之外——迴路只能調下一拍，本拍的毛刺/振鈴它碰不到。現代上修：NB buck f<sub>sw</sub> 約 0.5–2 MHz、邊框更陡，諧波更高更遠。對策分帳：LC 壓 f<sub>p</sub> 以上、敏感房再加「門」（磁珠/電阻/LDO）、snubber 治振鈴（源頭）。Ch.5 頻譜儀判讀法：載波峰「胖」＝邊帶雜訊/jitter，「尖」＝乾淨。</p>
+</div>
+<div class="anki">
+  <p class="q">Q3：控制迴路怎麼「看」容性牆？f<sub>p</sub> 公式、最大負載電容窗、ESR 零點、遠端牆——四条紀律？</p>
+  <p class="a">A3：迴路看到的最大一顆星是輸出極點 f<sub>p</sub>＝1/(2π√(LC))（附 180° 相位滑坡，補償網路負責跨穩它）。紀律：① datasheet 的 C<sub>out</sub> 窗是法律（超窗：上電振鈴/lockup、相位邊際縮水、越加越振）；② MLCC 時代 ESR 零點失蹤，補償本假設低 ESR，換「有年紀的 ESR」料同樣改寫補償；③ 遠端牆＝接縫反諧振新戶籍（佈線 L×兩段 C），加牆要近、短、分倉、重掃；④ remote sense 點＝判斷基准（量測點是法律）。</p>
+</div>
+<div class="anki">
+  <p class="q">Q4：磁珠濾波器諧振的三個避免特徵＋放大機制公式＋驗證公式（皆 PT2 Ch.5）？</p>
+  <p class="a">A4：避免清單（原文）：① 不在 10 kHz 級低頻做特性曲線；② DCR 極低（＜0.1 Ω）；③ 感性長尾延伸到低頻。機制：f<sub>filter</sub>＝1/(2π√(LC))、Q＝√(L/C)/R，Q＞1 諧振處衰減變正值（放大，書圖 5.11 有一顆 near 100 kHz 實錘）——低 DCR＋低損耗後端 C＝高 Q。驗證：Attenuation＝20log(V<sub>OUT</sub>/V<sub>IN</sub>)，注入掃描必須覆蓋工作雜訊全頻（「noise isn't limited to a single frequency」），曲線任何一段為正＝這顆門不能進敏感房。書中實測收益：50 mV 注入下 PLL1 jitter 無門 200 ps→有門 125～＜25 ps（視料號）。</p>
+</div>
+<div class="anki">
+  <p class="q">Q5：PDN 單頁決策文件的七個區塊與依賴順序？兩條「今天新增的接縫紀律」？</p>
+  <p class="a">A5：① 預算（Z<sub>target</sub>＝ΔV/ΔI、敏感頻譜）→② 電源端（f<sub>sw</sub>/f<sub>c</sub>/漣波頻譜/C<sub>out</sub> 窗/sense 點）→③ 門（電阻 vs 磁珠 vs LDO：電流量級×雜訊頻段）→④ 值梯度牆（值距、交棒尖峰、阻尼腳色、Q 不變定律）→⑤ 幾何（平面電容、駐波查表、切口）→⑥ 佈局紀律（接序、裝機電感、bounce 預算）→⑦ 驗證（上電/暫態/注入掃描/jitter 記帳，量測點全標 load point）。紀律一：f<sub>c</sub> 右側每個頻率都要有被動元件簽收；紀律二：電源爬坡×電容牆的交叉區是第四戶諧振（電源↔PDN 接縫反諧振），照樣三板斧。無出處的數字視為未填。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+
+<p><strong>Day 42（週四・週 9 EMI 機制開週）：</strong>電源這棒的接力的帳，週 8 全部結清了——從明天起，鏡頭從「能量怎麼送到位」轉成「能量怎麼跑出去」：<strong>EMI I——共模 vs 差模：為什麼『電流迴路面積』才是天線的翅膀面積</strong>。你已經手握三張前作武器：Day 40 的「平面駐波是 EMI 前奏」、Ch.6 的「λ/4 結構近似天線」、今天的「f<sub>sw</sub> 諧波族＝預先排好隊的輻射候補」。明天從 Maxell 都聽得懂的共模/差模定義開始，把「迴路面積」從口號變成可以拿去 review 圈圖的帳。PT2 Ch.9（spread spectrum、down-spread/center-spread 與諧波整形）將於本週後段登場。今晚 Anki 照掃——Q1、Q3 是 EMI 週的地基；Q4 的「曲線不得變正」反射已經可以進肌肉。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

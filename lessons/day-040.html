@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 40｜PDN II——去耦電容策略：反諧振數學與佈局幾何</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 7 週・第 40 天（週二新觀念課）</div>
+  <h1>Day 40：PDN II——去耦電容策略：反諧振數學與佈局幾何（Perfect Timing II Ch.6／Ch.8）</h1>
+  <div class="meta">2026-09-01（二）｜預估學習時間：90 分鐘｜難度：★★★★☆（昨天你把去耦「階梯」立起來了，今天拆階梯上最著名的一顆地雷：反諧振——兩個好意並聯、共振出比單獨任何一條都高的阻抗尖峰。這是 PI 面試出鏡率最高的概念之一；下午場則把「佈局幾何」補齊：同一顆電容，接法對了是防彈衣、接法錯了是裝飾品。PT2 Ch.6「PCB 佈局」＋Ch.8 未用完的段落主場）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>昨天結尾我 promise 過：「反諧振明天正式教」。今天兌現，而且不只要你會講名詞，要你能<strong>推、算、擺、查</strong>四件事：</p>
+  <ol>
+    <li><strong>推</strong>：反諧振的成立條件——「一個還在容性區＋另一個已進感性區」並聯，形成並聯 LC 振盪槽（PT2 Ch.8 圖 8.14 逐點拆），尖峰<strong>比兩條單曲線任何一條都高</strong></li>
+    <li><strong>算</strong>：反諧振頻率 f<sub>ar</sub> ≈ 1/(2π√(ESL<sub>大</sub>·C<sub>小</sub>)) 與尖峰高度 Z<sub>peak</sub> ≈ L/(C·R) 的估算——然後用它解釋「為什麼低 ESR 電容反而必須配更低的裝機電感」</li>
+    <li><strong>三板斧</strong>：Ch.8 三條治法（值距收窄／減裝機電感／高 ESR 阻尼），外加一條必須背下來的定律：<strong>「同 ESR:ESL 比值的電容並聯，Q 不變」</strong>——這決定了 damping 不能靠「多並幾顆同一料號」達成</li>
+    <li><strong>擺與查</strong>：平面電容設計（C＝ε·Er·A/T、dV＝(C<sub>lines</sub>/C<sub>plane</sub>)×V<sub>DD</sub>）、平面駐波諧振算式重演（書例 150/300/450/600 MHz）、Ch.8 圖 8.17「Bad/Good/Best」與 Ch.6 圖 6.3「via→電容→元件」的接序正義，以及 Ch.8 完整設計例（25 mΩ 案例十一條帳＋元件表）——今天全部收進一張可以帶去 layout review 的檢查表</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要——昨天埋的雷，今天起爆清單</h2>
+<ul>
+  <li><strong>Day 39 圖 2 下方小字：</strong>「交棒區（兩跑者阻抗交叉處附近）容易阻抗抬升——反諧振的溫床（明日 Day 40 主課）」。今天第 2 節就是那堂主課：交棒區為什麼不是平順交接，而是兩人同時松手的墜落點（甚至比松手更糟——把球往上拋）。</li>
+  <li><strong>Day 39 練習 4：</strong>磁珠＋後端電容在 120 kHz 出現「＋6 dB」正值衰減，被判定為 OIS 影像偶發抖動的元兇。那其實是反諧振的表親（串並混合的濾波器諧振）；今天把背後的 LC 振盪槽數學一次教完整，你回頭看那個 case 會更透。</li>
+  <li><strong>Day 39「一百顆同值只是地板÷100」：</strong>同值並聯＝整條曲線除以 N、形狀不動。今天它的姊妹定律登場：<strong>並聯同料號，ESR 和 ESL 一起除以 N，所以 Q＝ωL/R 紋風不動</strong>——尖峰的「相對於谷底的 wysokości」永遠還在。這是三板斧第三斧的物理基礎。</li>
+  <li><strong>Day 39 裝機電感「約 70% 法則」：</strong>pad＋via 讓 f₀ 下移到約七成。今天第二斧直接拿它開刀：減裝機電感不只救 f₀，還壓反諧振尖峰（尖峰正比於 Q，Q 正比於 L）。</li>
+  <li><strong>Day 39 水鎚 V＝L·di/dt：</strong>今天正式升帳為「VCC／ground bounce」主科（PT2 Ch.8 圖 8.9）——同一個公式，換了被告席。</li>
+  <li><strong>週 2–3 傳输線直覺＋Day 38 Q18（定義優先）：</strong>電源平面對＝「未端接傳輸線」（Ch.8 原文），驻波、開路／短路點全套照算；而「平面電容夠不夠」這個問題，書中用一個定義清楚的 dV 公式回答，不是靠信仰。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：兩個水缸、一根 U 形管，與中間那圈瘋狂晃動的水</span>
+  <p>昨天說去耦是「一樓一罐的加壓罐」。今天看兩罐相鄰的場景：<strong>大水缸</strong>（大電容，例如 10 µF）和<strong>小水缸</strong>（小電容，例如 100 nF）共用一根 U 形連通管（電源平面到封裝的那段電感路徑）。<br>
+  慢慢注水的低頻（DC～低頻）：兩罐都吃得進水，皆大歡喜。<br>
+  但頻率一快，大缸的進水管太長太細，水慣性讓它「吞吐不及」——對快速水流而言，<strong>大缸這側根本變成一根實心水管（電感）</strong>；小缸管短，還算一罐稱職的水庫（電容）。現在變成「一端是管、一端是罐」的結構——這正是國中物理的<strong>單擺／振盪槽</strong>：水在 U 形管裡來回晃，晃到某個頻率，<strong>中間管里的水位振幅比任何一缸的水位變化都大</strong>。這就是反諧振：大缸不吸、小缸不放，兩者互相推來推去，能量困在振盪裡，對外的表現是「這段頻率的水壓波動特別大」——阻抗尖峰比兩條單曲線都高（Ch.8 圖 8.14 的原始訊息）。<br>
+  治法也一樣直覺：<strong>① 讓兩罐容量別差太遠</strong>（行為差沒那麼大，振不起來——值距收窄）；<strong>② 把 U 形管加粗加短</strong>（管振的頻率和振幅都取決於管的長度——減裝機電感）；<strong>③ 在水裡放海綿隔板</strong>（ESR 就是那塊吸能量的海綿——阻尼）。<br>
+  最後記住那個白癡行為：往 U 形管旁<strong>再接十根一模一樣的 U 形管</strong>（並聯同料號）——每根管的「慣性：摩擦比」完全沒變，晃得一樣兇，只是總水量大了一點。<strong>同料號並聯減不了「相對晃幅」（Q 不變），這就是要靠「換顆天生帶海綿的」（高 ESR 料號）原因。</strong></p>
+  <p><em>公式全部遮住，這三段就是今天的結論：電容超過自己的諧振點就變電感；一大一小「一罐一管」並聯，會在中間頻率振出阻抗尖峰；治它是收窄值距、減接管電感、加對的海綿——而且海綿不能靠多接幾根管子代替。</em></p>
+</div>
+
+<h2>1. 先立兵凶戰危的框架：今天對付的三種「諧振家族成員」</h2>
+
+<p>先把術語分戶，避免之後越聽越糊——PI 世界有三個長得很像但性質完全不同的諧振：</p>
+<ul>
+  <li><strong>串聯諧振（f₀）：</strong>單顆電容內部 C 與 ESL 的共振——Day 39 已學，谷底＝ESR，之後變電感。它是<strong>元件自己的戶籍</strong>。</li>
+  <li><strong>並聯諧振／反諧振（anti-resonance）：</strong>兩顆（或多顆）元件<strong>之間</strong>形成的 LC 振盪槽——今天主角。Ch.8 原文给了它一串aliases：「anti-resonance、並聯諧振、impedance-hole（阻抗洞）」。它是<strong>組合才長出來的戶籍</strong>，單拆每顆都「合規」，組合起來違規。</li>
+  <li><strong>平面駐波諧振：</strong>電源─地面對這對「未端接傳輸線」自身的共振（書例 150–600 MHz）——第 4 節主角。它是<strong>板子幾何長出來的戶籍</strong>，電容只能稍微挪它（原文：influence extends only a few hundred MHz），移不走吧。</li>
+</ul>
+<p>三戶人家住在頻譜的不同地段：反諧振住在「相鄰兩棒交棒區」（kHz～百 MHz 級），平面駐波住在「200 MHz 以上」（書中口徑）。今天由近到遠各拆一戶。</p>
+
+<h2>2. 反諧振：為什麼「兩個好意」並聯會振出最壞的阻抗</h2>
+
+<h3>2.1 成立條件與書中原圖（Ch.8 圖 8.14 逐點拆）</h3>
+
+<p>Ch.8 原文（整理大意）：<strong>「不同值的電容一起使用可能產生不想要的反諧振尖峰……尖峰發生在個別電容串聯諧振頻率之間。注意合成阻抗的尖峰，比任何一顆單獨電容的阻抗都還高。這是因為一顆電容表現為電容、另一顆表現為電感時，形成了並聯 LC 振盪槽。」</strong>書中配的圖 8.14 用的是 <strong>22 nF 與 100 pF</strong> 並聯：小 pF 級先諧振、先進感性區；大 nF 級還在容性區——兩者在 22 nF 的 f₀ 之後、100 pF 的 f₀ 之前的某個頻率上，湊成了教科書級的並聯 LC。</p>
+
+<p>把條件講到不能再白：<strong>反諧振發生在「一個還在當電容、另一個已經當電感」的頻率重疊區</strong>。所以只要你的階梯上存在「值距」（不同容值的棒次），這個重疊區就<strong>必然存在</strong>——你無法「避免使用不同值」（Ch.8 原話強調：正確態度不是避開不同值，而是用下列方法管理它），你能做的是把尖峰<strong>壓矮、挪位、-split 成多個矮包</strong>。</p>
+
+<figure>
+<svg viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：反諧振——「一罐一管」振出比兩條單曲線都高的尖峰（依 PT2 Ch.8 圖 8.14 精神，以 10 µF／100 nF 數值示例）</text>
+
+  <!-- axes -->
+  <line x1="140" y1="420" x2="880" y2="420" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="140" y1="420" x2="140" y2="70" stroke="#64748b" stroke-width="1.5"/>
+  <text x="510" y="448" text-anchor="middle" font-size="11" fill="#374151">頻率（對數）：1 MHz → 1 GHz</text>
+  <text x="108" y="245" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 108 245)">阻抗（對數）</text>
+  <g font-size="9.5" fill="#64748b" text-anchor="middle">
+    <text x="140" y="436">1M</text><text x="380" y="436">10M</text><text x="620" y="436">100M</text><text x="860" y="436">1G</text>
+  </g>
+
+  <!-- zones -->
+  <rect x="140" y="70" width="120" height="350" fill="#16a34a" opacity="0.07"/>
+  <rect x="380" y="70" width="130" height="350" fill="#dc2626" opacity="0.08"/>
+  <rect x="595" y="70" width="285" height="350" fill="#94a3b8" opacity="0.08"/>
+  <text x="200" y="86" text-anchor="middle" font-size="10" fill="#166534">兩個都容性：加法關係，</text>
+  <text x="200" y="100" text-anchor="middle" font-size="10" fill="#166534">總容值≈大＋小，天下太平</text>
+  <text x="445" y="86" text-anchor="middle" font-size="10" fill="#991b1b" font-weight="bold">大容「管」、小容「罐」</text>
+  <text x="445" y="100" text-anchor="middle" font-size="10" fill="#991b1b">＝並聯 LC 振盪槽（戰區）</text>
+  <text x="735" y="86" text-anchor="middle" font-size="10" fill="#475569">兩個都感性：一起變電感，</text>
+  <text x="735" y="100" text-anchor="middle" font-size="10" fill="#475569">等平面電容接棒</text>
+
+  <!-- 10uF curve: falls to min at x~214 (1.6MHz) then rises -->
+  <path d="M148,150 L214,318 Q238,330 262,318 L380,250 L560,150 L700,80" stroke="#16a34a" stroke-width="2.4" fill="none"/>
+  <text x="168" y="140" font-size="11" fill="#166534" font-weight="bold">10 µF（ESL≈1 nH → f₀≈1.6 MHz）</text>
+  <text x="430" y="242" font-size="10" fill="#166534">f₀ 之後：對快速水流＝實心水管（電感）</text>
+
+  <!-- 100nF curve: falls to min at x~464 (22.5MHz) then rises -->
+  <path d="M300,110 L464,344 Q488,354 512,344 L620,290 L760,190 L850,120" stroke="#9333ea" stroke-width="2.4" fill="none"/>
+  <text x="318" y="100" font-size="11" fill="#6b21a8" font-weight="bold">100 nF（ESL≈0.5 nH → f₀≈22.5 MHz）</text>
+  <text x="600" y="308" font-size="10" fill="#6b21a8">這裡之前：仍是稱職的水庫（電容）</text>
+
+  <!-- parallel total: follows min, spikes at x~428 (15.9MHz) higher than both, dips after -->
+  <path d="M148,140 L214,306 L300,330 L370,342 Q400,346 412,320 L428,150 L444,320 Q470,340 505,336 L560,318 L640,268 L720,208 L830,130" stroke="#dc2626" stroke-width="2.8" fill="none"/>
+  <circle cx="428" cy="150" r="6" fill="#dc2626"/>
+  <text x="428" y="134" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#dc2626">反諧振尖峰 f_ar ≈ 1/(2π√(ESL大×C小)) ≈ 15.9 MHz</text>
+  <text x="360" y="170" font-size="10.5" fill="#dc2626" font-weight="bold">注意：尖峰比兩條單曲線任何一條都高！</text>
+  <text x="330" y="186" font-size="10" fill="#dc2626">（Ch.8 圖 8.14 的重點句；低損耗時理論上→∞）</text>
+
+  <!-- damped variant -->
+  <path d="M148,143 L214,308 L320,334 Q395,346 415,296 L428,262 L442,294 Q500,336 560,320 L640,270 L720,210 L830,132" stroke="#ea580c" stroke-width="2" fill="none" stroke-dasharray="7 4"/>
+  <text x="500" y="250" font-size="10.5" fill="#c2410c" font-weight="bold">＋對的海綿（高 ESR 阻尼腳色）：尖峰塌成矮包，</text>
+  <text x="502" y="265" font-size="10.5" fill="#c2410c">總體阻抗曲線變得平——「压平」比「压低一點」更值錢</text>
+
+  <!-- Ztarget -->
+  <line x1="145" y1="362" x2="865" y2="362" stroke="#dc2626" stroke-width="1.6" stroke-dasharray="6 4" opacity="0.6"/>
+  <text x="700" y="376" font-size="10" fill="#dc2626">Ztarget（Ch.8 設計例：25 mΩ）——尖峰一穿越，整段頻段違約</text>
+
+  <!-- note box -->
+  <rect x="140" y="458" width="740" height="48" rx="8" fill="#0b1220"/>
+  <text x="155" y="478" font-size="10.5" fill="#e2e8f0">讀圖口訣：① 尖峰永遠長在「兩顆 f₀ 之間」——那是大容已感、小容仍容的戰區；② 尖峰高度由 Q 決定（Q∝L/R）；</text>
+  <text x="155" y="496" font-size="10.5" fill="#e2e8f0">③ 值距越寬，戰區越寬、兩角行為差越大——尖峰又寬又高；值距收窄，尖峰又窄又矮、但棒次要加多。</text>
+</svg>
+<figcaption>圖 1：反諧振頻譜。書中原例是 22 nF／100 pF（圖 8.14）；本圖改用明天練習要算的 10 µF／100 nF 數值組，曲線為示意（谷深、峰高不按真實對數尺度），但<strong>「尖峰位於兩 f₀ 之間、且高於兩條單曲線」</strong>的拓撲是原文保證的。現代上修：書中口徑「離散電容守到約 200 MHz」，GHz 級交棒區的「最終反諧振」發生在平面腔與埋容、die 電容之間——概念同構，工具變成模擬。</figcaption>
+</figure>
+
+<h3>2.2 數學：從「一感一容」湊出振盪槽</h3>
+
+<p>把大電容在 f₀ 以上近似成「ESL<sub>大</sub> 的純電感」（損耗先放一邊），小電容在它 f₀ 以下近似成「純電容 C<sub>小</sub>」。並聯總導納：</p>
+
+<div class="formula">
+Y ＝ 1／(jωL) ＋ jωC ＝ j(ωC − 1/ωL)<br><br>
+當 ωC ＝ 1/ωL：虚部為零 → 總導納→0 → <strong>總阻抗→∞（理論值）</strong>。這就是並聯諧振的定義：<strong>兩條支路的電抗大小相等、符號相反，彼此抵消，誰也不給誰面子，對外的結果是「哪裡都不通」</strong>——而「不通」對去耦來說是災難：那個頻率的瞬態電流，整條階梯沒人接。<br><br>
+解出來：<strong>f<sub>ar</sub> ≈ 1／(2π√(ESL<sub>大</sub> × C<sub>小</sub>))</strong><br>
+（ESL<sub>大</sub>＝已變身電感的那顆的串聯電感；C<sub>小</sub>＝還在做電容的那顆的容值）<br><br>
+白話翻譯：尖峰頻率由「那根管的長度」和「那罐水的大小」共同決定——跟書中「U 形管裡的單擺」一樣，管越長（ESL 大）、罐越小（C 小），晃得越快（尖峰頻率越高）。<br><br>
+那尖峰實際上多高？因為沒有元件是理想的（ESR 總在），阻抗發不散到 ∞，工程估算：<br>
+<strong>Z<sub>peak</sub> ≈ L ／ (C × R<sub>loop</sub>)　＝　√(L/C) × Q，其中 Q ＝ ωL／R</strong><br><br>
+白話翻譯：<strong>尖峰高度＝「振盪槽的特性阻抗」乘以「品質因數」</strong>。海綿（R）越大、尖峰越矮；管越長（L 大）又海綿越少，尖峰可以衝上數十、數百 mΩ——對 mΩ 級預算的 PDN 是一擊斃命級。兩個推論立刻掉下來：<br>
+① <strong>Ch.8 原文：「並聯諧振的尖峰正比於電路的 Q，而 Q 正比於電感除以電阻。這就是為什麼超低 ESR 的電容必須搭配超低裝機電感，否則 Q（也就是尖峰）會非常大。」</strong>——低 ESR 是好事，但「好料配爛焊盤」會好料變兇器；<br>
+② 減裝機電感（三板斧第二斧）是<strong>一箭雙鵰</strong>：把 f₀ 推回高頻（70% 法則的反向操作）＋把 Q、把尖峰一起壓矮。
+</div>
+
+<h3>2.3 定律級細節：「同料號並聯，Q 不變」——阻尼不能靠湊顆數</h3>
+
+<p>Ch.8 藏了一段很容易被快速帶過去、但面試追問時就是分數的文字（原文大意）：<strong>把多顆相同電容並聯，有效 ESR 與有效 ESL 會被「同一比例」除以 N；算 Q 的時候兩個一起縮，除來除去正好約掉——所以 Q 保持不變，只有總阻抗下降。</strong></p>
+
+<div class="formula">
+N 顆同料號並聯：ESR′＝ESR／N，ESL′＝ESL／N<br>
+<strong>Q′ ＝ ωL′／R′ ＝ (ωL／N)／(ESR／N) ＝ ωL／ESR ＝ Q（不變）</strong><br><br>
+白話翻譯：並聯同料號是「把整條曲線等高下移（÷N）」，尖峰與谷底的<strong>相對比例</strong>一模一樣。如果你的阻抗曲線是「谷底 OK、尖峰超標」，並再多顆同樣的料號也救不了尖峰——它會帶著同樣的相對囂張一起下移，而且你還多買了一堆料。<br>
+結論（書中原案的正確執行順序）：尖峰問題→改用<strong>天生高 ESR 的料號</strong>（海綿內建）或補一個阻尼腳色；谷底（整體阻抗）問題→才輪到「多並幾顆」。兩種病吃兩種藥，別混著吃。
+</div>
+
+<h3>2.4 Ch.8 三板斧＋一條實務修訂</h3>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.9rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">斧</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">書中原話（整理）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">作用機轉</th>
+  <th style="border:1px solid #ccc; padding:0.9rem; text-align:left;">現代執行（2002 需上修處）</th>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>① 值距收窄</strong></td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">「電容值差距越大，並聯諧振越嚴重。選接近的值可減低阻抗尖峰；需要時再加第三種（或更多種）值把頻段補回來。通常十進制選值（0.1／0.01／0.001 µF）就夠。」</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">值距窄→兩顆 f₀ 靠得近→「一感一容」重疊區窄、行為差小→尖峰又窄又矮</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">現代量產常壓到 <strong>2–5 倍</strong>值距（如 1 µF／0.22 µF／47 nF），配 EDA 工具掃組合；「十進制夠用」以現代 mΩ 級預算偏鬆——上修。</td>
+</tr>
+<tr style="background-color:#ffffff;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>② 減裝機電感</strong></td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">「把電容焊在低電感的焊盤上，仔細縮小它到下方電源平面的距離。尖峰正比於 Q∝L/R——超低 ESR 電容必須配超低裝機電感。」</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">L↓→Q↓→尖峰矮；同時 f₀↑（70% 法則反用）——一箭雙鵰</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">via-in-pad、0201／01005 小封裝、埋入式電容（embedded cap）、薄介質（數 mil 級 core）。書中「低電感焊盤」在 2002 年是進階技巧，今天是標配。</td>
+</tr>
+<tr style="background-color:#f8fafc;">
+  <td style="border:1px solid #ccc; padding:0.4rem;"><strong>③ 高 ESR 阻尼</strong></td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">「選較大 ESR 的電容並多顆並聯。大 ESR 的效果等同減裝機電感（Q∝L、反比於 ESR）。這招特別有效，因為同料號並聯時 ESR 與 ESL 同比例下降，Q 約掉不掉——尖峰『相對高度』不變，但可以一邊阻尼一邊靠顆數把整體阻抗壓低。」</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">R↑→Q↓→尖峰塌成矮包；搭配「谷底不足用顆數補」兩招併用</td>
+  <td style="border:1px solid #ccc; padding:0.4rem;">實務常態：中高 ESR 的聚合物／高介損陶瓷當「阻尼腳色」混入 BOM；注意 DC 偏壓後容值衰減（Day 39）會把阻尼腳色的實際值距又拉開——選型工具要帶 DC bias 曲線。</td>
+</tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">坑：「我全換 lowest-ESR 的料，PDN 一定更好」</span>
+  <p>這是把 PI 當單變數問題的經典錯覺。Ch.8 的 Q 論告訴你：低 ESR＋一般裝機電感＝高 Q＝又尖又高的反諧振——換料後谷底确實深了，交棒區的尖峰卻可能<strong>直接刺穿 Z<sub>target</sub></strong>，而且它住在「PMIC 管不到、模擬工具最容易忽略」的中頻帶，量測上表现為「靜態全過、跑某 pattern 就掛」。正確問法不是「這顆好不好」，而是「<strong>這顆放進階梯後，整條合成曲線的 Q 分佈」——PI 是編曲，不是炫技</strong>。Ch.5 那顆低 DCR 磁珠放大雜訊（Day 39 §5.2）是同一条物理的另一個面孔：低損耗＝高 Q＝會放大，電源域處處如是。</p>
+</div>
+
+<h2>3. Ch.8 完整設計例：25 mΩ 案十一條帳＋元件表（帶去工作間的樣板）</h2>
+
+<p>Ch.8 结尾把全套觀念跑成一個「Example Design」——這組數字值得整包背下來，因為它的<strong>格式</strong>就是業界 PDN 設計文件该有的樣子：</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.88rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">#（Ch.8 原文十一步）</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">項目</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">書中數字</th>
+</tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">1</td><td style="border:1px solid #ccc; padding:0.35rem;">負載最大電流變化 ΔI</td><td style="border:1px solid #ccc; padding:0.35rem;">2.2 A</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">2</td><td style="border:1px solid #ccc; padding:0.35rem;">容許漣波 ΔV</td><td style="border:1px solid #ccc; padding:0.35rem;">3.6 V × 1.5% ＝ 54 mV</td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">3</td><td style="border:1px solid #ccc; padding:0.35rem;">目標阻抗 Z<sub>target</sub></td><td style="border:1px solid #ccc; padding:0.35rem;">54 mV ÷ 2.2 A ＝ <strong>25 mΩ</strong></td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">4</td><td style="border:1px solid #ccc; padding:0.35rem;">需求頻寬 f<sub>BYPASS</sub></td><td style="border:1px solid #ccc; padding:0.35rem;">0.5 ÷ 0.5 ns ＝ 1 GHz</td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">5</td><td style="border:1px solid #ccc; padding:0.35rem;">同時切換線路的總線路電容 C<sub>lines</sub></td><td style="border:1px solid #ccc; padding:0.35rem;">8 bit 匯流排 × 3 pF/腳負載 ×（3 pF/in × 10 in 走線）＝ 720 pF</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">6</td><td style="border:1px solid #ccc; padding:0.35rem;">需求平面電容 C<sub>plane</sub></td><td style="border:1px solid #ccc; padding:0.35rem;">720 pF × 3.6 V ÷ 54 mV ＝ <strong>48 nF</strong></td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">7–9</td><td style="border:1px solid #ccc; padding:0.35rem;">介質 Er／傳播速度／量測深入距離</td><td style="border:1px solid #ccc; padding:0.35rem;">Er＝4.0 → v＝11.8 in/ns ÷ √4 ＝ 6 in/ns；板長 10 in</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">10</td><td style="border:1px solid #ccc; padding:0.35rem;">平面「看起來像開路」的頻率（半波倍數）</td><td style="border:1px solid #ccc; padding:0.35rem;">(0.5, 1, 1.5…) × 6 in/ns ÷ 10 in ＝ <strong>300, 600, 900 MHz…</strong></td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">11</td><td style="border:1px solid #ccc; padding:0.35rem;">平面「看起來像短路」的頻率（1/4 波倍數）</td><td style="border:1px solid #ccc; padding:0.35rem;">(0.25, 0.75, 1.25…) × 6 in/ns ÷ 10 in ＝ <strong>150, 450, 750 MHz…</strong></td></tr>
+</table>
+
+<p>對應的元件配置（Ch.8 表 8.1，從低頻跑到高頻）：</p>
+
+<table style="width:100%; border-collapse:collapse; margin: 1rem 0; font-size: 0.88rem;">
+<tr style="background-color:#0f4c5c; color:white;">
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">跑者</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">數量</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">單顆容值</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">ESR</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">ESL</th>
+  <th style="border:1px solid #ccc; padding:0.4rem; text-align:left;">管轄（合成後）</th>
+</tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">開關電源（DC-DC）</td><td style="border:1px solid #ccc; padding:0.35rem;">1</td><td style="border:1px solid #ccc; padding:0.35rem;">—</td><td style="border:1px solid #ccc; padding:0.35rem;">1 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">60 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">DC～數十 kHz</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">鉭電容（bulk）</td><td style="border:1px solid #ccc; padding:0.35rem;">2</td><td style="border:1px solid #ccc; padding:0.35rem;">100 µF</td><td style="border:1px solid #ccc; padding:0.35rem;">50 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">4 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">～MHz 級</td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">陶瓷</td><td style="border:1px solid #ccc; padding:0.35rem;">2</td><td style="border:1px solid #ccc; padding:0.35rem;">1 µF</td><td style="border:1px solid #ccc; padding:0.35rem;">20 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">2 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">MHz～數十 MHz</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">陶瓷</td><td style="border:1px solid #ccc; padding:0.35rem;">3</td><td style="border:1px solid #ccc; padding:0.35rem;">0.1 µF</td><td style="border:1px solid #ccc; padding:0.35rem;">30 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">1.2 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">數十 MHz</td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">陶瓷</td><td style="border:1px solid #ccc; padding:0.35rem;">6</td><td style="border:1px solid #ccc; padding:0.35rem;">0.01 µF</td><td style="border:1px solid #ccc; padding:0.35rem;">50 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">1 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">百 MHz 前段</td></tr>
+<tr style="background-color:#ffffff;"><td style="border:1px solid #ccc; padding:0.35rem;">陶瓷</td><td style="border:1px solid #ccc; padding:0.35rem;">10</td><td style="border:1px solid #ccc; padding:0.35rem;">0.001 µF</td><td style="border:1px solid #ccc; padding:0.35rem;">60 mΩ</td><td style="border:1px solid #ccc; padding:0.35rem;">0.9 nH</td><td style="border:1px solid #ccc; padding:0.35rem;">～200 MHz（書中口徑）</td></tr>
+<tr style="background-color:#f8fafc;"><td style="border:1px solid #ccc; padding:0.35rem;">平面電容</td><td style="border:1px solid #ccc; padding:0.35rem;">—</td><td style="border:1px solid #ccc; padding:0.35rem;">≥48 nF（需求）</td><td style="border:1px solid #ccc; padding:0.35rem;">—</td><td style="border:1px solid #ccc; padding:0.35rem;">—</td><td style="border:1px solid #ccc; padding:0.35rem;">200 MHz 以上</td></tr>
+</table>
+
+<p><strong>這張表藏著三個可以被面試挖的細節：</strong>① 注意顆數隨頻率<strong>遞增</strong>（2→2→3→6→10）：Ch.8 原文解釋——大容天然 ESR 低、小容 ESR 隨容值減小而上升，所以越高頻要的顆數越多才守得住同一個 Z<sub>target</sub>；② 值距約十倍（十進制），這是 2002 年的妥協點——書中也明言「若目標阻抗要求不那麼低、瞬態不夠猛，可以<strong>單一值大量並聯</strong>省事」——兩條路線的取捨條件，書說得比多數現代文章清楚；③ 表裡 ESR 隨容值減而升（20→60 mΩ），正好印證 ①。</p>
+
+<h2>4. 平面電容與駐波：200 MHz 以上戰場的幾何課</h2>
+
+<h3>4.1 平面電容怎麼算：C＝ε·Er·A／T 與「184 pF 每平方英吋」</h3>
+
+<p>Ch.8 給物理式、Ch.6 給工程速算式（兩式同質，只是單位系統）：</p>
+
+<div class="formula">
+<strong>Ch.8：C ＝ ε₀ × Er × A ／ T</strong>（ε₀ ≈ 0.2249×10⁻¹² F/in；Er ≈ 3.8–4.2）<br>
+<strong>Ch.6 速算（英吋制）：C ＝ 0.225 × Er × (N−1) × A ／ t</strong>（A：單板單面面積，in²；t：板間距，in；N：極板數）<br><br>
+Ch.6 書中例（照錄）：10×10 in 的 FR-4 板、Er＝4.1、電源—地面間距 0.005 in：<br>
+C ＝ 0.225 × 4.1 × (2−1) × 100 ÷ 0.005 ＝ <strong>18,450 pF</strong>，也就是 <strong>≈184 pF／平方英吋</strong>。<br><br>
+白話翻譯：「電源平面和地面貼多近、對多大，就是一顆內建電容的大小。」由式子直接讀出的設計指令（Ch.8 原話）：<strong>電源平面要盡量贴近地面</strong>——T 減半、電容翻倍。Ch.6 的速算常數「184 pF/sq in @ Er4.1、5 mil」值得背：任何板子先面積×184、再乘（5 mil／實際間距）就有粗估。<br><br>
+<strong>「電容不夠怎麼辦」書中還真有一招（Ch.8 原文）：板子太小放不下所需平面電容時，可以把鄰近訊號平面上多餘的空隙「灌銅」，再用 via 把它們連到電源／地平面湊數。</strong>——這就是為什麼 review 板圖時看到訊號平面上莫名的大銅塊別急著笑：那可能是 PI 在還債（但代價是該層失去訊號參考資格，週 9 細算）。<br><br>
+<em>現代標準需上修：5 mil 間距是 2002 年的客氣版。現代埋入式電容用 2–3 mil 級薄 core／預埋 B-stage 材料，平面電容密度可到每平方英吋 nF 級（量級，廠商材料決定）；間距、Er、厚度全進堆疊設計，不再是 PI 事後補課——但「越近越大」的公式一句沒改。</em>
+</div>
+
+<h3>4.2 平面電容「夠不夠」的判定式：dV＝(C<sub>lines</sub>／C<sub>plane</sub>)×V<sub>DD</sub></h3>
+
+<p>Ch.8 的判定邏輯很乾脆：一整組同時切換的線路（Clines：腳負載＋板走線寄生）身上存著 V<sub>DD</sub> 量級的電荷，一次切換全要經平面路徑倒進電源系統——平面電容越大，分到的電壓擾動越小：</p>
+
+<div class="formula">
+<strong>dV ＝ (C<sub>lines</sub> ／ C<sub>plane</sub>) × V<sub>DD</sub>　⇔　C<sub>plane</sub> ＝ C<sub>lines</sub> × V<sub>DD</sub> ÷ dV</strong><br><br>
+書中例（照錄）：8-bit 匯流排、每條 3 pF 負載、走線 3 pF/in × 10 in → C<sub>lines</sub>＝720 pF；3.6 V 軌、容許 54 mV → <strong>C<sub>plane</sub> ＝ 720 pF × 3.6 ÷ 0.054 ＝ 48 nF</strong>。<br><br>
+白話翻譯：這是一條「電荷分壓」帳——切換前線上帶著 Q＝C<sub>lines</sub>·V<sub>DD</sub> 的電荷，切換後這坨電荷要跟平面電容重新分壓；平面電容比線路電容大多少倍，扰动就被稀釋多少倍。<strong>C<sub>plane</sub> 對 C<sub>lines</sub> 的倍數，就是 dV 對 V<sub>DD</sub> 的倍數的鏡像</strong>（這裡 48 nF／720 pF ≈ 67 倍 ↔ 54 mV／3.6 V ≈ 67 倍——同一件事寫兩次）。<br>
+注意這個公式管的是「瞬態電荷有地方放」，跟 Z<sub>target</sub>（掃頻阻抗）是两個互補的視角——一個查帳本、一個查頻率響應，現代會兩者都要過。
+</div>
+
+<h3>4.3 駐波與諧振算式重演：150／300／450／600 MHz 是怎麼長出來的</h3>
+
+<p>Ch.8 原話：<strong>「電源平面對（V<sub>DD</sub> 與 Ground）形成一條未端接的傳輸線，因此具備它全部的特性：前向波與反射波合成駐波——在半波长的整数倍處看起來像開路，在 1/4 與 3/4 波長處看起來像短路。」</strong>于是諧振位置純幾何：</p>
+
+<div class="formula">
+書中算式逐步重演（Ch.8／設計例第 7–11 條）：<br>
+① 傳播速度：v ＝ c／√Er ＝ 11.8 in/ns ÷ √4.0 ＝ <strong>6 in/ns</strong>（書中 c 取 11.8 in/ns）<br>
+② 一個波長對應的頻率：板長 10 in → f(1λ) ＝ 6 in/ns ÷ 10 in ＝ <strong>600 MHz</strong><br>
+③ 谐振發生在 1/4、1/2、3/4、1 波長 → <strong>150、300、450、600 MHz</strong><br>
+④ 其中「開路點」（阻抗峰值，最危險）：300、600、900 MHz（半波倍數）；「短路點」：150、450、750 MHz<br><br>
+白話翻譯：電源平面這對銅皮是塊「沒有 terminator 的銅鼓」，你在板上任何一點抽電流，等於敲鼓面——鼓面在它自己的共振頻率上振得最兇，而且<strong>板子越小、鼓面張力（速度）越高，鼓聲越尖（諧振頻率越高）</strong>。書中還補了一句重要的量測觀測：<strong>焊上去的離散電容只能把諧振峰「稍微推擠」，影響力僅及幾百 MHz——之後平面還是照自己的波長諧振。</strong>（原文大意）<br><br>
+<em>現代上修＋你的版圖：鏡頭模組 FPC／小板邊長常只有 2–4 in 量級（約），Er 取 4.2 → v≈5.7 in/ns → 1λ 諧振在 1.4–2.9 GHz、1/4 波諧振在 350 MHz～720 MHz——板越小、谐振越高，剛好撞進「離散電容失靈、埋容又沒上」的空窗帶。這就是為什麼小板的 camera module 反而容易在幾百 MHz 長出阻抗峰。</em>
+</div>
+
+<h3>4.4 「平面諧振是 EMI 的前奏」——把兩章拼給你看</h3>
+
+<p>Ch.8 沒有直接寫這七個字，但它把子彈都發好了，拼圖如下（每一塊都有出處）：</p>
+<ul>
+  <li><strong>子彈一（Ch.8 bounce 節原文）：</strong>VCC／ground bounce 的後果清單裡明列「<strong>增加 EMI</strong>、增加晶片內各種 jitter、侵蝕噪声邊際」——平面在諧振點上就是一個被持續激發的大面積天線結構（前題：<a href="day-039.html">Day 39 §5 bounce</a>）。</li>
+  <li><strong>子彈二（Ch.6「EMI Generation」原文）：</strong>「若走線長度等於時脈基頻波長（或其倍數）的 1/4、1/2、1……就形成接近理想的輻射源。」——平面諧振的波長與板邊界尺寸掛鉤，板上的连接器、開孔、跨越平面的走線都可能成為那根把諧振能量「放上天線」的耦合天線。</li>
+  <li><strong>拼圖（工程推論，非原文）：</strong>數位邊沿的能量頻譜寬到 GHz（Day 39 §3.2：50 MHz 時脈頻譜到 4 GHz，Ch.8 圖 8.11），只要有一根諧波「撞上」平面諧振點，平面就獲得一個持續被敲的鼓；鼓面振動經板-edge、aperture、附著的走線轉成輻射——<strong>EMC 測試裡那根「找不到明確時脈來源」的寬包／孤峰，常就坐在平面諧振表上</strong>。週 9 正式打 EMI 戰役時，今天這張「板子尺寸→諧振頻率表」就是你的預判兵器。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：平面電容與駐波——左：電荷分壓帳（dV 式）；右：10 英吋銅鼓的四個共振（PT2 Ch.6／Ch.8 算式重演）</text>
+
+  <!-- LEFT: plane pair cross-section -->
+  <rect x="45" y="60" width="410" height="180" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="60" y="84" font-size="12" font-weight="bold" fill="#0f4c5c">平行板電容器（Ch.8 圖 8.15 精神）</text>
+  <rect x="80" y="120" width="330" height="12" fill="#0f4c5c"/>
+  <text x="90" y="114" font-size="10.5" fill="#0f4c5c" font-weight="bold">電源平面（VDD）</text>
+  <rect x="80" y="196" width="330" height="12" fill="#334155"/>
+  <text x="90" y="226" font-size="10.5" fill="#334155" font-weight="bold">地面（GND）</text>
+  <rect x="80" y="132" width="330" height="64" fill="#bfdbfe" opacity="0.5"/>
+  <text x="245" y="160" text-anchor="middle" font-size="10.5" fill="#1e40af">介質：Er≈4（FR-4）</text>
+  <line x1="425" y1="120" x2="425" y2="208" stroke="#dc2626" stroke-width="1.6"/>
+  <text x="438" y="168" font-size="11" fill="#dc2626" font-weight="bold">T</text>
+  <text x="245" y="248" font-size="11" fill="#374151" text-anchor="middle">C ＝ 0.225·Er·A／t（英吋制）→ Er 4.1、t 5 mil ≈ <tspan font-weight="bold">184 pF／in²</tspan></text>
+
+  <!-- LEFT bottom: charge divider -->
+  <rect x="45" y="270" width="410" height="120" rx="10" fill="#0b1220"/>
+  <text x="62" y="294" font-size="11.5" font-weight="bold" fill="#fbbf24">dV ＝ (C_lines／C_plane) × V_DD 的白話</text>
+  <text x="62" y="316" font-size="10.5" fill="#e2e8f0">切換線路帶著一坨電荷要「跳車」跳進電源系統。</text>
+  <text x="62" y="334" font-size="10.5" fill="#e2e8f0">平面電容是泳池、線路電容是水瓢——泳池越大，跳進去水面上升越少。</text>
+  <text x="62" y="352" font-size="10.5" fill="#7dd3fc">書例：720 pF × 3.6 V ÷ 54 mV ＝ 48 nF（泳池容積的底線）</text>
+  <text x="62" y="372" font-size="10.5" fill="#fda4af">板子塞不下？Ch.8 授權：鄰近訊號平面灌銅＋via 連過去湊數。</text>
+
+  <!-- RIGHT: drum resonances -->
+  <rect x="490" y="60" width="385" height="330" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="505" y="84" font-size="12" font-weight="bold" fill="#0f4c5c">10 in 銅鼓的四個共振（Er=4 → v=6 in/ns）</text>
+  <!-- standing waves row -->
+  <g transform="translate(505,105)">
+    <!-- 1/4 lambda -->
+    <line x1="0" y1="30" x2="80" y2="30" stroke="#94a3b8" stroke-width="1.2"/>
+    <path d="M0,30 Q20,8 40,30 Q60,52 80,30" stroke="#dc2626" stroke-width="2.4" fill="none" transform="scale(0.5 1)"/>
+    <text x="40" y="66" text-anchor="middle" font-size="10.5" fill="#991b1b" font-weight="bold">150 MHz</text>
+    <text x="40" y="80" text-anchor="middle" font-size="9" fill="#991b1b">1/4λ：短路點</text>
+  </g>
+  <g transform="translate(600,105)">
+    <path d="M0,30 Q20,0 40,30 T80,30 T120,30 T160,30" stroke="#ea580c" stroke-width="2.4" fill="none" transform="scale(0.5 1)"/>
+    <text x="40" y="66" text-anchor="middle" font-size="10.5" fill="#c2410c" font-weight="bold">300 MHz</text>
+    <text x="40" y="80" text-anchor="middle" font-size="9" fill="#c2410c">1/2λ：開路點★</text>
+  </g>
+  <g transform="translate(695,105)">
+    <path d="M0,30 Q13,4 27,30 Q40,56 53,30 Q67,4 80,30 Q93,56 107,30 Q120,4 133,30 Q147,56 160,30" stroke="#9333ea" stroke-width="2" fill="none" transform="scale(0.5 1)"/>
+    <text x="40" y="66" text-anchor="middle" font-size="10.5" fill="#6b21a8" font-weight="bold">450 MHz</text>
+    <text x="40" y="80" text-anchor="middle" font-size="9" fill="#6b21a8">3/4λ：短路點</text>
+  </g>
+  <g transform="translate(790,105)">
+    <path d="M0,30 Q10,6 20,30 Q30,54 40,30 Q50,6 60,30 Q70,54 80,30 Q90,6 100,30 Q110,54 120,30 Q130,6 140,30 Q150,54 160,30" stroke="#16a34a" stroke-width="1.8" fill="none" transform="scale(0.5 1)"/>
+    <text x="40" y="66" text-anchor="middle" font-size="10.5" fill="#166534" font-weight="bold">600 MHz</text>
+    <text x="40" y="80" text-anchor="middle" font-size="9" fill="#166534">1λ：開路點★</text>
+  </g>
+
+  <!-- harmonic ruler -->
+  <text x="505" y="215" font-size="11" font-weight="bold" fill="#0f4c5c">把常見面規疊上去（約／量級）：</text>
+  <text x="505" y="236" font-size="10.5" fill="#334155">24 MHz XO 的 12 次諧波 ＝ 288 MHz ≈ 撞 300 MHz 開路點 ★</text>
+  <text x="505" y="254" font-size="10.5" fill="#334155">USB 2.0 480 MHz 基頻附近 ＝ 撞 450/600 一帶</text>
+  <text x="505" y="272" font-size="10.5" fill="#334155">MIPI 資料率邊沿能量分佈（Day 39 §3.2）＝ 整段都蓋到</text>
+  <text x="505" y="294" font-size="10.5" fill="#dc2626" font-weight="bold">「找不到來源」的輻射孤峰 → 先查板子尺寸算出的這張表！</text>
+
+  <!-- small board note -->
+  <rect x="505" y="308" width="355" height="72" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.2"/>
+  <text x="518" y="328" font-size="10.5" font-weight="bold" fill="#92400e">板子縮小＝鼓聲變尖（v/L，L 在分母）：</text>
+  <text x="518" y="346" font-size="10" fill="#92400e">10 in → 150/300/450/600 MHz（書例）</text>
+  <text x="518" y="362" font-size="10" fill="#92400e">5 in（約）→ 300/600/900/1200 MHz｜3 in（約，modular</text>
+  <text x="518" y="376" font-size="10" fill="#92400e">小板）→ 475/950/1425/1900 MHz——高但更靠近 fBYPASS 空窗</text>
+
+  <!-- bottom band -->
+  <rect x="45" y="405" width="830" height="80" rx="8" fill="#0b1220"/>
+  <text x="62" y="428" font-size="11" font-weight="bold" fill="#fbbf24">為什麼離散電容救不了駐波？（Ch.8 原文大意）</text>
+  <text x="62" y="448" font-size="10.5" fill="#e2e8f0">① 焊上去的電容只能「稍微推擠」谐振峰，影響僅及幾百 MHz，之後平面照自己的波長振；② 就算 ESL→0，電容到諧振點早已變身電感——打不掉鼓的共振，</text>
+  <text x="62" y="466" font-size="10.5" fill="#e2e8f0">因為鼓本身就是電源系統的一部分。真正的解法在幾何：縮小腔體（stitching via 圍腔）、加埋容改變腔的「張力」、避免讓諧波面規撞上開路點——週 9 EMI 主場見。</text>
+</svg>
+<figcaption>圖 2：左半是「泳池與水瓢」的電荷分壓帳（dV＝(C<sub>lines</sub>/C<sub>plane</sub>)×V<sub>DD</sub>）；右半是 Ch.8 設計例第 7–11 條的圖解：銅鼓的四個共振與常見面規的對撞表。駐波波形為示意（畫的是沿板邊一維行的行波合成，實際二維腔型更複雜，原文亦言：準確曲線需要 field solver）。</figcaption>
+</figure>
+
+<h2>5. VCC／ground bounce：水鎚升帳為被告（Ch.8 圖 8.9／8.10）</h2>
+
+<h3>5.1 機制與帳單</h3>
+<p>Ch.8 圖 8.9 的場景：晶片內部輸出翻轉、瞬間要電，但<strong>晶片與 PCB 之間的封裝引線架與鍵合線有電感（和電阻）</strong>——電流急變在這段電感上敲出壓降：<strong>V ＝ L·di/dt</strong>。對地那一側同理（地彈跳）。原文開列的被害清單：① 晶片內部供電被調變→<strong>電路餘裕（headroom）縮水</strong>；② <strong>EMI 上升</strong>；③ 晶片內<strong>各種 jitter 全線上升</strong>；④ <strong>噪声邊際被侵蝕</strong>；⑤ 夠大時→不穩定系統、<strong>間歇性邏輯錯誤</strong>（注意最後這條：bounce 造成的 bug 常常「量不到、重開就好」——你歷年玄學 case 的嫌犯名單上該有它）。</p>
+<p>原文還有一段產業觀察值得背下來：<strong>低電壓、更快切換、更高邏輯密度讓切換噪聲惡化，而降低成本的压力讓業界繼續用「封裝寄生參數惡劣的便宜封裝」跑越來越高的頻率——這使 VCC／ground bounce 成為今日主要失效源之一。</strong>（2002 年就這樣講；今天的薄封裝、SiP 只加不減。）</p>
+
+<div class="formula">
+ bounce 電压估算：<strong>V<sub>bounce</sub> ＝ L<sub>pkg</sub> × di/dt</strong>（di 為單位時間內負載電流的變化量，Ch.8 原式）<br><br>
+白話翻譯：封裝電感是「收過路費的水鎚」，過路費跟「你要電的急切程度」成正比，跟「你給沒給它後門」（板端就近去耦）成反比。<br><br>
+書中給的減害清單（Ch.8 原文整理，除了更好的封裝／差動訊號這些「換晶片級」對策）：<br>
+<strong>① 電源腳走線盡可能短；② 一顆元件多個電源腳；③ 雙鍵合線（double-bonding wires）；④ 用低接腳電阻的連接器；⑤ 地面不要開切口（cuts）；⑥ 正確的去耦設計。</strong>——注意 ①⑤⑥ 全是<strong>板子端、你说了算</strong>的項目。
+</div>
+
+<p><strong>去耦電容在這裡的角色（Ch.8 原文的電荷轉移敘事，很值得內化）：</strong>封裝電感上的壓降「沒辦法被板端電容直接抹平」——板端電容做的工作是<strong>用儲存電荷供應這股瞬態需求，讓壓降從晶片端消失、改出現在 PCB 供電軌上</strong>（電荷從板端電容搬到晶片端電容：一邊電壓掉、另一邊升），然後再隨電源供電慢慢抹平。<strong>有效的去耦系統，是把這個漣波的「振幅與持續時間」都壓到最小</strong>（原文）。書中圖 8.10 的實測佐證（CY28410 緩衝器）：把去耦做足、壓住 bounce 之後，輸出 cycle-to-cycle jitter 從約百 ps 量級降到約五十 ps 量級（依圖 8.10 曲線量級讀取）——<strong>bounce 直接寫進 jitter 帳本的現場照片</strong>，也呼應 Day 39「Additional Jitter＝Noise/Slew」的另一條路徑。</p>
+
+<h2>6. 佈局幾何：同一顆電容，接對了是防彈衣（Ch.6＋Ch.8 圖 8.17）</h2>
+
+<h3>6.1 Bad／Good／Best：裝機電感的三級遊戲</h3>
+<p>Ch.8 圖 8.17 只有三個小圖，卻是全書「一句圖勝千言」的代表：電容焊盤與電源／地的連接，<strong>via 打在焊盤正下方（via-under-pad）電感最低，該用盡用</strong>；長而窄的走線是電感製造機，避免；穿 via 可以接受，條件是「那條路比另一條長走線電感更低」。</p>
+
+<h3>6.2 接序正義：via → 電容焊盤 → 元件（Ch.6 圖 6.3 的「保護島」）</h3>
+<p>Ch.6 的重點不在「電容擺近」四個字，而在<strong>接的順序</strong>（原文整理）：電源路徑從平面出發，<strong>必須先經過 via、再經過去耦電容的焊盤、最後才到元件</strong>——這個順序在電容之後「圈出一段受保護的走線島嶼（island of protected trace）」。為什麼順序就是正義？把雜訊想成兩個方向的水流：</p>
+<ul>
+  <li><strong>由外向內：</strong>平面上的雜訊想沿電源線入侵元件——它<strong>先撞上電容（低阻對地短路掉）</strong>才輪到元件；</li>
+  <li><strong>由內向外：</strong>元件自己-switching 噴出的雜訊想爬上平面——它<strong>先經電容被攔截</strong>才輪到 via 和平面。</li>
+</ul>
+<p>如果順序反了（via→元件、電容「掛」在元件之後的分支上），兩個方向的雜訊都<strong>繞得過電容</strong>——電容只濾到它和元件之間那一小段線，平面照樣互通道歉。再補 Ch.6 兩條：元件與電容之間的走線「越短越好、寬比窄好」（目標：把兩者間電感壓到最小）；以及 Ch.8 的擺放分級——<strong>容值越小的電容 ESL 也越小，越要把牠擺在離晶片最近的地方</strong>，否則牠的優點會被「路上撿到的電感」淹沒；常見慣例是每個電源/地腳對擺一顆 0.1 µF 或 0.01 µF（原文），但最終由切換電流、系統噪聲、可容許紋波三者平衡決定。</p>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：佈局幾何——左：裝機電感三級遊戲（Ch.8 圖 8.17 精神）；右：接序正義（Ch.6 圖 6.3「保護島」）</text>
+
+  <!-- LEFT panel: cross sections -->
+  <g font-size="10.5">
+    <text x="250" y="66" text-anchor="middle" font-weight="bold" fill="#0f4c5c">截面觀：電容怎麼「接地／接電」（頂層銅＋內層平面）</text>
+
+    <!-- BAD -->
+    <rect x="55" y="130" width="330" height="70" fill="none"/>
+    <line x1="55" y1="130" x2="385" y2="130" stroke="#94a3b8" stroke-width="3"/>
+    <text x="58" y="124" font-size="9" fill="#64748b">頂層銅</text>
+    <rect x="55" y="175" width="330" height="14" fill="#334155"/>
+    <text x="390" y="186" font-size="9" fill="#334155">地平面</text>
+    <!-- cap far, thin trace -->
+    <rect x="290" y="106" width="26" height="24" fill="#9333ea" opacity="0.85"/>
+    <text x="303" y="100" text-anchor="middle" font-size="9" fill="#6b21a8">C</text>
+    <line x1="290" y1="118" x2="150" y2="118" stroke="#dc2626" stroke-width="1.4"/>
+    <text x="215" y="112" text-anchor="middle" font-size="9" fill="#dc2626">細長走線＝電感製造機</text>
+    <line x1="150" y1="118" x2="150" y2="175" stroke="#dc2626" stroke-width="2.5"/>
+    <circle cx="150" cy="175" r="4" fill="#dc2626"/>
+    <text x="120" y="150" font-size="9" fill="#dc2626">via 離pad遠</text>
+    <text x="66" y="216" font-size="11" font-weight="bold" fill="#dc2626">BAD：電感＝走線＋via＋迴路大面積</text>
+
+    <!-- GOOD -->
+    <rect x="55" y="252" width="330" height="70" fill="none"/>
+    <line x1="55" y1="252" x2="385" y2="252" stroke="#94a3b8" stroke-width="3"/>
+    <rect x="55" y="297" width="330" height="14" fill="#334155"/>
+    <rect x="240" y="228" width="26" height="24" fill="#9333ea" opacity="0.85"/>
+    <text x="253" y="222" text-anchor="middle" font-size="9" fill="#6b21a8">C</text>
+    <!-- short wide fan to two nearby vias -->
+    <rect x="212" y="252" width="12" height="45" fill="#d97706" opacity="0.8"/>
+    <rect x="280" y="252" width="12" height="45" fill="#d97706" opacity="0.8"/>
+    <circle cx="218" cy="297" r="4" fill="#d97706"/>
+    <circle cx="286" cy="297" r="4" fill="#d97706"/>
+    <text x="150" y="245" font-size="9" fill="#92400e">短而寬的連帶＋就近 via</text>
+    <text x="66" y="338" font-size="11" font-weight="bold" fill="#d97706">GOOD：小迴路、短電流路徑</text>
+
+    <!-- BEST -->
+    <rect x="55" y="374" width="330" height="70" fill="none"/>
+    <line x1="55" y1="374" x2="385" y2="374" stroke="#94a3b8" stroke-width="3"/>
+    <rect x="55" y="419" width="330" height="14" fill="#334155"/>
+    <rect x="230" y="350" width="26" height="24" fill="#9333ea" opacity="0.85"/>
+    <text x="243" y="344" text-anchor="middle" font-size="9" fill="#6b21a8">C</text>
+    <!-- via in pad: vias directly under cap pads -->
+    <line x1="236" y1="374" x2="236" y2="419" stroke="#16a34a" stroke-width="4"/>
+    <line x1="250" y1="374" x2="250" y2="419" stroke="#16a34a" stroke-width="4"/>
+    <circle cx="236" cy="419" r="4" fill="#16a34a"/>
+    <circle cx="250" cy="419" r="4" fill="#16a34a"/>
+    <text x="300" y="368" font-size="9" fill="#16a34a">via 打在焊盤正下方</text>
+    <text x="66" y="458" font-size="11" font-weight="bold" fill="#16a34a">BEST：via-in-pad（Ch.8：最低電感，能用作用作）</text>
+  </g>
+
+  <!-- RIGHT panel: sequence -->
+  <g font-size="10.5">
+    <text x="660" y="66" text-anchor="middle" font-weight="bold" fill="#0f4c5c">接序觀：平面→via→電容→元件（順序列＝屏蔽方向）</text>
+
+    <!-- correct -->
+    <rect x="500" y="88" width="330" height="130" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <rect x="510" y="140" width="60" height="26" fill="#334155"/>
+    <text x="540" y="158" text-anchor="middle" font-size="9.5" fill="white">平面</text>
+    <circle cx="600" cy="153" r="8" fill="#d97706"/>
+    <text x="600" y="178" text-anchor="middle" font-size="9" fill="#92400e">via</text>
+    <rect x="640" y="138" width="34" height="30" fill="#9333ea"/>
+    <text x="657" y="158" text-anchor="middle" font-size="9.5" fill="white">C</text>
+    <text x="657" y="178" text-anchor="middle" font-size="9" fill="#6b21a8">pad</text>
+    <rect x="710" y="132" width="100" height="42" rx="6" fill="#0f4c5c"/>
+    <text x="760" y="157" text-anchor="middle" font-size="10" fill="white">元件電源腳</text>
+    <line x1="570" y1="153" x2="592" y2="153" stroke="#16a34a" stroke-width="2.4"/>
+    <line x1="608" y1="153" x2="638" y2="153" stroke="#16a34a" stroke-width="2.4"/>
+    <line x1="674" y1="153" x2="710" y2="153" stroke="#16a34a" stroke-width="2.4"/>
+    <path d="M806,120 Q830,96 795,96 Q755,96 757,112" stroke="#dc2626" stroke-width="1.8" fill="none" stroke-dasharray="4 3"/>
+    <text x="700" y="106" text-anchor="middle" font-size="9" fill="#dc2626">元件噴出的雜訊：先撞 C</text>
+    <path d="M516,132 Q500,108 540,100 Q575,96 585,112" stroke="#ea580c" stroke-width="1.8" fill="none" stroke-dasharray="4 3"/>
+    <text x="612" y="205" text-anchor="middle" font-size="9.5" fill="#166534" font-weight="bold">C 之後到腳的這段＝「受保護的走線島」（Ch.6 圖 6.3）</text>
+
+    <!-- wrong -->
+    <rect x="500" y="238" width="330" height="130" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="510" y="290" width="60" height="26" fill="#334155"/>
+    <text x="540" y="308" text-anchor="middle" font-size="9.5" fill="white">平面</text>
+    <circle cx="600" cy="303" r="8" fill="#d97706"/>
+    <text x="600" y="328" text-anchor="middle" font-size="9" fill="#92400e">via</text>
+    <rect x="640" y="282" width="100" height="42" rx="6" fill="#0f4c5c"/>
+    <text x="690" y="307" text-anchor="middle" font-size="10" fill="white">元件電源腳</text>
+    <rect x="775" y="288" width="34" height="30" fill="#9333ea" opacity="0.7"/>
+    <text x="792" y="308" text-anchor="middle" font-size="9.5" fill="white">C</text>
+    <line x1="570" y1="303" x2="592" y2="303" stroke="#dc2626" stroke-width="2.4"/>
+    <line x1="608" y1="303" x2="640" y2="303" stroke="#dc2626" stroke-width="2.4"/>
+    <line x1="740" y1="303" x2="773" y2="303" stroke="#dc2626" stroke-width="2.4"/>
+    <path d="M736,270 Q760,248 720,248 Q660,248 660,268" stroke="#dc2626" stroke-width="1.8" fill="none" stroke-dasharray="4 3"/>
+    <text x="700" y="258" text-anchor="middle" font-size="9" fill="#dc2626">雜訊走「元件↔via↔平面」直達車，繞過 C！</text>
+    <text x="612" y="355" text-anchor="middle" font-size="9.5" fill="#991b1b" font-weight="bold">C 掛在元件「之後」：只濾到一小段線，等於裝飾</text>
+  </g>
+
+  <!-- bottom band -->
+  <rect x="440" y="380" width="440" height="76" rx="8" fill="#0b1220"/>
+  <text x="455" y="402" font-size="10.5" font-weight="bold" fill="#fbbf24">Ch.6 的地面紀律（與 bounce/回流直接相關）：</text>
+  <text x="455" y="420" font-size="10" fill="#e2e8f0">① 高頻回流走「最小電感路徑」——紧贴訊號線下方的平面；去耦電容是把回流</text>
+  <text x="455" y="436" font-size="10" fill="#e2e8f0">「跨回正確電壓平面」的橋（Ch.6 圖 6.4）；② 地面切口（cutout）逼回流繞路→</text>
+  <text x="455" y="452" font-size="10" fill="#e2e8f0">路徑電感升、上升時間劣化、串擾升——「地面不要開切口」同時出現在 Ch.6 與 Ch.8。</text>
+</svg>
+<figcaption>圖 3：同一顆電容的兩張「身份證明」：左半管「怎麼接」（via-in-pad、短寬連帶、小迴路），右半管「接在哪一段」（順序＝屏蔽方向）。面試白板題「decoupling cap 擺哪裡」的完整答案需要左右兩邊都畫出來——只答「擺近一點」是幼兒園版。</figcaption>
+</figure>
+
+<h3>6.3 Ch.8「去耦八條」（原文清單＋你的欄位）</h3>
+<p>Ch.8 在 Bypass Guidelines 節收了八條軍規，原文照譯如下（括號內標註它在今天的哪一節登場）：</p>
+<ol>
+  <li>選<strong>可得最小封裝裡最大的容值</strong>（小封裝＝低 ESL，§2.3 第二斧）</li>
+  <li>濾波系統要同時滿足<strong>電源紋波與目標阻抗</strong>兩項要求；各容值的顆數要在網路中<strong>平衡分佈</strong>，以最窄阻抗罩住最寬頻段（§3 設計例）</li>
+  <li><strong>電容贴近元件</strong>（§6.2）</li>
+  <li><strong>裝機電感最小化</strong>（§6.1）</li>
+  <li><strong>並聯降總阻抗</strong>（Day 39「地板÷N」；注意 §2.3：它不治尖峰）</li>
+  <li>多值/多顆的佈局困難時，<strong>考慮 multi-cap 複合元件</strong>（一颗 package 內多顆不同值——把「值梯度」買成單一元件，裝機電感一起打包）</li>
+  <li><strong>200 MHz 以上用平面電容</strong>（§4；現代要守更高——埋容）</li>
+  <li><strong>好的 PCB 佈局紀律</strong>（§6 全節）</li>
+</ol>
+<p>再加上今天補的三條進階軍規，就是可以帶去 layout review 的檢查表：<strong>⑨ 交棒區掃描：每對相鄰容值合成曲線的最大尖峰 ≤ Z<sub>target</sub> 嗎？（三板斧用哪斧要寫下來）⑩ 板子尺寸→平面駐波表列出來了嗎？面規（時脈諧波）有撞上開路點嗎？⑪ bounce 預算：最壞 di/dt × 封裝電感，跟容許紋波比是多少？電源腳的 via/走線順序是「平面→via→C→腳」嗎？</strong></p>
+
+<h2>7. 實務案例連結</h2>
+
+<h3>7.1 NB 主機板（你的本行）</h3>
+<ul>
+  <li><strong>layout review 時你現在能抓的三種「去耦假動作」：</strong>① 電容整齊排在晶片「外圈」、但每顆都是長細線拉進電源——顆數誠可觀，裝機電感全不及格（§6.1 BAD 列隊）；② 電源腳先、去耦後——保護島順序倒置（§6.2 右）；③ 全板單一两種容值打天下、合成曲線交棒區大尖峰——Day 39「一百顆裝飾品」加上今天「三板斧沒動斧」。</li>
+  <li><strong>DDR 軌的「值梯度」讀法：</strong>記憶體電源區通常是大 bulk＋多級小值梯——今天你看得懂那张 BOM 背後的「棒次表」，也看得懂為什麼 VDDQ 的去耦要緊貼每幾根 DQ 擺（SSO 電流就近回收，bounce 预算 §5）。</li>
+  <li><strong>EMC pre-scan 出包時的「查表法」：</strong>先看 Fail 頻率落在哪根諧波面規上（24/100/125 MHz 的諧波族），再算板子邊長對應的平面駐波表（§4.3）——兩張表重疊的頻率，優先懷疑「平面被敲鼓」而不是「某條線輻射」；確認手段與對策（打洞圍腔、加 stitching via、挪量）是週 9 主課，今天先建立「查表」反射。</li>
+  <li><strong>「重開就好」case 的嫌犯重排：</strong>間歇性邏輯錯誤（§5.1 清單第⑤條）——以前只能换板，現在可以問：事件發生瞬間的負載事件（buck 切換、風扇啟動、無線共軌）？bounce 頻段跟誰重疊？探棒短地重測電源腳<strong>晶片側</strong>（不是板端 test point——電感壓降在腳邊最大，§5.1 電荷轉移敘事）。</li>
+</ul>
+
+<h3>7.2 鏡頭模組（camera 語言）</h3>
+<ul>
+  <li><strong>模组小板的「高頻空窗」更兇：</strong>FPC＋小板邊長 2–4 in 量級 → 平面/銅皮諧振被推到數百 MHz～GHz（§4.3 小板的算法你已經會），而模组上能焊的 discrete 只有 0201/01005——這解释了一個你解過的現象：<strong>模组端的 PI 問題常常「加電容沒用、加對位置和封裝才有用」</strong>（第二斧是主力）。OIS 應變片區域銅皮被開槽讓位給感測器組件＝平面被切小＋回流被切——谐振表要重算，這是 camera stackup 裡 PI 與結構的永久談判。</li>
+  <li><strong>三軌交棒區的「值距」審查：</strong>AVDD 常見「大顆鋁聚合物＋0402 100 nF」兩棒接力的設計——值距 100 倍！反諧振尖峰又寬又高、而且位置常落在幾百 kHz～MHz 的「VCM 頻段」正中（回想 Day 39 練習 4 的 120 kHz）。今天你開的處方更精確：中間補一棒（值距收到 2–5 倍）＋讓某一棒自帶海綿（高 ESR 阻尼），比把 100 nF 加到十顆有效（§2.3 定律）。</li>
+  <li><strong>sensor 腳邊的「順序考古」：</strong>flex 上的電源走線層少、via 貴——最容易出現「電源線先繞到 sensor 腳、去耦掛尾」的 BAD 接序。review flex 時拿 §6.2 右圖逐軌對照；必要時在 sensor 腳前「插隊」補一颗 01005（第三斧之外，順序先對）。</li>
+  <li><strong>MCLK/IF 軌 bounce 與 jitter 的雙重帳：</strong>§5 的 charge-transfer 敘事＋Day 39 Additional Jitter＝Noise/SR 串起來：DVDD 的 SSO 經封裝電感彈跳→耦合進隔壁 AVDD/MCLK 路徑→jitter 與條紋。模组封裝細小、L<sub>pkg</sub> 不便宜，這是「bounce 直接進影像」的模组版路徑圖。</li>
+</ul>
+
+<h2>8. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：反諧振頻率定位</strong>——10 µF（ESL≈1 nH）與 100 nF（ESL≈0.5 nH）並聯（典型量級假設）。(a) 兩顆的 f₀ 各約多少？(b) 反諧振尖峰約落在哪個頻率？用 f<sub>ar</sub>≈1/(2π√(ESL<sub>大</sub>×C<sub>小</sub>)) 計算，並驗證它是否落在「兩 f₀ 之間」(c) 把 100 nF 換成 1 µF（ESL≈1 nH），尖峰頻率怎麼變？「戰區」寬度怎麼變？這印證三板斧第幾斧？</summary>
+<div class="answer">
+<p>(a) 10 µF：f₀＝1/(2π√(1 nH×10 µF))＝1/(2π√(10⁻⁸×10⁻⁵))＝1/(2π×3.16×10⁻⁷)≈<strong>0.5 MHz</strong>（更準用 √(10⁻¹⁴)=3.16×10⁻⁷ → ≈0.50 MHz；對照 Day 39 例題同法）。100 nF：f₀＝1/(2π√(0.5 nH×100 nF))≈<strong>22.5 MHz</strong>（Day 39 練習 2 同款）。</p>
+<p>(b) f<sub>ar</sub>＝1/(2π√(1 nH×100 nF))＝1/(2π×10⁻⁸)≈<strong>15.9 MHz</strong>。0.5 MHz < 15.9 MHz < 22.5 MHz ✓ 落在兩 f₀ 之間——此時 10 µF 已是電感（過 f₀ 15 倍）、100 nF 還在電容區（差 f₀ 一個倍頻程不到）——「一管一罐」成立。</p>
+<p>(c) 換 1 µF 後 f₀(1 µF)＝1/(2π√(1 nH×1 µF))≈15.9 MHz；f<sub>ar</sub>＝1/(2π√(1 nH×1 µF))≈<strong>15.9 MHz？不對——尖峰條件是「一感一容」，兩顆 f₀ 幾乎重疊時根本沒有重疊戰區</strong>。正確結論：尖峰<strong>消失/塌平</strong>（兩顆行為幾乎同步，總曲線≈一顆 11 µF）。戰區寬度＝兩 f₀ 之間的對數距離：10 倍值距（10 µF vs 1 µF）比 100 倍值距（10 µF vs 100 nF）窄一個 octav 以上、且行為差更小——這就是三板斧<strong>第一斧（值距收窄）</strong>的算式本體。代價也看清了：兩棒變一棒，高頻棒次沒了——要頻寬就得加棒次、要沒尖峰就得併棒次，設計就是這組拉鋸。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：尖峰高度與阻尼預算</strong>——接練習 1：f<sub>ar</sub>≈15.9 MHz 處，L＝1 nH（10 µF 的裝機後總電感）、C＝100 nF，回路總損耗 R<sub>loop</sub>≈50 mΩ（兩顆 ESR 之和，約值），Z<sub>target</sub>＝25 mΩ（Ch.8 設計例）。(a) 尖峰高度 Z<sub>peak</sub>≈L/(C·R) 多少？超標幾倍？(b) 同事提議「再並五顆同料號 100 nF」——能修好嗎？用 Q 不變定律說明，並說明曲線會怎麼動。(c) 要用阻尼把尖峰壓到 ≤2×Z<sub>target</sub>（50 mΩ），R<sub>loop</sub> 要多少？現實中怎麼拿到？</summary>
+<div class="answer">
+<p>(a) Z<sub>peak</sub>≈L/(C·R<sub>loop</sub>)＝10⁻⁹／(10⁻⁷×0.05)＝10⁻⁹／5×10⁻⁹＝<strong>200 mΩ</strong>——是 Z<sub>target</sub> 的 <strong>8 倍</strong>。15.9 MHz 正是 PMIC 不管、大容已感、小容獨木難支的地帶：誰在這個頻段有瞬態（例如 burst 速率恰好的記憶體、或 PWM 調光頻率的諧波），誰就吃 8 倍預算的塌陷。</p>
+<p>(b) 修不好。同料號並聯：ESR′＝30/N mΩ、ESL′＝0.5/N nH——Q′＝ωL′/R′ 的 N 全部約掉（§2.3 定律），尖峰對谷底的<strong>相對高度不變</strong>；整條合成曲線只是「谷底和尖峰一起下降」（谷底可能過剩＝浪費 BOM，尖峰仍在違約邊緣）。曲線動向：往下平移、形狀（含相對尖峰）不變——記住這個「等高下移」的畫面，面試畫曲線用。</p>
+<p>(c) 要 Z<sub>peak</sub>＝L/(C·R)≤0.05 Ω → R≥L/(C×0.05)＝10⁻⁹/(10⁻⁷×0.05)＝<strong>0.2 Ω</strong>——比現有的 50 mΩ 多 0.15 Ω。現實取得方式：把其中一顆小值「換料」成天生高 ESR 型號（高介損陶瓷／聚合物腳色，注意它 DC 偏壓後的實際容值仍要守住 C<sub>小</sub> 的角色）；或增加一個中間值阻尼棒（同時執行第一斧）。0.2 Ω 對 100 nF 級電容不是天方夜譚——小容值 ESR 本來就動輲數十到百 mΩ（Ch.8 表 8.1 的 60 mΩ 就是 0.001 µF 級），「挑一顆貴而髒的小容當海綿」是 PI 的日常。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：平面電容的收支</strong>——某 NB 子板電源區 4 in × 6 in，電源—地面間距 0.004 in，Er＝4.1（約值）。(a) 用 Ch.6 速算式求平面電容。(b) 若需求照書例邏輯算出 C<sub>plane</sub>＝48 nF，缺口多大？(c) 列出書中授權的湊數法與現代會加的方案，並說明各自代價。(d)（複習串接）為什麼「把 T 減半」比「把面積加一倍」通常更划算？</summary>
+<div class="answer">
+<p>(a) C＝0.225×4.1×(2−1)×24／0.004＝0.225×4.1×24＝22.14，÷0.004＝<strong>≈5,535 pF ≈ 5.5 nF</strong>。（或用背誦版：184 pF/in² @5 mil→本板 4 mil 加乘 5/4：184×24×1.25≈5,520 pF，交叉核對✓）</p>
+<p>(b) 5.5 nF vs 48 nF——<strong>差近 9 倍</strong>。這不是小缺口，是「這一層根本沒在當電容用」等級的缺口（書中案例的 10×10 in×5 mil 也只 18.5 nF，48 nF 需求在書的時代也已是「要特意設計」的量）。</p>
+<p>(c) 書中授權法（Ch.8 原文）：<strong>鄰近訊號平面灌銅＋via 連到電源/地湊數</strong>——代價是該訊號層喪失完整參考面（訊號跨分割＝反射＋EMI，週 2/9 的帳），要挑「本來就空」的層；現代加碼：<strong>薄介質堆疊（T 進 2–3 mil 級）、埋入式電容（embedded cap）、更多電源—地平面對</strong>——代價依序是制板成本、層數與板厚、以及 §4.3 的諧振表全部要重算（平面電容和平面諧振是同一枚硬幣的兩面：你加的是電容，動的是腔體）。</p>
+<p>(d) C∝A/T：面積加倍＝加一倍電容，還要錢（多一層銅）和空間；T 減半＝<strong>同樣電容翻倍、零面積成本</strong>，只動堆疊參數——代價是製程公差占比變大（Ch.6 原話精神：1 mil 公差在 10 mil 間距上是 10%、在 20 mil 上只有 5%——T 越小，%公差越兇，要與板廠確認能力）。「先問 T、再問 A」是平面電容的預算順序。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：駐波表與諧波面規</strong>——你的 camera 子板約 5 in × 5 in，Er≈4（約值，v≈6 in/ns）。(a) 列出 1/4、1/2、3/4、1λ 的諧振頻率，標出「開路點（高阻抗 ★）」。(b) 板上有一顆 24 MHz XO 與 240 MHz 的 PLL 輸出：它們的諧波族哪些可能撞上開路點（整數倍手算即可，標「約」）？(c) 板廠建議把這版板子的電源層間距從 5 mil 改 3.5 mil 並縮板 15%（邊長 5→4.25 in）——預測你的「查表法」結果怎麼變（方向即可）。(d) 這題的元教訓一句話。</summary>
+<div class="answer">
+<p>(a) f(1λ)＝6 in/ns ÷ 5 in＝<strong>1,200 MHz</strong>。諧振：1/4λ＝300 MHz（短路點）、1/2λ＝<strong>600 MHz★開路</strong>、3/4λ＝900 MHz（短路）、1λ＝<strong>1,200 MHz★開路</strong>。半波倍數族 ★：600、1,200、1,800…；注意：書的 10 in 板開路點是 300/600，你這块 5 in 板的開路點起跳就是 600——板小一半、開路點高一倍（L 在分母，§4.3 小字驗證過）。</p>
+<p>(b) 24 MHz×n：×25＝600 MHz★、×50＝1,200 MHz★（約）——24 MHz XO 的 25 次諧波正中開路點！240 MHz×n：×2.5＝600（非整數、較不準）、×5＝1,200★（約）。手算原則：諧波能量隨階數衰減（Day 39 §3.2 的 sinc 包絡），所以「低階撞高點」比「高階撞低點」兇；24×25 這種中高階在頻譜上已弱，但 240 MHz×5 能量可觀——兩個候選都值得記進 pre-scan 觀察名單。結論格式要像這樣：<strong>頻率、來源、撞的是開路還是短路點、能量估计</strong>。</p>
+<p>(c) 兩件事同向疊加：T 減→平面電容↑（腔的「張力/負載」改變，谐振往下挪一些、平面電容本體變大是好事）；板縮 15%→駐波頻率<strong>往上抬</strong>約 1/0.85≈1.18 倍（600★→約 705 MHz、1,200★→約 1,410 MHz）。淨效應：<strong>查表要整張重算，舊的「撞點」名單作廢</strong>——可能躲開 600 MHz、也可能把別條諧波接進來。板子改版＝PI 諧振表改版，這是 changelist review 該有的一欄。</p>
+<p>(d) 元教訓：<strong>平面諧振不是「有没有問題」而是「跟誰撞」的問題——你的板子尺寸本身就是一張已生成、沒人讀取的輻射預約單（EMC 的前奏，§4.4）。讀它的人，就是團隊裡唯一能在 pre-scan 前說出「預期會在哪幾個頻點出事」的工程師。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：bounce 預算與接序查察</strong>——sensor 的 DVDD 1.2 V、容許紋波 ±5%（60 mV）。封裝＋鍵合總電源路徑電感約 1 nH（量級假設）。最壞情況：內部 8 條輸出同時切換，合計 ΔI＝150 mA、在 Δt＝1 ns 內完成（約值）。(a) V<sub>bounce</sub> 估算？超額多少？(b) 板端加去耦能「直接抹平」這個壓降嗎？用 Ch.8 的電荷轉移敘事說明板端電容真正做的工作。(c) 你 review flex 發現：電源 via→sensor 腳→去耦電容（掛尾式）。用 §6.2「保護島」觀念說明問題，並給出改法（列順序）。(d) Ch.8 減 bounce 清單裡，哪幾條在「晶片已選定、封裝不能改」的現實下仍然可用？</summary>
+<div class="answer">
+<p>(a) di/dt＝150 mA／1 ns＝1.5×10⁸ A/s；V＝L·di/dt＝10⁻⁹×1.5×10⁸＝<strong>0.15 V＝150 mV</strong>——是 60 mV 預算的 <strong>2.5 倍</strong>。注意這個壓降發生在<strong>封裝引線上、晶片「內部」看到的電源</strong>——板上 test point 可能根本量不到它（被封裝電感隔住）；這也呼應 Day 39「量測點是法律」：板端過規 ≠ 腳邊過規。</p>
+<p>(b) 不能「抹平」，只能「搬家」。Ch.8 的敘事（§5.1）：板端電容用儲存電荷供應瞬態，讓 <strong>di 盡量不走封裝電感</strong>——壓降從「晶片腳邊」被改寫成「PCB 軌上的小幅漣波」，再隨電源供電衰减。所以板端電容的有效性取決於<strong>它到晶片腳的總電感 ≪ 封裝路徑電感可比擬的程度</strong>——這就是 §6 佈局幾何存在的全部理由：ESL 沒壓低，「搬家」搬到一半就卡住。（現代解法更進一步：die-side 電容／封裝內嵌去耦，把「水庫」搬到封裝裡——概念還是同一句：別讓 di 走長路。標「現代延伸」。）</p>
+<p>(c) 現況＝「平面→via→<strong>腳</strong>→C 掛尾」：元件噴出的杂訊經 via 直上平面（繞過電容）、平面的杂訊也直達腳——電容只罩住「腳到掛尾」那一小段，兩個方向都失守。改法（照 Ch.6 圖 6.3 重排）：平面→via→（短寬走線）→<strong>去耦焊盤→元件腳</strong>，讓「C 之後到腳」成為受保護島；若 flex 層數不夠、via 打不了 via-in-pad，至少把小值 01005 移到 via 與腳之間並貼腳擺，大顆留在外圈接棒。</p>
+<p>(d) 清單六條（§5.1）裡，封裝已定的情況下仍全部可用：① 電源腳走線短（flex routing）② 多電源腳的話分路就近取電（接線自由度）⑤ 地面不開切口（模組銅皮被結構開槽是常見犯案點，§7.2 提過）⑥ 去耦設計全套（值梯度＋裝機電感＋接序）——只有 ③ double-bonding 屬封裝廠、④ 連接器選低阻屬選料。白話：<strong>bounce 這場仗，板端工程師的兵器比你想的多。</strong></p>
+</div>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "What is anti-resonance between decoupling capacitors? Why can't you just use lots of capacitors of the lowest available ESR? How do you fix an anti-resonance peak you found in simulation?"</strong><br><br>
+  <strong>Reference answer:</strong> Anti-resonance forms when one capacitor is still capacitive while another has passed its self-resonance and behaves inductive—the pair becomes a parallel LC tank, and at f_ar ≈ 1/(2π√(ESL_large·C_small)), between the two self-resonances, the combined impedance spikes higher than either capacitor alone would give (Classic reference: the Cypress design guide's parallel-resonance plots). That spike is a hole in the PDN: load transients at that frequency see no support. Lowest-ESR-everywhere backfires because the peak height scales with Q ≈ ωL/R: shrinking ESR without shrinking mounting inductance raises Q and makes the spike sharper—same physics as the low-DCR ferrite bead that amplifies noise. And you can't damp it by paralleling more of the same part: N in parallel divides ESR and ESL by the same factor, so Q stays constant while the whole curve just shifts down—the relative spike survives (the book's parallel-capacitor Q argument). Fixes, in order: narrow the value spacing between adjacent legs so the capacitive/inductive overlap window shrinks (book says decade spacing was typically fine; modern designs tighten toward 2–5× ratios and add a third/fourth value to recover bandwidth); cut mounting inductance—smaller packages, via-in-pad, tight plane spacing—which lowers Q and raises every self-resonance at once (one arrow, two hawks); or deliberately introduce a higher-ESR damping leg—choose the damping part so that after DC-bias derating it still holds its role. Verify by simulating the combined network impedance against Z_target, then confirm on hardware with two-port insertion-loss measurements across a sensible current-injection point; anything above target between legs is a to-do item, not a footnote.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "A pre-compliance radiated-emit test fails with a peak around 600 MHz. You can't attribute it to any single trace. Walk me through your investigation."</strong><br><br>
+  <strong>Reference answer:</strong> First I'd check whether the board itself is the antenna—power/ground plane pairs are unterminated transmission lines with standing-wave resonances set by board geometry: roughly f = (n/4)·v/L per edge, with v ≈ c/√Er. A quick calculation from board size and stack-up tells me if 600 MHz is a quarter- or half-wave resonance of this panel—plane resonance is an EMI precursor because bounce energy on a resonant plane couples out through connectors, apertures and attached traces, and the plane can be excited by anything broadband, not one "guilty" trace. Correlate: does 600 MHz sit on a harmonic family of a known source (24 MHz×25, a 240 MHz PLL ×5—estimates, then check spectrum)? Then localize with near-field probes while toggling activity, and if possible measure plane impedance (two-port) between an injection point and suspect locations—peaks at predicted resonance frequencies with movement between nodes and antinodes confirm cavity behavior. Mitigations in order of system cost: break or shrink the cavity with stitching vias around board edges and power domains (raises resonant frequency out of the occupied band); add/bring closer a thin-dielectric plane pair or embedded capacitance (more plane C loads the cavity); ensure return paths aren't cut (ground plane cuts force current around, adding loops); as a last resort, absorb—notch—edge rate management at the aggressor if it's a specific source. I'd also check whether decoupling caps near the emission region are actually helping: they only nudge cavity resonances slightly—the book is explicit that above a few hundred MHz discrete caps barely move plane behavior—so this is a geometry fight, and I'd fix it as such. Document before/after far-field and near-field evidence both ways.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「反諧振不是『用錯電容』，是『棒次與棒次之間』的戶籍——單顆都合規，組合違規，所以要掃合成曲線」；「Q∝L/R 是電源域的萬有引力：低 ESR 配高裝機電感＝高 Q＝尖峰，低 DCR 磁珠放大雜訊、低損耗平面長出駐波，全是同一張考卷」；「同料號並聯 Q 不變——阻尼是選型問題，不是顆數問題」；「板子尺寸就是一張輻射預約單：我能在 pre-scan 前把預期出事頻點算出來」；「去耦的接序正義：平面→via→電容→腳，順序就是屏蔽方向」。這五句連起來，就是「這個人真的做过 PDN」的指紋。</p>
+</div>
+
+<h2>10. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：反諧振的成立條件、頻率位置與尖峰特性（PT2 Ch.8 圖 8.14）？為什麼「尖峰比任何一條單曲線都高」？</p>
+  <p class="a">A1：條件＝「一顆在容性區＋另一顆已過 f₀ 進感性區」並聯→並聯 LC 振盪槽（書中 aliases：並聯諧振/anti-resonance/impedance-hole）。位置：兩顆 f₀ 之間，f<sub>ar</sub>≈1/(2π√(ESL<sub>大</sub>·C<sub>小</sub>))。特性：兩支路電抗等值反號互相抵消→總阻抗理論→∞，實際 Z<sub>peak</sub>≈L/(C·R)<sub>loop</sub>＝√(L/C)×Q——比兩條單曲線都高（原文重點）。值距越寬、戰區越寬、尖峰越大。</p>
+
+  <p class="q">Q2：Ch.8 治反諧振三板斧？「同 ESR:ESL 比值並聯，Q 不變」定律說什麼？</p>
+  <p class="a">A2：①值距收窄（書：十進制通常夠；現代 2–5 倍＋加棒次補頻寬——上修）②減裝機電感（Q∝L；同時 f₀↑，一箭雙鵰：via-in-pad/0201/01005/埋容）③高 ESR 阻尼料號（Q 反比於 ESR）。定律：N 顆同料號並聯，ESR/N、ESL/N 同比例縮→Q′＝ωL′/R′ 不變、整條曲線等高下移——尖峰相對高度不變。結論：尖峰靠「料」不靠「量」；谷底（總阻抗）才靠量。</p>
+
+  <p class="q">Q3：平面電容兩條公式（Ch.6/Ch.8）與書中數字？dV 判定式與書例？電容不夠怎麼辦（書中授權法）？</p>
+  <p class="a">A3：C＝ε₀·Er·A/T（ε₀≈0.2249 pF/in）；速算 C＝0.225·Er·(N−1)·A/t（in 制）。書例：10×10 in、Er4.1、t 5 mil→18,450 pF＝184 pF/in²（背它）。判定：dV＝(C<sub>lines</sub>/C<sub>plane</sub>)×V<sub>DD</sub>；例：C<sub>lines</sub>＝720 pF（8bit×3pF×(3pF/in×10in)）、3.6 V、54 mV→C<sub>plane</sub>≥48 nF。不夠：鄰近訊號平面灌銅＋via 連過去湊數（代價：該層參考完整性）。現代上修：埋容/薄 core（2–3 mil 級）把密度推到 nF/in² 級。</p>
+
+  <p class="q">Q4：平面駐波諧振怎麼算（書例全套）？開路點、短路點差在哪？為什麼說「平面諧振是 EMI 前奏」？</p>
+  <p class="a">A4：平面對＝未端接傳輸線。v＝c/√Er（書：11.8 in/ns÷√4＝6 in/ns）；板長 10 in→1λ＝600 MHz；諧振在 λ/4 倍數：150/300/450/600 MHz。開路點（高阻、半波倍數：300/600/900）最危險；短路點：150/450/750。板子越小谐振越高（v/L）。前奏邏輯：bounce 清單含「增加 EMI」（Ch.8 原文）＋λ/4 倍結構近理想天線（Ch.6 原文）→平面諧振能量經板邊/開孔/附著走線上天線；digital 頻譜寬到 GHz 保證總有諧波敲鼓。離散電容只能推擠峰幾百 MHz（原文）——解在幾何（stitching via 圍腔等，週 9）。</p>
+
+  <p class="q">Q5：VCC/ground bounce 公式、五项害處、書中減害清單？板端去耦的真實工作是什麼（電荷轉移敘事）？</p>
+  <p class="a">A5：V＝L<sub>pkg</sub>·di/dt（封裝引線架＋鍵合線電感）。害處：headroom 縮水、EMI↑、各種 jitter↑、噪声邊際侵蝕、(夠大)間歇性邏輯錯誤。減害清單：電源走線短、多電源腳、double-bonding、低阻連接器、地面不開切口、正確去耦（其中四項板端可執行）。電荷轉移：板端電容供應瞬態，把壓降從晶片腳「搬」到 PCB 軌上再被電源抹平——有效性取決於板端電容到腳的電感夠低（佈局幾何的全部理由）。實證：Ch.8 圖 8.10（CY28410）去耦做足，c2c jitter 約百 ps→約五十 ps 量級。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+
+<p><strong>Day 41（週三・DC-DC 與去耦的交互——電源端這棒到底怎麼接）：</strong>這兩天你把「去耦端」從選值、阻尼、平面、佈局全拆完了，但接力賽第一棒——開關電源本身——我們一直只把它當「一條阻抗斜坡」。明天拆它的黑箱：buck 的輸出阻抗為什麼在低頻低、過了什麼頻率開始「裝死變電感」、它的控制迴路怎麼「看」你那一大牆的去耦電容（容性負載與迴路穩定性的愛恨）、以及 Ch.5「磁珠/電阻濾波＋後端電容」如何跟 DC-DC 的頻寬邊界無縫接軌——週 8 收官：從 Z<sub>target</sub> 預算→元件選型→佈局檢查表的「PDN 單頁決策文件」，明天你手寫得出來。今晚 Anki 五張照掃——Q1、Q2 是明天白板題的前置。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

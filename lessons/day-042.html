@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 42｜EMI I——共模 vs 差模：迴路面積就是天線的翅膀面積（週 9 開週・Perfect Timing II Ch.9）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 9 週・第 42 天（週四新觀念課・週 9 開週・PT2 Ch.9 對照日）</div>
+  <h1>Day 42：EMI I——共模 vs 差模：迴路面積就是天線的翅膀面積（Perfect Timing II Ch.9）</h1>
+  <div class="meta">2026-09-03（四）｜預估學習時間：90 分鐘｜難度：★★★★☆（前十一週你练的是「讓訊號在板上好好走」；從今天起換一個鏡頭：「你板上每一股電流，都在用你聽不見的音量對全世界廣播——問題只有：誰在聽、多遠聽得到、以及你願不願意讓它小聲」。今天是週 9 EMI 開週課：把「共模/差模」從名詞變成你手上量得到的電流，把「迴路面積」從口號變成能圈在 review 圖上、能算 dB 的帳。PT2 Ch.9（EMI 章）對照日：書中的天線清單、FCC 限制表、33 MHz 收音機案例與「端接第一」紀律全部進帳；壓軸的頻譜擴展（spread spectrum）本週後段再拆。）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>今天是 EMI 週的「文法課」——之後所有實驗、案例、對策都講這套文法。下課時你要能：</p>
+  <ol>
+    <li><strong>用電流講清共模與差模</strong>（不是用電壓）：差模＝出去與回來大小相等、方向相反的一對電流；共模＝兩條線<strong>同方向</strong>一起流的電流，靠寄生電容從「空氣」回來源。並能寫出分解式：I₁＝I<sub>DM</sub>＋I<sub>CM</sub>、I₂＝−I<sub>DM</sub>＋I<sub>CM</sub>。</li>
+    <li><strong>把「迴路面積＝天線翅膀」變成算式</strong>：差模輻射 E∝I×A×f²——面積縮 10 倍＝radiation 少 20 dB；頻率翻倍＝多 6 dB。並能解釋為什麼回流緊貼訊號線正下方（Day 16）就是大自然最便宜的降噪。</li>
+    <li><strong>說出共模的四大來源與兩條偵測手法</strong>：地彈跳把整塊板的「地」抬起來、屏蔽線 pigtail、線材比板子會發聲（電纜＝最有效的天線）、差動失衡（duty 偏離 50% 偶次諧波抬頭＝書中圖 9.8–9.11 的簽名）。30–300 MHz 測試失敗，先查共模。</li>
+    <li><strong>认出並正確使用 X-cap／Y-cap／共模電感的語彙與紀律</strong>：X 跨線（濾差模）、Y 對機殼（濾共模、被安全規範的洩漏電流卡死容值）、共模電感雙繞同芯（差模磁通互相抵消所以不擋差模）；以及磁珠<strong>擋不住共模</strong>的原因——外加電路圖節點命名（<code>_filt</code>）的「量測點是法律」紀律。最後把 Ch.9 的減對策四階梯（端接→慢邊框→濾波電容→頻譜擴展）挂進武器庫。</li>
+  </ol>
+</div>
+
+<h2>0. 前情提要——你已經收過五張 EMI 的預告信</h2>
+<ul>
+  <li><strong>Day 16 回流路徑：</strong>「約 80% 的回流擠在訊號線正下方 ±3h 的窄帶裡（量級）」——當時你學的是「訊號完整性」：回流斷了會振鈴、會輻射耦合。今天把它翻面：<strong>回流紧貼與否，決定的不只是阻抗，而是整個迴圈對外喊多大聲</strong>。跨槽改道＝翅膀張開。</li>
+  <li><strong>Day 21 差動訊號：</strong>我們已經有電壓域的共模定義——「共模＝兩線的平均」，以及差動對共模的拒收能力（CMR）。今天把平均/差分的刀從<strong>電壓</strong>切到<strong>電流</strong>：真正決定輻射的是電流怎麼流、從哪條路回去。</li>
+  <li><strong>Day 36 實作日：</strong>你親手把探棒地針換成 μ-clip、拆掉長接地線（現場焊接）——當時說長地線會「撿噪聲」。那支懸空的接地線，其實就是一支 15 cm 的小天線：它收的正是空間裡的<strong>磁場/共模噪聲</strong>。你早就摸過共模，只是它那時不叫這名字。</li>
+  <li><strong>Day 40 平面與切口：</strong>「平面駐波是 EMI 前奏」、f<sub>1λ</sub>＝v/L 查表法——平面諧振是「板子自己變成共振腔」。今天學的是同一枚硬幣的另一面：<strong>電流怎麼進出這個共振腔</strong>。</li>
+  <li><strong>Day 41 開關階躍與諧波族（DC-DC 與去耦的交互）：</strong>「預先排好隊的輻射候補」——buck 開關節點的 ns 階躍與時鐘的諧波梳就是頻譜上一根根等著超標的譜線。今天學它們<strong>怎麼離開板子</strong>（哪支天線、哪種模式），明天（週五實作日）你就拿著今天的文法到實驗室抓人。</li>
+</ul>
+
+<div class="card intuition">
+  <span class="label">白話版：拔河、整齊划槳、與你家廚房的两個開關</span>
+  <p><strong>差模＝兩個人拔河。</strong>你拉左邊、隊友拉右邊，兩股力一模一樣、方向相反——站在旁邊看的人（三公尺外的收訊機）看到的「淨力」幾乎是零，因為雨邊互相抵銷。電的世界裡：電流從訊號線出去 100 mA、從回流線回來 100 mA，兩條線靠得很近，它們產生的磁場在外遠處互相抵消——拔河打得再激烈，旁人是感覺不到的。<strong>但有個前提：兩條繩子要貼得夠近。</strong>如果你和隊友各站一間健身房（訊號線與回流線被切槽分開了），兩股力隔了 20 公尺互相拉扯——旁人一眼就看出「這裡有人在用力」。<strong>你們两人之間圍出來的面積，就是旁人的「可見面積」</strong>——這就是「迴路面積＝天線翅膀面積」的白話版。</p>
+  <p><strong>共模＝整條船的划手同聲同向。</strong>現在左舷八個划手同一拍往前划、右舷八個也同一拍往前划——水波（電磁波）蕩得老遠，隔著湖都看得見。電的世界裡：訊號線和它的回流線上出現<strong>同方向</strong>的電流（各 5 mA），它們不再互相抵消，而是疊起來一起朝線材末端推，從電纜頭「噴」進空氣裡，繞道寄生電容（線對機殼、線對燈泡、線對你）回到電源。<strong>共模電流通常比差模小一百倍（差 40 dB），但每一毫安的發聲效率可能高一百倍</strong>——所以測試失敗時，兇手多半是那個小角色。</p>
+  <p><strong>電纜是板子伸到房間裡的手臂。</strong>板上走線再差也是幾公分，電源線、USB 線、螢幕線一拉就是 1～2 公尺——同頻下，1 公尺的線比 1 公分的走線有效率得多的多（辐射強度近似正比於「有效長度」）。所以 EMC 測試實驗室裡流傳一句粗話：<strong>「失敗了？先動線」</strong>——不是玄學，是天線理論。</p>
+  <p><strong>X-cap 與 Y-cap＝你家廚房的兩個開關。</strong>電源進口的濾波器裡住著兩種電容，分工清楚：<strong>X-cap 夾在兩條電源線中間</strong>，像廚房檯面的總閘——它管的是「兩條線之間的差別」（差模），對 60 Hz 市電來說它阻抗高到幾乎不導電、對高頻噪聲卻是短路。<strong>Y-cap 是每條線對「大地/機殼」的滴水孔</strong>——它管的是「兩條線一起相對於地的抖動」（共模）。為什麼滴水孔必須開得很小（容量只能 nF 級）？因為那條路平時也漏 60 Hz 的電到機殼——孔開大了，人摸到機殼就會被電（洩漏電流有法規上限），漏到漏電斷路器還會跳電。<strong>一句話：X 跨線濾差模、可以開大；Y 對地濾共模、被安全規範勒死只能開小。</strong></p>
+  <p><em>公式全部遮住，今天的結論就這四段：（1）出去和回來的一對電流叫差模，貼得越近、互相抵消越乾淨，它們圍出來的面積就是對外廣播的音量旋鈕；（2）兩條線同方向一起流的叫共模，不抵消、專走電纜和寄生電容，每毫安都比差模會發聲，是低頻段輻射測試的頭号嫌犯；（3）電纜是效率最高的天線，板子輻射要出去多半借了某條線或某個金屬殼的光；（4）對症的濾波元件各有執照：X-cap 管線與線（差模）、Y-cap 管線與地（共模）、共模電感專殺共模、而磁珠對共模形同虛設——因為它只認得「流過它的電流有多大」，分不清你們是同向還是反向。</em></p>
+</div>
+
+<h2>1. 誰在廣播：EMI 的來源、天線清單與法規舞台（PT2 Ch.9）</h2>
+
+<h3>1.1 書中開宗明義：時鐘電路是头号來源</h3>
+<p>PT2 Ch.9 第一段就定性（原文大意）：<strong>任何能產生 RF 範圍頻率訊號的裝置，都是潛在的 EMI 來源</strong>；而「<strong>多數系統中 EMI 的主要來源，是時鐘產生與分配電路</strong>（The primary sources of EMI in most systems are the clock generation and distribution circuits）」。為什麼偏偏是時鐘？書中給的理由很乾淨：<strong>固定頻率的週期性訊號</strong>讓能量集中在狹窄頻點上、可以不斷堆高（energy to increase to higher levels）；而非週期性、不同步的訊號不會產生那麼多 EMI（原文大意）。白話：<em>雜訊要「整齊」才會大聲——時鐘是全世界最整齊的訊號，所以是最吵的。</em></p>
+<p>能量要離開板子，需要一支<strong>天線</strong>。Ch.9 的清單值得全文抄進筆記（原文列舉）：<strong>PCB 走線、重工跳線（rework wires）、遮蔽不足的元件、連接器、電纜（遮蔽或未遮蔽都算）、以及接地不良的設備</strong>。注意最後兩項——你在 NB 主機板天天經手的 board-to-board 連接器與排線，在書裡直接以「天線」身分出現。這也解釋了為何 Ch.9 後面教對策時，第一刀不是加遮罩，而是<strong>把天線的驅動源頭關小聲</strong>（端接、慢邊框）。</p>
+
+<h3>1.2 書中案例：33.3 MHz 與收音機 99.9——諧波指紋的鼻祖案例</h3>
+<p>Ch.9 的入門案例（忠於原文）：FM 電台佔 88～108 MHz、電台間留 200 kHz 保護帶；收音機為了收弱訊用了高增益放大器，所以對微弱干擾極敏感。而 2002 年同步裝置的典型頻率 <strong>33.3 MHz</strong>（PCI 匯流排、ASIC、FPGA、處理器的常用時鐘），它的<strong>三次諧波正好 99.9 MHz</strong>——一塊跑 33 MHz 的板子，就能讓附近調到 99.90 MHz 的收音機出现失真。<em>（時效註記：PCI 33 MHz 是 2002 年的量級。現代設備裡同一齣戲的演員換成了 24/25 MHz 感測器晶振、100 MHz 參考時鐘、MIPI 的 GHz 級時脈與 buck 的 0.5～2 MHz 開關——頻點更高、譜線更密，但「諧波恰好撞上受害者」的劇本一模一樣，查案方法不變：超標頻點 ÷ 板上任一時鐘/開關頻率，能整除就嫌疑人上檯。）</em></p>
+
+<h3>1.3 法規舞台：FCC Class A/B、CISPR、VCCI（Ch.9 測量的那一章）</h3>
+<p>Ch.9 講測量（原文大意）：把受測物放進<strong>電波暗室（anechoic chamber）或開曠場測試站（OATS）</strong>，量各頻點的輻射能量，跟 FCC 限值比。FCC 於 1975 年訂出 Part 15（管「不故意產生 RF」的設備），並分兩級：<strong>Class A＝商業/工業/辦公環境設備</strong>，<strong>Class B＝居家使用設備</strong>——原文點名 <strong>Class B 比 Class A 更難過</strong>。書中表 9.1（FCC Part 15，2002 年快照）：</p>
+<table>
+<tr><th>頻段（MHz）</th><th>Class A @10 m（µV/m｜dBµV/m）</th><th>Class B @3 m（µV/m｜dBµV/m）</th></tr>
+<tr><td>30–88</td><td>90｜39</td><td>100｜40</td></tr>
+<tr><td>88–216</td><td>150｜43.5</td><td>150｜43.5</td></tr>
+<tr><td>216–960</td><td>210｜46.5</td><td>200｜46</td></tr>
+<tr><td>&gt;960</td><td>300｜49.5</td><td>500｜54</td></tr>
+</table>
+<p><strong>三個讀表重點：</strong>①限值單位是<strong>電場強度</strong>（µV/m），測量距離寫在級別裡（A 量 10 公尺、B 量 3 公尺——同一台設備拿 B 的尺來量更嚴）；②限值隨頻率<strong>上浮</strong>（39→54 dBµV/m），因為高頻天然更難壓、也因為高頻通訊服務容忍度不同；③<strong>40 dBµV/m 就是 100 µV/m</strong>——等號兩邊換算要熟，面試報數字常常混著說。<em>（時效註記：這是 2002 年 FCC 快照；現代消費性產品認證的主流家族是 CISPR 32/35 與對應的 FCC Part 15 Subpart B，限值結構相近但數值/頻段以<em>現行版本</em>為準——工作時永遠翻当前標準，書表只當「認識地形」用。Ch.9 同時提到歐洲走 CISPR（1934 年成立的國際組織）、日本走 VCCI（1985 年 12 月由四個日本工業協會組成）——三大區塊三本執照的精神到現在不變。）</em></p>
+<p>書中對「報告怎麼讀」也有一句珍言：合規圖表上所有頻點峰值都在限值線下；超標的頻點叫 <strong>hot spots</strong>，「由這些頻率可以鎖定負責的時鐘走線」（原文大意）——<strong>頻點→時鐘→走線→對策</strong>，這條查案鏈就是本週的主線。</p>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：頻譜上的地景——諧波梳、限值線與 hot spot（以 24 MHz 時鐘 ×n 為例；限值用書中 Class B 形狀）</text>
+
+  <!-- axes -->
+  <line x1="90" y1="360" x2="890" y2="360" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="90" y1="360" x2="90" y2="70" stroke="#64748b" stroke-width="1.5"/>
+  <text x="490" y="392" text-anchor="middle" font-size="11" fill="#374151">頻率：30 MHz → 1 GHz（對數）</text>
+  <text x="58" y="215" text-anchor="middle" font-size="11" fill="#374151" transform="rotate(-90 58 215)">電場強度（dBµV/m）</text>
+
+  <!-- y ticks -->
+  <g font-size="9.5" fill="#64748b" text-anchor="end">
+    <text x="86" y="336">30</text><text x="86" y="268">40</text><text x="86" y="200">50</text>
+    <text x="86" y="132">60</text><text x="86" y="98">65</text>
+  </g>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="90" y1="332" x2="890" y2="332"/><line x1="90" y1="264" x2="890" y2="264"/>
+    <line x1="90" y1="196" x2="890" y2="196"/><line x1="90" y1="128" x2="890" y2="128"/>
+  </g>
+
+  <!-- FM band shading -->
+  <rect x="196" y="70" width="52" height="290" fill="#fef3c7" opacity=".6"/>
+  <text x="222" y="84" text-anchor="middle" font-size="9.5" fill="#92400e">FM 88–108</text>
+
+  <!-- x ticks: 30M..1G log, 1.664 dec per major decade -->
+  <g font-size="9.5" fill="#64748b" text-anchor="middle">
+    <text x="90" y="376">30M</text><text x="262" y="376">100M</text><text x="434" y="376">300M</text><text x="606" y="376">1G</text>
+  </g>
+
+  <!-- limit line (Class B 3m step): 40 at 30-88, 43.5 88-216, 46 216-960, 54 >960 -->
+  <path d="M90,264 L262,264 L262,240 L434,240 L434,226 L606,226 L606,174 L890,174" stroke="#dc2626" stroke-width="2.5" fill="none"/>
+  <text x="640" y="164" font-size="10.5" fill="#dc2626" font-weight="bold">限值線（Class B 形狀，示意）</text>
+
+  <!-- harmonic comb of 24 MHz: pick several -->
+  <g stroke="#0e7490" stroke-width="5">
+    <line x1="150" y1="360" x2="150" y2="150"/>
+    <line x1="196" y1="360" x2="196" y2="205"/>
+    <line x1="238" y1="360" x2="238" y2="235"/>
+    <line x1="300" y1="360" x2="300" y2="252"/>
+    <line x1="362" y1="360" x2="362" y2="262"/>
+    <line x1="430" y1="360" x2="430" y2="278"/>
+    <line x1="505" y1="360" x2="505" y2="290"/>
+    <line x1="585" y1="360" x2="585" y2="300"/>
+  </g>
+  <text x="150" y="140" text-anchor="middle" font-size="10" fill="#0e7490" font-weight="bold">3×24＝72 MHz：超標！</text>
+  <text x="300" y="242" font-size="10" fill="#c2410c">← 5×24：擦線</text>
+
+  <!-- hot spot arrow -->
+  <circle cx="196" cy="120" r="0" fill="none"/>
+  <text x="150" y="118" font-size="10.5" fill="#dc2626" font-weight="bold">hot spot → 查指紋：72÷24＝3（整除）→ 24 MHz 時鐘及其驅動走線</text>
+
+  <!-- Ch.9 story -->
+  <rect x="95" y="404" width="790" height="56" rx="8" fill="#0b1220"/>
+  <text x="110" y="424" font-size="10.5" fill="#fbbf24">Ch.9 案例（2002）：33.3 MHz（PCI 時鐘）的 3 次諧波＝99.9 MHz → 害到調到 99.90 的 FM 收音機。</text>
+  <text x="110" y="442" font-size="10.5" fill="#e2e8f0">現代版腳本相同、頻點不同（24/25/38.4/100 MHz 晶振、MIPI 與 f_sw 諧波——以現代標準需上修）。</text>
+  <text x="110" y="458" font-size="10.5" fill="#4ade80">查案第一刀：超標頻點對板上任一時鐘做「整除測試」；第二刀才輪到模式（共模？差模？）與天線（哪條線？）。</text>
+</svg>
+<figcaption>圖 1：輻射測試報告的地景讀法。紅階梯＝限值線（Class B 形狀，示意）；青梳＝某 24 MHz 時鐘的諧波族（高度僅示意：50% duty 方波奇次諧波按 1/n 包絡滾降）。hot spot 的查案順序：先指紋（整除）、再模式（共/差模）、再天線（哪條線/哪個面）。</figcaption>
+</figure>
+
+<h2>2. 文法課開始：共模與差模——用電流講，不用電壓講</h2>
+
+<h3>2.1 定義（先白話、再定義、再公式）</h3>
+<p><strong>白話：</strong>差模是「一對」，共模是「一堆一起」。看一對導線裡的兩個電流：如果它們<strong>大小相等、方向相反</strong>（去與回），這是差模（differential mode, DM）——這是你<strong>要的</strong>訊號；如果它們<strong>方向相同</strong>（一起往同一個方向流），這是共模（common mode, CM）——這幾乎永遠不是你<strong>要的</strong>。</p>
+<p><strong>嚴格定義（任何兩個電流都能分解）：</strong>任意一對導體的電流 I₁、I₂，都可以唯一地拆成兩個模式的疊加：</p>
+<div class="formula">
+I<sub>DM</sub> ＝ (I₁ − I₂) ／ 2　（差模分量：兩線「相减」的一半）<br>
+I<sub>CM</sub> ＝ (I₁ ＋ I₂) ／ 2　（共模分量：兩線「相加」的一半）<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：把兩條線的電流想成兩支隊伍的成績。「減」抓出它們相反用力多少（正事），「加」抓出它們一起往哪邊溜（外快）。外快就是共模。</span>
+</div>
+<p><strong> sanity check（自我檢驗）：</strong>純差模傳輸時 I₂＝−I₁，代進去：I<sub>CM</sub>＝(I₁−I₁)/2＝0——去與回完全對稱，共模為零。一旦 I₁＋I₂≠0（例如 100 mA 出去、只有 80 mA 回來，剩下 20 mA「回錯路」了），I<sub>CM</sub>＝10 mA：這 10 mA 一定找得到第三條路回去——那條路通常是<strong>寄生電容</strong>（線對機殼、線對桌面、線對燈管、線對人）與<strong>電源端的雜訊阻抗</strong>。共模電流的「回」不走你的設計，走的是你<strong>沒設計的東西</strong>——這就是它難纏的本質。</p>
+<p>Day 21 的電壓版本還記得更清楚嗎（CM＝(V₁＋V₂)/2）？電壓版解釋<strong>接收端為什麼不怕差模</strong>（差動接收器只減不加，把共模拒收）；今天的電流版解釋<strong>發送端為什麼輻射</strong>（共模電流沒有對消的夥伴，必須從空間繞道，所到之處都是場）。一枚硬幣兩面：差動的好處在接收端拒收、在發送端<strong>自我對消</strong>。</p>
+
+<figure>
+<svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1b：同一對導線，兩種電流——磁場抵消（左）vs 磁場疊加（右）</text>
+
+  <!-- LEFT: differential -->
+  <rect x="30" y="50" width="425" height="300" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="242" y="74" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#166534">差模 DM：去＝回、方向相反 → 遠處磁場對消</text>
+
+  <!-- two conductors -->
+  <line x1="70" y1="130" x2="400" y2="130" stroke="#334155" stroke-width="4"/>
+  <line x1="70" y1="180" x2="400" y2="180" stroke="#334155" stroke-width="4"/>
+  <text x="78" y="120" font-size="10.5" fill="#334155">線 1（訊號）</text>
+  <text x="78" y="200" font-size="10.5" fill="#334155">線 2（回流）</text>
+  <!-- arrows -->
+  <line x1="180" y1="130" x2="250" y2="130" stroke="#16a34a" stroke-width="4" marker-end="url(#arrG)"/>
+  <line x1="250" y1="180" x2="180" y2="180" stroke="#16a34a" stroke-width="4" marker-end="url(#arrG)"/>
+  <defs><marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#16a34a"/></marker>
+  <marker id="arrR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker></defs>
+  <text x="300" y="134" font-size="11" fill="#16a34a">I</text>
+  <text x="300" y="184" font-size="11" fill="#16a34a">−I</text>
+
+  <!-- loop area shading -->
+  <rect x="150" y="130" width="100" height="50" fill="#dc2626" opacity=".12"/>
+  <line x1="150" y1="130" x2="150" y2="180" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="250" y1="130" x2="250" y2="180" stroke="#dc2626" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="300" y="158" font-size="10.5" fill="#b91c1c">A＝兩線間隔 × 平行長度<br>（貼得越近→A 越小→越無聲）</text>
+
+  <!-- far field small -->
+  <path d="M330,250 q22,-14 44,0 q22,-14 44,0" stroke="#16a34a" stroke-width="2" fill="none" opacity=".55"/>
+  <path d="M330,262 q22,-14 44,0 q22,-14 44,0" stroke="#dc2626" stroke-width="2" fill="none" opacity=".45" transform="translate(0,14)"/>
+  <text x="90" y="278" font-size="11" fill="#166534">遠處：兩個反向環流≈拔河，旁人看不到淨力</text>
+  <text x="90" y="300" font-size="11" fill="#166534">→ 輻射 ∝ A·f²·I：小環、低頻時微弱</text>
+  <text x="90" y="326" font-size="11.5" fill="#14532d" font-weight="bold">設計目標：讓「去」永遠找到最近的「回」＝一切 EMI layout 的第一原則</text>
+
+  <!-- RIGHT: common mode -->
+  <rect x="475" y="50" width="420" height="300" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+  <text x="685" y="74" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#991b1b">共模 CM：兩線同向 → 磁場疊加、經寄生繞道回家</text>
+
+  <line x1="515" y1="130" x2="845" y2="130" stroke="#334155" stroke-width="4"/>
+  <line x1="515" y1="180" x2="845" y2="180" stroke="#334155" stroke-width="4"/>
+  <line x1="580" y1="130" x2="650" y2="130" stroke="#dc2626" stroke-width="4" marker-end="url(#arrR)"/>
+  <line x1="580" y1="180" x2="650" y2="180" stroke="#dc2626" stroke-width="4" marker-end="url(#arrR)"/>
+  <text x="660" y="134" font-size="11" fill="#dc2626">+I<sub>CM</sub></text>
+  <text x="660" y="184" font-size="11" fill="#dc2626">+I<sub>CM</sub></text>
+
+  <!-- return via parasitic -->
+  <line x1="845" y1="130" x2="845" y2="228" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <line x1="845" y1="180" x2="845" y2="228" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <rect x="770" y="228" width="150" height="14" rx="4" fill="#f59e0b"/>
+  <text x="845" y="256" text-anchor="middle" font-size="10.5" fill="#92400e">機殼／大地／環境（寄生 C 耦合）</text>
+  <path d="M770,236 C 700,290 560,290 515,158" stroke="#f59e0b" stroke-width="1.8" fill="none" stroke-dasharray="6 4"/>
+  <text x="600" y="288" text-anchor="middle" font-size="10.5" fill="#92400e">「回來」這一程走你沒設計的路：線→寄生 C→環境→電源</text>
+
+  <!-- big radiating waves -->
+  <path d="M560,94 q26,-16 52,0 q26,-16 52,0 q26,-16 52,0" stroke="#dc2626" stroke-width="3" fill="none"/>
+  <path d="M560,106 q26,-16 52,0 q26,-16 52,0 q26,-16 52,0" stroke="#dc2626" stroke-width="2" fill="none" opacity=".5" transform="translate(0,-16)"/>
+  <text x="770" y="98" font-size="11" fill="#991b1b" font-weight="bold">對消者缺席→整條線都在喊</text>
+  <text x="515" y="326" font-size="11.5" fill="#991b1b" font-weight="bold">短偶極天線近似：輻射 ∝ I_CM × 線長 × f ——電纜一拉 1 m，效率碾壓板上小環</text>
+</svg>
+<figcaption>圖 1b：同一對導線的兩種活法。左（差模）：去與回大小相等方向相反，遠處磁場對消，殘下來的輻射由「圍出來的面積 A」定價；右（共模）：兩線同向、無人對消，電流經寄生電容與環境完成迴路，整條線（尤其拖出機殼的電纜）成為一支短偶極天線。</figcaption>
+</figure>
+
+<h2>3. 數學：迴路面積就是翅膀面積（含「遮掉公式也懂」版）</h2>
+
+<h3>3.1 差模＝小環天線：E ∝ I × A × f²</h3>
+<p>一對緊貼的平行線（去與回）在遠處看就是一個<strong>小環形線圈</strong>。教科書標準近似（小環、遠場、自由空間，最大值）：</p>
+<div class="formula">
+E（V/m）≈ 1.32×10⁻¹⁴ × <strong>I（A）× A（m²）× f²（Hz）</strong> ／ r（m）<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：廣播音量＝電流 × 「翅膀面積」 × 頻率平方 ÷ 距離。三個旋鈕——①把電流減小（串阻、慢邊框）；②把迴路面積折疊到最小（回流緊貼）；③把能量從高頻移走（濾波）。注意是 f 的<strong>平方</strong>：頻率×2＝輻射+6 dB、×10＝+20 dB——這就是為什麼「高速」與「EMI」總是綁在一起報導。面積×10＝+20 dB（反過來說：<strong>面積縮十倍＝免費 20 dB</strong>，這是整堂課性價比最高的一句話）。</span>
+</div>
+
+<h3>3.2 共模＝短偶極天線：E ∝ I × L × f（只線性於 f！）</h3>
+<p>共模電流在導線上没有反向夥伴，它看起来是一段「單臂」天線（短偶極）。教科書標準近似（短偶極、遠場）：</p>
+<div class="formula">
+E（V/m）≈ 60π × <strong>I（A）× L（m）</strong> × f ／（c·r）≈ 188 × I × L ／（λ·r）<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：共模天線的音量＝電流 × 「線伸出去多長」 × 頻率。同樣的 1 mA，1 公尺的電源線比 50 cm² 的板上小環會喊（多數工作頻段下，量級比較見 §3.3 對照表）——所以 EMC 實驗室的第一條江湖規矩：「線材是天線，先對線材下手」（束線、共模 choke、磁環夹在纜線上，都是沖著 I_CM 去的）。</span>
+</div>
+
+<h3>3.3 同頻對決：100 MHz 下誰在喊？（全用上面兩式、標量級）</h3>
+<table>
+<tr><th>情境（f＝100 MHz、r＝3 m）</th><th>電流</th><th>幾何</th><th>粗估 E</th><th>dBµV/m（約）</th></tr>
+<tr><td>差模小環：板上電源迴路</td><td>10 mA</td><td>A＝50 cm²</td><td>≈2.2 mV/m</td><td>≈67</td></tr>
+<tr><td>同樣電流、回流改道：A 縮到</td><td>10 mA</td><td>A＝5 cm²（回流緊貼）</td><td>≈0.22 mV/m</td><td>≈47（−20 dB）</td></tr>
+<tr><td>共模：機殼外電源線</td><td><strong>0.1 mA</strong></td><td>L＝30 cm</td><td>≈0.6 mV/m</td><td>≈56</td></tr>
+<tr><td>共模：同一條線放大電流</td><td>1 mA</td><td>L＝30 cm</td><td>≈6 mV/m</td><td>≈76</td></tr>
+</table>
+<p>讀表（白話）：Row 1 告訴你<strong>差模輻射不需要很大電流就能超標</strong>（100 MHz 的 Class B 限值 43.5 dBµV/m——Row 1 超了 23 dB！）；Row 2 告訴你<strong>把回流拉回訊號正下方（Day 16 的 ±3h 窄帶）就是 20 dB 的免費午餐</strong>；Row 3 是本週最重要的一格：<strong>共模電流只有差模情境的百分之一，喊出來的分貝卻更高</strong>——「小角色大音量」實錘。所有數字為公式代值、口算量級，精確值以模擬/量測為準；但比值背後的物理（A、f²、L、模式效率）是硬的。</p>
+
+<div class="card pitfall">
+  <span class="label">踩雷區</span>
+  <p><strong>「我板的走線都很短，怎麼可能輻射？」</strong>——因為天線可能不在板上：Ch.9 的天線清單裡寫了<strong>「電纜（遮蔽或未遮蔽）與接地不良的設備」</strong>。板上 1 cm 的環在 100 MHz 只是低效小環，同一股共模電流搭上 1.5 m 的 USB-C 線，就是 100 MHz 處 1/2 波長都有餘的高效天線（100 MHz 的 λ/2＝1.5 m！）。所以問 EMI 問題永遠先問：<strong>「這股電流的迴路，有沒有離開機殼？」</strong>離開了，它就是外面那支天線的供電者。另一條初學者帳單：<strong>共模常常只有差模的 1%（−40 dB），卻常常更吵——所以用「它很小」排除共模是錯的，要用「它從哪條路回去」審查它。</strong></p>
+</div>
+
+<h2>4. 共模從哪裡來：四大來源與「抓共模」的兩條手</h2>
+
+<h3>4.1 來源一：地彈跳——把整塊板的「地」抬起來（最常見）</h3>
+<p>回到 Day 38/40 的 V<sub>bounce</sub>＝L·di/dt：晶片內部一大排輸出同時切換，封裝/接地孔的電感上瞬間抬出一個「地」的電壓（幾十～上百 mV 常見，量級）。關鍵轉折：<strong>當地的Reference 本身在抖，板上所有「相對地」的訊號都被連帶抬高</strong>——對板外（機殼、電纜）而言，整塊板帶著所有訊號「一起升降」，這就是共模的定義。用 Day 21 的話說：地彈跳不改變差分訊號（減掉就不見了），卻把整條船舉高（共模上升）。書中 Ch.9 那句「<strong>接地不良的設備（improperly grounded equipment）</strong>」在天線清單裡，說的就是這個家族：接地不是「有接」就好，是<strong>接的阻抗在雜訊頻率下還算不算低</strong>。</p>
+
+<h3>4.2 來源二：屏蔽/接地的斷點——pigtail 與 360° 終止</h3>
+<p>屏蔽線才「接地不良」？最經典：編織屏蔽層沒有 360° 環抱終止，而是擼出一條辮子（pigtail）焊到機殼——辮子幾公分長的電感在 100 MHz 已是幾十 Ω（約值：1 µH/m 量級×3 cm＝30 nH→19 Ω@100 MHz，約），高頻共模電流在屏蔽層斷點處<strong>必須找彆的路</strong>：從屏蔽層表面溢出、沿電纜外壁繼續走——共模就此生成並帶著電纜一起辐射。這就是為什麼軍規/醫療音頻線死守「shield to shell 360°」，也是週 15 鏡頭模組「metal clip 壓住 FPC 接地指」的真正理由之一（先挂帳）。</p>
+
+<h3>4.3 來源三：差模→共模的轉化——失衡就是翻譯官</h3>
+<ul>
+  <li><strong>duty cycle 簽名（Ch.9 原文數據）：</strong>書中對 0～50% duty 的方波做傅立葉分析（圖 9.8–9.11）：<strong>奇次諧波在 duty＝50% 時能量最大</strong>，偏離就衰減；<strong>偶次諧波在 duty＝正好 50% 時最小（理論為零）</strong>。實戰推論：頻譜上看到<strong>明顯的 2 次、4 次諧波</strong>＝有人 duty 不是 50%（或時鐘本就不是對稱方波）——這是最便宜的指紋偵測。而「不對稱」正是 DM→CM 轉化的入口：上升/下降時間不一致、占空比失真，差動對上的兩條線就不再完美反相，殘差溜進共模。</li>
+  <li><strong>時鐘/差動對的 speed（Day 23 老朋友）：</strong>odd/even 速度差讓差動對的兩邊在接收端錯位——錯位後的場不再完美對消，殘出来的部分正是共模（週 4 的帳在週 9 續帳）。同理：差動走線單側跨槽、單側近邊界，都會做同一件壞事。</li>
+</ul>
+
+<h3>4.4 來源四：電源/地兩端之間的電位差——跨箱世界的共模泵</h3>
+<p>兩台設備（NB＋外接螢幕／充電器＋手機）之間，「地與地」不是一點：漏電保護、負載變化、電源自身開關雜訊都會讓兩地之間存在電壓差。設備間的電纜把「兩地」連成回路，地壓差直接驅動<strong>電纜外壁共模電流</strong>。你無法消滅地壓差（那是電力系統的宇宙），能做的是：<strong>別讓你的電纜替它導流</strong>（共模 choke、屏蔽 360°、單點接地策略）——「接地策略」這個課綱名詞，物理上處理的就是這一類。</p>
+
+<h3>4.5 抓共模的兩條手（明天實作日的主角，先學語法）</h3>
+<ul>
+  <li><strong>電流夾（current clamp）：</strong>夾住纜線<strong>外圈</strong>（把所有導線包進去）：差模去回互相抵消（∝I₁−I₂→0），夾子讀到的是<strong>純共模</strong>×夾變比。夾住單條線讀到 I₁＝I<sub>DM</sub>＋I<sub>CM</sub>；兩線差動讀法讀 DM。三夾兩算法，模式分家。</li>
+  <li><strong>近場 H 探棒（磁環 DIY 也行）：</strong>小線圈探「磁場近場」＝探<strong>電流迴路的痕跡</strong>：沿板掃描，峰值處即大環路徑所在（明天用它找 buck 功率環、排線迴圈）。近場探的是源頭定位，遠場（暗室）報的是总分——先近後遠、先分後總。</li>
+</ul>
+<div class="card intuition">
+  <span class="label">經驗法則（標記：約/江湖，非標準條文）</span>
+  <p>低中頻段（約 30–300 MHz，量級）的輻射失敗，<strong>七成案情最後落在共模＋纜線</strong>（「七成」為業界流傳的經驗量級，非統計常數）；300 MHz～1 GHz 以上，散熱片、連接器殼、機殼縫隙、平面腔體（Day 40）開始分食案情。判讀上的三條快篩：①夾住纜線，超標線在夾子頻譜上同時超標→共模/纜線案；②手摸機殼（人體接地）分貝明顯變化→共模案（人變成寄生回流！）——「摸線大法」是江湖手語，正式調查請用夾子；③把某排線拔掉超標消失，別急著定罪——也可能是它供電的晶片停擺了，看頻點指紋再收網。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 920 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：迴路面積幾何學——回流緊貼（上）vs 跨槽改道（下）：同一根線，音量差 20 dB 級</text>
+
+  <!-- TOP: tight loop -->
+  <rect x="40" y="52" width="845" height="150" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="58" y="74" font-size="12" font-weight="bold" fill="#166534">情境 A：訊號線下方有完整參考平面 → 回流走正下方（Day 16：±3h 窄帶）</text>
+  <line x1="80" y1="108" x2="840" y2="108" stroke="#0e7490" stroke-width="3.5"/>
+  <text x="86" y="100" font-size="10.5" fill="#0e7490">訊號 →</text>
+  <!-- plane -->
+  <rect x="80" y="150" width="760" height="10" fill="#64748b"/>
+  <text x="812" y="146" font-size="10.5" fill="#475569">接地平面</text>
+  <!-- image return -->
+  <line x1="640" y1="140" x2="280" y2="140" stroke="#16a34a" stroke-width="3.5" marker-end="url(#arrG)"/>
+  <text x="660" y="144" font-size="10.5" fill="#16a34a">← 回流（緊貼正下方：高頻揀最小電感路徑）</text>
+  <!-- thin loop shading -->
+  <rect x="280" y="108" width="360" height="32" fill="#0e7490" opacity=".08"/>
+  <line x1="280" y1="108" x2="280" y2="140" stroke="#0e7490" stroke-dasharray="3 3" stroke-width="1"/>
+  <line x1="640" y1="108" x2="640" y2="140" stroke="#0e7490" stroke-dasharray="3 3" stroke-width="1"/>
+  <text x="460" y="128" text-anchor="middle" font-size="11" fill="#0f4c5c">A₁＝h×長度（h＝介電厚，零点幾 mm）→ 環極窄</text>
+  <text x="600" y="190" font-size="11" fill="#166534" font-weight="bold">去/回磁場幾乎重疊對消 → 對外幾乎無聲</text>
+
+  <!-- BOTTOM: slot detour -->
+  <rect x="40" y="222" width="845" height="168" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+  <text x="58" y="244" font-size="12" font-weight="bold" fill="#991b1b">情境 B：同一根線、但參考平面被切了一道槽（Day 40 的切口清單！）→ 回流被迫繞橋</text>
+  <line x1="80" y1="282" x2="840" y2="282" stroke="#0e7490" stroke-width="3.5"/>
+  <text x="86" y="274" font-size="10.5" fill="#0e7490">訊號 →（位置一模一樣！）</text>
+  <!-- slotted plane -->
+  <rect x="80" y="326" width="330" height="10" fill="#64748b"/>
+  <rect x="530" y="326" width="310" height="10" fill="#64748b"/>
+  <text x="436" y="336" font-size="11" fill="#dc2626" font-weight="bold">槽</text>
+  <!-- detour return -->
+  <path d="M640,320 L560,320 Q520,320 520,300 L520,300 Q520,288 500,288 L300,288" stroke="none" fill="none"/>
+  <path d="M640,318 L556,318 Q516,318 516,306 L516,302 Q516,296 500,300 L500,300" stroke="none" fill="none"/>
+  <path d="M640,318 L560,318 Q524,318 524,306 Q524,298 508,298 L492,298 Q470,298 470,282 L470,280" stroke="#dc2626" stroke-width="3" fill="none"/>
+  <path d="M470,282 L470,286 M470,282 L478,290" stroke="#dc2626" stroke-width="3" fill="none"/>
+  <text x="620" y="310" font-size="10.5" fill="#dc2626">回流：槽前急煞 → 繞過槽邊（高頻走「面積最小可行」路）</text>
+  <!-- big loop -->
+  <path d="M280,282 L280,320 L500,320 L500,282" fill="#dc2626" opacity=".10" stroke="none"/>
+  <path d="M280,282 L280,316 M500,282 L500,316" stroke="#dc2626" stroke-dasharray="3 3" stroke-width="1"/>
+  <text x="390" y="308" text-anchor="middle" font-size="11" fill="#b91c1c" font-weight="bold">A₂＝繞橋圍出來的大環（mm～cm² 暴增十倍起）</text>
+  <text x="600" y="360" font-size="11.5" fill="#991b1b" font-weight="bold">E ∝ A·f²：A 放大 10–100× → 輻射 +20～+40 dB → 一根線「突然會喊」</text>
+  <text x="60" y="382" font-size="10.5" fill="#991b1b">連環殺：切口不只殺回流（SI 振鈴）還開天線（EMI）——Day 16＋Day 40 的帳今天合併結。</text>
+</svg>
+<figcaption>圖 2：同根訊號線、兩種地基：A 情境回流緊貼正下方，環路面積＝線長×介電厚度（極小）；B 情境參考平面被切槽，回流必須繞道、圍出幾十倍大的環——E∝A·f² 直接把音量放大 20～40 dB。EMI review 圈圖時，圈的就是這種「回流的繞道」。</figcaption>
+</figure>
+
+<h2>5. 對症下藥的語彙：X-cap、Y-cap、共模電感（與磁珠的執照邊界）</h2>
+
+<h3>5.1 一張圖看懂 AC 進線濾波器</h3>
+<p>所有 AC 電源入口（NB 適配器、桌機、儀器）都住著同一套三件套：<strong>共模電感（common-mode choke）＋ X-cap ＋ 兩顆 Y-cap</strong>。分工由「它接在哪兩點之間」決定——這是最後的語法定律：<strong>濾波器的「身份」由它兩端的節點決定，不是由它自己是電容/電感決定</strong>：</p>
+<ul>
+  <li><strong>X-cap：接在 L↔N（兩條電源線之<strong>間</strong>）</strong>——它「看」到的只能是差模（兩線之間的電位差）。對 50/60 Hz 它是大阻抗（例：100 nF@50 Hz→X<sub>C</sub>＝1/(2π·50·100 n)≈<strong>32 kΩ</strong>，不吃掉任何功率），對高頻差模是捷徑（同一顆 @1 MHz→<strong>約 1.6 Ω</strong>）。X-cap 故障模式必須不起火、不短路爆炸（跨在火線零線之間！）所以要安規認證（Class X2 等）＋並洩放電阻。白話：<strong>X＝跨在兩線上的「差別濾波器」，對 60 Hz 裝瞎、對高頻裝短路。</strong></li>
+  <li><strong>Y-cap：接在 L→PE 與 N→PE（各一條線對<strong>地</strong>）</strong>——它「看」到的只能是共模（兩線相對地一起晃）。白話：<strong>Y＝每條線對大地的滴水孔。</strong></li>
+  <li><strong>共模電感：兩組繞線同繞一顆磁芯</strong>——差模電流一去一回，兩組線圈在磁芯裡的磁通<strong>大小相等、互相抵消</strong>（鐵芯「看不到」差模，幾乎零阻抗路過）；共模電流兩線同向，磁通相加——高阻抗擋住。這是「由節點決定身份」定律的最佳範例：同一顆鐵芯，對差模透明、對共模鐵閘。白話：<strong>它是個認「隊形」不認「人」的安檢門：各走各方向→放行；結隊同方向→攔下。</strong></li>
+</ul>
+
+<h3>5.2 為什麼 Y-cap 永遠只有 nF 級？——被「摸到的機殼」限制的设计</h3>
+<p>Y-cap 那條「滴水路」平時也漏 50/60 Hz 的市電到機殼。<strong>洩漏電流＝2πf·C·V</strong>：以 230 V/50 Hz、單線 2.2 nF 計：I≈2π×50×2.2 nF×230 V≈<strong>0.16 mA</strong>（兩條線≈0.32 mA）——在多數設備的接觸電流限值內（約值：限值依標準/設備類別從零点幾 mA 到 3.5 mA 不等，以現行安規為準）。若「好心」把它換成 100 nF：0.16 mA×45.5≈<strong>7.2 mA/線</strong>——人摸機殼會麻麻的，多台設備共用迴路時累計还可能讓漏電斷路器（RCD/GFCI，跳脫閾值常用 30 mA 量級）無故跳電；更糟的是若接地斷線，機殼可能帶上危險位。<strong>所以 Y-cap 的容值上限不是電氣性能決定的，是「人摸到的電流」決定的</strong>——這是教科書級的設計哲學：<strong>共模濾波不能靠 Y-cap 獨撐，必須共模 choke 為主、Y 為輔。</strong></p>
+
+<h3>5.3 移植到直流世界（你的本行）：X/Y 語彙的 DC 版</h3>
+<ul>
+  <li><strong>「X-cap 角色」＝電源軌對回流（GND）的去耦/濾波電容</strong>——它濾的是「軌與回流之間」的差模紋波（週 7–8 全部的牆都是這個角色）。</li>
+  <li><strong>「Y-cap 角色」＝電源/信號節點對<strong>機殼/屏蔽</strong>的小電容</strong>——DC 系統裡它同样受「洩漏/地環路」邏輯制約（對機殼的電容會提供高頻共模回流、也可能引入地環路），值常落在 nF 級以下（約）。</li>
+  <li><strong>磁珠的執照邊界（今天最重要的對策課）：</strong>磁珠是「串在一條導體上的頻率相關電阻」。它分不清流過的是差模還是共模——共模電流「流過每條導體同方向各一份」，每顆磁珠只是各自加了一點阻抗，沒有「磁通相加放大攔阻」的效果；想殺共模要用<strong>共模 choke（信號線/電源線兩條一起繞同一芯）</strong>。反過來說：<strong>你在 DC 軌上那顆 600 Ω@100 MHz 的磁珠（Day 41）從頭到尾都在打差模</strong>——共模超標報告上它一分錢力氣都出不上。很多「加了磁珠 EMI 沒動」的案情，破案鍵就在這裡。</li>
+</ul>
+
+<h3>5.4 電路圖上的紀律：<code>_filt</code> 節點命名＝濾波器的戶籍（「量測點是法律」續篇）</h3>
+<p>既然濾波器的身份由「節點對節點」決定，你的原理圖就必須把每個濾波邊界<strong>命名</strong>：<code>AVDD_1V8 →（FB/共模 choke/電阻）→ AVDD_1V8_filt</code>、<code>MIPI_RX_D_P →（共模 choke）→ MIPI_RX_D_P_filt</code>。好處有三：① 雜訊對策有節點可指——「AVDD_filt 節點 150 MHz 處量到 8 mV」是一句可執行的話，「電源有點吵」不是；② 佈局 review 能圈「濾波前區/後區」——filt 之前的走線與Via 不得進入敏感區、後端回路面不得被切（Day 40）；③ 除錯時「跨過濾波器量兩側」直接給出該級濾波器的<strong>實際插入損耗</strong>（Ch.5 治具精神的原理圖版，Day 41 已立）。<strong>沒有名字的濾波器＝沒有戶口的人：出了事沒人負責，量了沒基準。</strong></p>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：AC 進線濾波器三件套（上）與 DC 世界的翻譯（下）——「身份由節點決定」定律</text>
+
+  <!-- ===== AC side ===== -->
+  <rect x="35" y="44" width="850" height="210" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="55" y="66" font-size="12" font-weight="bold" fill="#334155">AC 側：L、N 進屋，PE 是機殼/大地</text>
+  <!-- L line -->
+  <line x1="60" y1="100" x2="830" y2="100" stroke="#334155" stroke-width="2.4"/>
+  <!-- N line -->
+  <line x1="60" y1="150" x2="830" y2="150" stroke="#334155" stroke-width="2.4"/>
+  <text x="66" y="92" font-size="11" fill="#b91c1c">L（火）</text>
+  <text x="66" y="166" font-size="11" fill="#1d4ed8">N（零）</text>
+
+  <!-- CM choke core -->
+  <ellipse cx="215" cy="125" rx="34" ry="44" fill="none" stroke="#7c3aed" stroke-width="4"/>
+  <text x="215" y="196" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="bold">共模 choke：雙繞同芯</text>
+  <text x="215" y="212" text-anchor="middle" font-size="10" fill="#7c3aed">差模磁通相消→透明；共模相加→鐵閘</text>
+  <!-- windings -->
+  <path d="M188,100 q7,-12 14,0 q7,-12 14,0 q7,-12 14,0" stroke="#7c3aed" stroke-width="2.6" fill="none"/>
+  <path d="M188,150 q7,12 14,0 q7,12 14,0 q7,12 14,0" stroke="#7c3aed" stroke-width="2.6" fill="none"/>
+
+  <!-- X cap between L N -->
+  <line x1="360" y1="100" x2="360" y2="116" stroke="#0e7490" stroke-width="2"/>
+  <line x1="346" y1="116" x2="374" y2="116" stroke="#0e7490" stroke-width="3"/>
+  <line x1="346" y1="126" x2="374" y2="126" stroke="#0e7490" stroke-width="3"/>
+  <line x1="360" y1="126" x2="360" y2="150" stroke="#0e7490" stroke-width="2"/>
+  <text x="392" y="126" font-size="11" fill="#0e7490" font-weight="bold">X-cap：跨 L–N</text>
+  <text x="392" y="140" font-size="10" fill="#0e7490">濾差模；60 Hz 高阻抗、HF 短路；安規級（X2 類）</text>
+
+  <!-- Y caps to PE -->
+  <line x1="560" y1="100" x2="560" y2="116" stroke="#ea580c" stroke-width="2"/>
+  <line x1="546" y1="116" x2="574" y2="116" stroke="#ea580c" stroke-width="3"/>
+  <line x1="546" y1="126" x2="574" y2="126" stroke="#ea580c" stroke-width="3"/>
+  <line x1="560" y1="126" x2="560" y2="176" stroke="#ea580c" stroke-width="2"/>
+  <line x1="640" y1="150" x2="640" y2="116" stroke="#ea580c" stroke-width="2"/>
+  <line x1="626" y1="116" x2="654" y2="116" stroke="#ea580c" stroke-width="3"/>
+  <line x1="626" y1="126" x2="654" y2="126" stroke="#ea580c" stroke-width="3"/>
+  <line x1="640" y1="126" x2="640" y2="176" stroke="#ea580c" stroke-width="2"/>
+  <line x1="520" y1="176" x2="690" y2="176" stroke="#78716c" stroke-width="3.5"/>
+  <text x="606" y="196" text-anchor="middle" font-size="11" fill="#78716c" font-weight="bold">PE（機殼/大地）</text>
+  <text x="606" y="88" text-anchor="middle" font-size="11" fill="#ea580c" font-weight="bold">Y-cap ×2：各自對 PE——濾共模</text>
+  <text x="606" y="234" text-anchor="middle" font-size="10" fill="#ea580c">容值被「摸機殼的洩漏電流（2πfCV）」卡死：nF 級起跳、上限看安規</text>
+
+  <!-- load -->
+  <rect x="770" y="86" width="52" height="80" rx="6" fill="#475569"/>
+  <text x="796" y="130" text-anchor="middle" font-size="10" fill="white">設備</text>
+
+  <text x="55" y="244" font-size="10.5" fill="#334155">讀圖：從「接點對」認身份——L↔N＝只能管差模；→PE＝只能管共模；雙繞同芯＝認隊形不認人。</text>
+
+  <!-- ===== DC side ===== -->
+  <rect x="35" y="268" width="850" height="166" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="55" y="290" font-size="12" font-weight="bold" fill="#9a3412">DC 世界翻譯（你的 NB/模組板）：語法不變</text>
+
+  <!-- rail -->
+  <line x1="70" y1="330" x2="840" y2="330" stroke="#9a3412" stroke-width="2.4"/>
+  <line x1="70" y1="380" x2="840" y2="380" stroke="#64748b" stroke-width="2.4"/>
+  <text x="76" y="322" font-size="11" fill="#9a3412">AVDD（→ AVDD_filt）</text>
+  <text x="76" y="396" font-size="11" fill="#475569">回流/GND</text>
+
+  <!-- bead -->
+  <rect x="210" y="322" width="46" height="16" rx="7" fill="#9a3412"/>
+  <text x="233" y="312" text-anchor="middle" font-size="10.5" fill="#9a3412">磁珠/電阻</text>
+  <text x="233" y="414" text-anchor="middle" font-size="10" fill="#9a3412">＝「串在導體上」：對差模有效；對共模只有各自一點阻抗（不是共模 choke！）</text>
+
+  <!-- X role cap -->
+  <line x1="430" y1="330" x2="430" y2="346" stroke="#0e7490" stroke-width="2"/>
+  <line x1="416" y1="346" x2="444" y2="346" stroke="#0e7490" stroke-width="3"/>
+  <line x1="416" y1="356" x2="444" y2="356" stroke="#0e7490" stroke-width="3"/>
+  <line x1="430" y1="356" x2="430" y2="380" stroke="#0e7490" stroke-width="2"/>
+  <text x="470" y="356" font-size="10.5" fill="#0e7490">「X 角色」＝軌↔回流的牆（週 7–8 全部去耦都是這角色）</text>
+
+  <!-- Y role cap -->
+  <line x1="660" y1="330" x2="660" y2="346" stroke="#ea580c" stroke-width="2"/>
+  <line x1="646" y1="346" x2="674" y2="346" stroke="#ea580c" stroke-width="3"/>
+  <line x1="646" y1="356" x2="674" y2="356" stroke="#ea580c" stroke-width="3"/>
+  <line x1="660" y1="356" x2="660" y2="368" stroke="#ea580c" stroke-width="2"/>
+  <rect x="620" y="368" width="80" height="8" rx="3" fill="#78716c"/>
+  <text x="660" y="392" text-anchor="middle" font-size="10" fill="#78716c">機殼/屏蔽罩</text>
+  <text x="700" y="330" font-size="10.5" fill="#ea580c">「Y 角色」＝對殼小 C：共模洩放；受制約於地環路/洩漏邏輯</text>
+</svg>
+<figcaption>圖 3：上：AC 進線濾波器三件套（共模 choke＋X＋Y×2）——元件的「濾波身份」由它跨接的節點對決定。下：同樣語法翻譯到 DC 板——去耦牆是「X 角色」、對殼小容是「Y 角色」、磁珠只是「串導體」殺不了共模、想殺共模請上共模 choke。<code>_filt</code> 命名就是在給每個濾波邊界上戶口。</figcaption>
+</figure>
+
+<h2>6. Ch.9 的減對策四階梯（書中順序，忠於原文）</h2>
+<p>Ch.9 結論頁（Guidelines 原文列點）給了一個<strong>有順序</strong>的清單——順序本身就是經濟學（由便宜到貴、由源頭到末端）：</p>
+<ol>
+  <li><strong>「先把所有時鐘訊號正確端接」（Properly terminate all clock signals）。</strong>書中數據（原文）：端接不良造成的 over/undershoot，單一節點可貢獻 <strong>3～4 dB</strong> 的 EMI；若板上有 <strong>10～20 個節點</strong>嚴重 over/undershoot，「通過 FCC 合規測試就有了危險」。白話：<em>振鈴是每個節點各自貢獻的分貝債，而且是同一個時鐘驅動——會疊加！</em>（dB 疊加算術：10 個不相干源各 +3 dB→總和 +10 dB；同一時鐘的相關源更糟，最壞逼近 +20 dB——練習 5 給你手算。）對策零成本或低成本：串聯電阻調值（Day 2 端接策略，書中圖 9.2→9.3 前後對照）。</li>
+  <li><strong>「能用慢速緩衝器就用慢的」（Use slow rise time buffers when possible）。</strong>Ch.9 圖 9.1 的實錘：同頻率、同振幅、同 duty、同相位，只有邊框不同的兩支訊號——<strong>邊框快的辐射能量「可測地」更高</strong>。書中補充：很多時鐘緩衝器有 high-speed/low-speed 輸出選項，pin-for-pin 或可編程 slew rate，<strong>若系統timing 吃得下，這是「通常零額外成本」的最佳解</strong>。呼應 Ch.1：邊框是頻譜的入場券——把 t_r 放慢一個十倍，頻譜膝點（≈0.35/t_r）之後的能量整段下移。</li>
+  <li><strong>「在選定訊號上考慮濾波電容」（Consider filter capacitors on selected signals）。</strong>書中規格（原文）：容值常落在 <strong>5～15 pF</strong>；加在<strong>近源端</strong>；若走線已有串聯終端電阻，cap 放電阻<strong>兩側皆可降 EMI</strong>，但<strong>最佳 SI 的擺位是「驅動器與電阻之間」</strong>（圖 9.5）。副作用原文也講了：邊框會被磨圓、傷時鐘 SI——所以「selected signals」四個字是精髓：只對「timing 餘量吃得起、又實在輻射」的訊號下手，並逐條重新看 timing 帳（Ch.3 的 budget 精神）。</li>
+  <li><strong>「高速的場合考慮 spread spectrum 時鐘」。</strong>這是 Ch.9 的壓軸大篇幅（書：1995 年起進入電腦系統設計、今日多數 PC 依賴它）——<strong>把譜線「攤平」成頻寬：65 MHz 時鐘加 3.87% center-spread，基頻減 6.48 dB、3 次諧波減 9.57 dB、9 次減 14.15 dB</strong>（書中量測）；down-spread/center-spread 的選擇、調變率 20–150 kHz 的窗口（&lt;20 kHz 會聽見的嗡聲、&gt;200 kHz 會被下游 PLL 環路頻寬「破防」）——這些明天之後、本週後段（spread spectrum 專課）整章拆開，今天先立鈎子：<strong>它是「能量搬運工」不是「能量 destroyer」，且搬家要下游全家同意（Spread-Aware PLL）。</strong></li>
+</ol>
+<p>四階梯之外，書裡還有一層「第零階梯」：<strong>屏蔽（shielding）</strong>——Ch.9 定位它是機械手段（metallic packaging），能用但有成本、且「產品發布前才發現 EMI 問題時不方便改」（原文大意）。白話：遮罩是保險套不是治療：先治（端接/邊框/濾波），實在不行才包——帶著一堆未治之症去貼遮罩，成本與風險都會在量產時找你。</p>
+
+<div class="card pitfall">
+  <span class="label">踩雷區</span>
+  <p><strong>本課三大新手誤區：</strong>①「加了磁珠 EMI 就治了」——磁珠只處理流經導體的差模帳（§5.3），共模案犯請通緝共模 choke＋Y 路徑＋接地策略；②「共模電流小，先查差模」——先查<strong>超標頻點搭的是哪條天線</strong>：頻點指紋＋夾子一分鐘就能分家，直覺排序會浪費暗室時間（暗室按小時計費，這是真金白銀的誤區）；③「duty 差一點點而已」——Ch.9 傅立葉圖表（9.8–9.11）教你把它變成法醫知識：<strong>偶次諧波異常＝不對稱指紋</strong>，duty、上升下降不對稱、差動失衡都是同一類「失去對消」的病。</p>
+</div>
+
+<h2>7. 實務案例連結</h2>
+
+<h3>7.1 NB 主機板（你的本行）</h3>
+<ul>
+  <li><strong>充電器嗡聲／音頻_pop_：共模路徑考古：</strong>USB-C PD 充電器的開關雜訊（百 kHz 級＋諧波，Ch.5/今天 §1 的諧波梳）沿<strong>電源線共模</strong>進機身，經音頻 codec 的接地路徑整流成可聽噪——處理順序正是本課文法：夾電源線確認共模→共模 choke/磁環/Y 路徑→音頻地回流獨立（Day 16 原則）。單純加大板上差模去耦通常「完全沒用」——因為案犯根本不差模。</li>
+  <li><strong>連接器陣列＝天線插座：</strong>Ch.9 天線清單點名連接器。NB 側的 USB/HDMI/DP 高速口：差分對接地指（gnd pins）數量與間距（Day 16 的「地針決定連接器成敗」）本質是在控制「差模環路面積＋共模外洩路徑」；殼體接地（gasket）斷點、螺絲漏鎖，就是「improperly grounded equipment」的微縮版——組裝製程單裡那些螺絲扭力，是 EMC 工。</li>
+  <li><strong>散熱片與機殼縫隙（&gt;300 MHz 案情）：</strong>散熱片浮在晶片上靠夾具單點接觸，高頻下它是一段「接地不良的金屬體」（天線清單：遮蔽不足的元件）。縫隙天線法則（約）：輻射顯著需縫隙長度≈λ/10 以上——1 GHz 的 λ/10≈3 cm（口算：v≈c，λ＝30 cm）：機殼大縫防低頻、小縫防高頻，查表精神同 Day 40 駐波。</li>
+  <li><strong>f<sub>sw</sub> 諧波梳的「整除測試」：</strong>Day 41 的 suspects 表今天升級成法醫工具：報告超標頻點（如 384 MHz）逐一除以板上頻率（24/25/38.4 MHz、buck f<sub>sw</sub>）——384÷24＝16 整除即嫌疑人。嫌疑人確認後，四階梯（端接→慢速→小 cap→SSC）由便宜開始試，並用近場探棒確認源頭走線。</li>
+</ul>
+
+<h3>7.2 鏡頭模組（camera 語言）</h3>
+<ul>
+  <li><strong>模組 FPC 就是「伸出機殼的電纜」：</strong>鏡頭模組到主板那段 FPC（MIPI 4 lane＋I²C＋AVDD/DVDD＋紅外線等）是整台 camera 系統最經典的天線候選——它從屏蔽環境（若機殼內無遮蔽更糟）伸出、長度數十 cm。設計紀律：每組差動對配地（回流緊貼＝A 最小）、FPC 兩面地銅完整、跨軸區不切槽；若暗室超標頻點指紋指向 MIPI 時鐘諧波，加料順序：FPC 貼地銅/接地指改善→MIPI 共模 choke（確有此規格件，量級：0201/0402、Z 數十～數百 Ω@GHz 級——約值，選料看供應商曲線）→源頭 slow slew。注意：先確認「是共模还是差模」再選料——共模 choke 對差模超標幫不上忙（對稱邏輯）。</li>
+  <li><strong>AF/OIS VCM 驅動：PWM 大環＋音圈＝自帶天線：</strong>VCM 線圈本身就是磁場發射器，驅動 PWM（幾百 kHz～MHz 級、含電流階躍）的功率環如果繞一大圈再過去（模組板→FPC→主板），差模大環＋PWM 諧波共模一起送。對策：驅動 IC 貼 coil、環路面積壓到最小（今天全部的 A 理論在此）、PWM 走線短且回流不跨槽、必要時共模 choke 上馬。週 15 把這案例展開成整課（actuator 雜訊耦合），今天的文法先存摺。</li>
+  <li><strong>duty 指紋在 camera 的日常：</strong>flash torch PWM、shutter、lens driver 使能……週邊低速訊號 duty 不準，頻譜上偶次諧波抬頭（Ch.9 圖表知識直接可用）——排查「這條 2× 譜線哪來的」時，先查 duty/上升下降不對稱，省下暗室費。</li>
+  <li><strong>模組端「Y 角色」的真實存在：</strong>模組 metal 件（濾光片座、馬達外殼）透過 clip/導電布接到主機板地——那是模組共模的洩放路徑與屏蔽層續接；clip 位置/數量/按壓力（接觸阻抗）高頻失守＝共模無路可走就只能外噴。做 module bring-up 的你，從今天起對「clip 少鎖一片」這類製程單有法醫級的理解。</li>
+</ul>
+
+<h2>8. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：差模小環的音量旋鈕</strong>——板上某電源迴路：去回並行，長 6 cm、間隔 8 mm（A＝48 cm²≈50 cm²），流過 5 mA@120 MHz 的差模電流。(a) 用 E≈1.32×10⁻¹⁴·I·A·f²/r 估算 3 m 處場強（dBµV/m 約多少？），對比 Class B 88–216 MHz 限值（43.5 dBµV/m，書中表 9.1）。(b) 把間隔壓到 0.8 mm（回流重佈緊貼）：新值？省了幾 dB？(c) 若頻率從 120→240 MHz（其他不變），多幾 dB？這題的「性價比結論」是什麼？</summary>
+<div class="answer">
+<p>(a) E≈1.32×10⁻¹⁴×5×10⁻³×50×10⁻⁴×(1.2×10⁸)²/3。分步：1.32e-14×5e-3＝6.6e-17；×5e-3＝3.3e-19；×1.44e16＝4.75e-3；/3≈<strong>1.58 mV/m</strong>。轉 dBµV/m：20·log(1580 µV/m)≈20×3.2＝<strong>約 64 dBµV/m</strong>——超限值 43.5 約 <strong>20 dB</strong>！注意條件多溫和：只有 5 mA（很小）、普通板尺寸。</p>
+<p>(b) A 變 1/10→E 變 1/10：<strong>約 54 dBµV/m，省整整 20 dB</strong>——只改了走線幾何，零元件、零成本。</p>
+<p>(c) f 翻倍→f²＝×4＝<strong>+6 dB</strong>（升到約 70 dBµV/m）。</p>
+<p>結論（背起來）：<strong>迴路面積是性價比最高的旋鈕（縮 10 倍＝−20 dB），而且免費；電流旋鈕（串阻/慢速）要花 SI 的錢；頻率旋鈕（濾波）要花 BOM 的錢。</strong>所以 layout 永遠先折疊迴路——Ch.9 的四階梯是「源頭優先」經濟學，layout 更是第 0 階梯。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：三夾兩算法——誰在喊？</strong>某設備纜線（L＝40 cm）在 150 MHz 超標。你用電流夾三種夾法量得：①夾住纜線全部導線：讀值換算為 30 mA；②夾住單根導體：讀值 1.05 A；③訊號與回流的差動讀法：讀值 1.0 A。(a) 求 I<sub>CM</sub> 與 I<sub>DM</sub>。(b) 假設 DM 迴路緊貼（A＝3 cm²）、CM 走整條 40 cm 纜線：分別用兩式估 3 m 處輻射，誰是主嫌？差幾 dB？(c) 對「主嫌」給出兩種不同層級的對策。</summary>
+<div class="answer">
+<p>(a) 夾全部導線＝|ΣI|＝2·I<sub>CM</sub>→I<sub>CM</sub>＝15 mA（約值，夾法①口徑）；差動讀法＝2·I<sub>DM</sub>→I<sub>DM</sub>＝0.5 A（夾法②單導體≈I<sub>DM</sub>＋I<sub>CM</sub>≈0.5 A＋0.015 A，量級上就是 0.5 A）。共模只有差模的 3%（≈−30 dB）——「小角色」。</p>
+<p>(b) DM（小環，f＝1.5×10⁸、A＝3×10⁻⁴ m²）：1.32e-14×0.5＝6.6e-15；×3e-4＝1.98e-18；×2.25e16＝4.46e-2；/3≈1.49×10⁻² V/m＝<strong>14.9 mV/m</strong>；轉 dBµV/m：20·log(1.49×10⁴ µV/m)≈<strong>83 dBµV/m</strong>。CM（短偶極，L＝0.4 m、λ＝2 m、r＝3 m）：E≈188×0.015×0.4/(2×3)≈<strong>0.188 V/m≈105 dBµV/m</strong>。<strong>共模比緊貼的差模環還高約 22 dB</strong>——3% 的電流、碾壓的音量（「小角色大音量」第三次實錘；所有數字為量級粗估，口徑假設：夾讀值即該頻點總量）。</p>
+<p>(c) 對共模的對策（分層）：<strong>源頭層</strong>——找「同向電流泵」：地壓差/地彈跳/屏蔽斷點（§4.1/4.2 逐條巡）；<strong>攔截層</strong>——纜線加共模 choke（或暫時夾磁環做快速驗證：分貝掉＝定罪共模路徑）、屏蔽 360° 續接、Y 角色洩放路徑檢查。<strong>不要做的事</strong>：繼續加板上差模去耦（案犯不差模）、給訊號線串磁珠就交差（§5.3 執照問題）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：duty 指紋法醫（Ch.9 圖 9.8–9.11 的實戰版）</strong>——某 24 MHz 時鐘網絡，暗室超標報告裡有一根 <strong>48 MHz（2 次諧波）</strong>特別扎眼。(a) 依書中傅立葉結論，50% duty 方波的偶次諧波理論上如何？(b) 列出三種會讓 2 次諧波「不該有卻有」的原因。(c) 你手邊只有示波器（無頻譜儀），設計一個 5 分鐘的查案程序。(d) 同一報告另一根 168 MHz（7×24）很高但 96 MHz（4×）很低——對「凶手是不是這支 24 MHz」說明你的推理。</summary>
+<div class="answer">
+<p>(a) 書中結論（原文大意＋圖 9.9/9.11）：<strong>偶次諧波在 duty＝50% 時能量最小（理想為零）</strong>；奇次在 50% 最大。</p>
+<p>(b) 2 次諧波抬頭的常見原因：① duty 偏離 50%（驅動器/緩衝器選型或負載不對稱）；② 上升≕下降時間不對稱（同一訊號的兩個邊框「不等長」→頻域看就是對稱性破壞）；③ 差動對單側受損（單側串擾/單側跨槽→反相性失真→DM 殘差變 CM 兼產生偶次）。另：這訊號根本不是 50% duty（有些時鐘本來 25/75%——先查設計意圖再喊冤！）。</p>
+<p>(c) 5 分鐘程序：示波器看該節點波形→量 duty 與上升/下降時間比→若 duty 非 50%：頻域直覺（FFT 若可用）直接看 2f 高度；無 FFT 則做「排除法」：換上 book 建議的 low-speed/對稱緩衝器或調串聯電阻，去暗室前用近場探棒＋頻譜功能（或夾子＋接收模式）比較 2f 是否縮。重點纪律：<strong>先確認設計 duty，再定罪「不對稱」</strong>。</p>
+<p>(d) 指紋自洽性：168 MHz＝7×24（奇次，50% duty 下本該存在、能量由基頻強度决定）；96 MHz＝4×24（偶次，本該小）。兩根「一高一低」符合一支 50% duty 方波的正常梳狀結構——支持「凶手是這支 24 MHz 的奇次梳」；而若凶手另有其人（如 32 MHz×3＝96 MHz），96 MHz 反而不會低。指紋分析只能支持/排除嫌疑，定罪要「消滅實验」（停發/降速該節點，看譜線跟不跟著消失）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：Y-cap 的洩漏帳（安全×濾波trade-off）</strong>——一台 230 V/50 Hz 設備的電源入口：(a) 每線 2.2 nF 的 Y-cap，單線洩漏與兩線合計各多少？(b) 工程師「為濾共模」把它換成 100 nF：新洩漏是多少？對照两台設備共用迴路＋30 mA 級 RCD（約值）的情境說後果。(c) 某 X-cap＝100 nF：對 50 Hz 與 30 MHz 的容抗各多少？說明它為何「對市電裝瞎、對高頻裝短路」。(d) 要更強的共模濾波又不想動 Y 值，正確方向是什麼？</summary>
+<div class="answer">
+<p>(a) I＝2πfCV＝2π×50×2.2e-9×230≈<strong>0.16 mA/線</strong>；兩線≈<strong>0.32 mA</strong>（同相匯流約值）。</p>
+<p>(b) ×45.5 倍容值→<strong>約 7.2 mA/線、14.4 mA/台</strong>：摸殼麻麻的（一般設備接觸電流限值多為零点幾 mA～3.5 mA 級，以現行標準為準——已爆）；兩台併同一迴路≈29 mA，貼著 30 mA 跳脫線（RCD 實際還有相位/瞬態因素，約值估算而已）——跳不跳看運氣，這就是「無故跳電」工单的來源。而且若 PE 斷線，機殼可能帶危險位——Y 值上限是<strong>安規問題不是性能問題</strong>。</p>
+<p>(c) X<sub>C</sub>＝1/(2πfC)：@50 Hz＝1/(2π×50×1e-7)≈<strong>32 kΩ</strong>（相對電源內阻極大，幾乎不分流、不耗功）；@30 MHz＝1/(2π×3×10⁷×1e-7)≈<strong>0.053 Ω</strong>（近短路）。白話：它是一扇「只對快訊號開的門」。</p>
+<p>(d) 正確方向：<strong>加大共模 choke 阻抗</strong>（高 μ 磁芯、多繞匝）為主、Y 為輔（在安規額度內分配）；並回頭審源頭（§4 四大來源：泵不泵起來比攔不攔得住更治本）。記著 §5.2 一句：<strong>共模濾波不能靠 Y-cap 獨撐。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：振鈴的分貝債（Ch.9：3–4 dB/節點 × 10–20 節點）</strong>——一棵時鐘樹：同一顆緩衝器驅動 12 個節點，每節過衝偏大，書中估計每節點貢獻約 3 dB。(a) 若各節點輻射<strong>完全不相干</strong>（隨機相位），12 節點總和比單節點多幾 dB？(b) 但它們由同一時鐘、同一邊框時刻驅動——近乎相干（同相疊加）時多幾 dB？(c) 書中「10–20 節點危及合規」的白話含義是什麼？(d) 你只有 2 個暗室小時，怎麼用最便宜的方式先驗證「端接債」的存在？</summary>
+<div class="answer">
+<p>(a) 不相干：功率相加→10·log(12)≈<strong>+10.8 dB</strong>。每節點「才 3 dB」，十二個加起來 10 dB 級——分貝債的複利。</p>
+<p>(b) 完全相干（同頻同相）：電場相加→20·log(12)≈<strong>+21.6 dB</strong>。真實時鐘樹的諧波（同一時鐘衍生）介於兩者之間、偏相干——同一根諧波譜線由全樹同相位貢獻時，最壞情況接近 +20 dB。<strong>「每點小改」的價值因此被嚴重低估：3 dB/點 × 12 點不是 3 dB，是 10–20 dB。</strong></p>
+<p>(c) 白話：端接不良不是「個別節點的 SI 小事」，是<strong>全板性的 EMI 負債</strong>——所以 Ch.9 把它排在對策四階梯的第一級（最便宜、最該先還）；也解釋了為何書中說 10–20 個嚴重過衝節點「通過 FCC 測試就有危險」。</p>
+<p>(d) 便宜驗證：示波器全板掃時鐘節點過衝（>10% V 過衝入帳）→挑「貢献最大節點群」的緩衝器換 low-speed/調串聯 R（書中順序①②，零 BOM）→ 用近場 H 探棒在同一位置比對該諧波頻點強度（或夾子夾相關走線）→分貝下降再進暗室。暗室前先在實验室把「方向」做對，暗室只做「結算」。</p>
+</div>
+</details>
+
+<h2>9. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "Explain differential-mode versus common-mode emissions. Which one usually dominates radiated emissions from a cabled device in the 30–300 MHz range, and how do you diagnose which mode you have?"</strong><br><br>
+  <strong>Reference answer:</strong> Current decomposition first: on any pair of conductors I_CM=(I₁+I₂)/2 and I_DM=(I₁−I₂)/2. Differential-mode is the intended signal—equal-and-opposite currents whose fields cancel at distance; whatever survives is priced by the loop area they enclose: for a small loop, far-field E ∝ I·A·f²/r, so doubling the loop area doubles emissions and doubling frequency adds 6 dB. Common-mode is the same-direction current on both conductors; there is no cancellation partner, and it returns through parasitics—chassis, cable shielding, the room itself—turning the whole cable into a short monopole with E ∝ I·L·f. That per-ampere efficiency is the trap: a common-mode current 30–40 dB smaller than the differential signal can still be the loudest thing in the chamber; cables are also by far the most efficient antennas a product owns—a 1.5 m power cord is a half-wave antenna at only 100 MHz. In the 30–300 MHz range, with cabling present, common mode on the cables is usually the dominant culprit in my experience. Diagnosis is mechanical, not philosophical: a current clamp around all conductors reads common mode directly (differential cancels inside it); around one conductor reads DM+CM; a twisted-pair differential read gives DM. Two comparisons close the case: if the failing spectral line appears on the clamp around the cable, it is a common-mode/cable case; if the level shifts when an operator grounds themselves near the unit (the "hand trick"—use it as a qualitative flag, not evidence), the return path through parasitics confirms common mode. For board-only loops, a near-field H-probe maps current loops and points at the offending geometry—usually return detours across a split plane, since loop area is the antenna's wingspan. Then the countermeasure follows the mode: common mode calls for common-mode chokes, 360° shield termination and grounding strategy—ferrite beads on single conductors will not touch it—while differential mode calls for loop-area collapse and source-side fixes: proper termination first (a classic clock-design measurement gives roughly 3–4 dB per badly terminated node, and a dozen such nodes compound toward failing the FCC test), slower edges where timing permits, then small filter capacitors. The interview-level summary: identify the antenna, identify the mode, fix the source before shielding it.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "What are X and Y capacitors in an AC input filter? Why are Y capacitors limited to small values while X capacitors can be large? And does a ferrite bead on a DC rail protect against common-mode noise?"</strong><br><br>
+  <strong>Reference answer:</strong> A component's filtering identity is defined by the two nodes it sits between. An X capacitor connects line-to-neutral, so the only thing it can ever shunt is differential-mode noise; it must present high impedance at mains frequency—an 100 nF X-cap is roughly 32 kΩ at 50 Hz, so it wastes no power—yet low impedance at RF (under 2 Ω at tens of MHz), which is exactly the job. Because it sits directly across the mains, failure modes matter: X capacitors are safety-certified to fail without fire or short (X-class ratings) and are paired with bleed resistors; they can be relatively large precisely because nothing normally flows through them. Y capacitors connect each line to protective earth—the chassis—so they drain common-mode noise. But that same path leaks mains current to the enclosure: I = 2πfCV, about 0.16 mA per line for 2.2 nF at 230 V/50 Hz. Enclosure touch-current limits (well under a few mA depending on the standard) and nuisance tripping of 30 mA-class ground-fault breakers, plus the hazard of an open PE, are what cap Y values at the nanofarad level—the limit is set by a human touching the chassis, not by electrical performance. That is why common-mode filtering must lean on the common-mode choke—a core with both line conductors wound so differential flux cancels (transparent to line current) while common-mode flux adds (high impedance)—with Y capacitors as a secondary path within the safety budget. And no: a ferrite bead on a DC rail does not protect against common mode. A bead adds impedance to whatever flows through one conductor; common-mode current flows in the same direction through every conductor of the pair, and a per-conductor bead provides only its own modest impedance per wire with no flux-adding mechanism—mode-selective rejection requires a common-mode choke winding both conductors on a shared core. In a camera module context this matters directly: a MIPI flex exiting the housing is an antenna for common mode, so when a failing line fingerprints to the MIPI clock harmonics I first split modes with a clamp, and only then choose beads (for differential ripple on rails) versus common-mode chokes on the signal pairs. Getting the mode right before buying components is the difference between two hours and two weeks in the chamber.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「濾波器的身份由它跨接的節點對決定：L↔N 只能管差模、→PE 只能管共模、雙繞同芯認隊形不認人——所以我的電路圖給每個濾波邊界命名（_filt），出了事有戶口可查」；「共模電流常常比差模小幾十倍，但每一毫安都比差模會喊——30–300 MHz 帶電纜的案子，先通緝共模」；「迴路面積是天線的翅膀：縮十倍＝免費 20 dB，這是 EMI 設計裡性價比最高的旋鈕」；「duty 偏離 50%、上升下降不對稱，頻譜上的偶次諧波就是指紋（PT2 Ch.9 的傅立葉圖表）」；「端接是第還帳第一優先：3–4 dB 一個節點、十幾個節點就是 10–20 dB 的複利債」；「磁珠只殺差模——加了磁珠 EMI 沒動，八成是模式抓錯了」。加上明天開始實作，這套話你會有自己的量測數據背书。</p>
+</div>
+
+<h2>10. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：用電流寫出差模/共模的分解式與定義？「三夾兩算法」怎麼做？</p>
+  <p class="a">A1：I<sub>DM</sub>＝(I₁−I₂)/2（出去與回來相反用力的一半＝正事）、I<sub>CM</sub>＝(I₁＋I₂)/2（兩線同方向一起流的一半＝漏出去外快）。純差模時 I₂＝−I₁→I<sub>CM</sub>＝0。三夾兩算：夾全部導體→|ΣI|＝2I<sub>CM</sub>（差模在夾內自消）；夾單導體≈I<sub>DM</sub>＋I<sub>CM</sub>；差動讀法→2I<sub>DM</sub>。共模的「回程」走寄生電容（線→殼/環境→電源）——你沒設計的路。</p>
+</div>
+<div class="anki">
+  <p class="q">Q2：差模（小環）與共模（短偶極）的輻射公式？由此推出的三條設計推論？</p>
+  <p class="a">A2：小環：E∝I·A·f²/r（面積、頻率平方）；短偶極：E∝I·L·f（線長、一次方）。推論：①面積縮 10 倍＝−20 dB，免費且最猛——回流緊貼訊號（Day 16 的 ±3h）就是折疊迴路；②頻率×2＝+6 dB（高速與 EMI 同帳本）；③電纜是最高效天線（1.5 m 電源線＝100 MHz 的半波天線），失敗先查「離開機殼的導體」。教科書近似式，數字標量級。</p>
+</div>
+<div class="anki">
+  <p class="q">Q3：共模的四大來源＋兩個快速偵測手法？</p>
+  <p class="a">A3：來源：①地彈跳/地壓差把整塊板（連同所有「相對地」訊號）抬高——對機殼即共模（含跨設備地壓差經電纜導流）；②屏蔽斷點：pigtail 辮子／非 360° 終止，屏蔽電流溢出沿纜外壁走；③差模→共模轉化：duty 偏 50%、上升≠下降、差動對單側不連續/單側跨槽（Ch.9 圖 9.8–9.11：偶次諧波異常＝不對稱指紋）；④接地不良的金屬件（散熱片/殼體單點接觸）。偵測：電流夾（夾全導體讀共模）＋近場 H 探棒（掃磁場近場定位大環）；江湖手：手靠近/觸殼看分貝變化＝共模弱信號。</p>
+</div>
+<div class="anki">
+  <p class="q">Q4：X-cap／Y-cap／共模電感各自接在哪、濾什麼？Y 為什麼被卡在 nF 級？磁珠為什麼殺不了共模？</p>
+  <p class="a">A4：X＝L↔N（跨兩線）濾差模：50 Hz 時約數十 kΩ（100 nF→約 32 kΩ）不耗功、HF 近短路；要安規級（跨市電、故障不起火）＋洩放電阻。Y＝各線→PE 濾共模：洩漏電流 2πfCV（2.2 nF@230 V/50 Hz≈0.16 mA/線）受觸電/漏電斷路器規範卡死→nF 級；所以共模靠 choke 為主 Y 為輔。共模 choke＝雙繞同芯：差模磁通相消（透明）、共模相加（高阻）。磁珠只給「單導體」加阻抗、無磁通相加機制→對共模只有各自一點阻抗＝執照外。DC 版翻譯：去耦牆＝X 角色、對殼小 C＝Y 角色。</p>
+</div>
+<div class="anki">
+  <p class="q">Q5：PT2 Ch.9 的 EMI 減對策四階梯（原文順序）＋關鍵數據？「第零階梯」是什麼？</p>
+  <p class="a">A5：①正確端接全部時鐘：over/undershoot 每節點貢獻約 3–4 dB，10–20 節點危及 FCC 合規（dB 複利：同鐘相關源最壞逼近 +20 dB）；②能慢則慢：同頻同幅只有邊框不同→快邊框輻射可測地更高（圖 9.1），slow buffer 常 pin-compatible 零成本；③選定訊號加濾波 cap：約 5–15 pF、近源端、串終端電阻時最佳擺位在「驅動器與電阻之間」（圖 9.5，副作用：邊框變圓）；④高速場合上 spread spectrum（本週後段專課：65 MHz/3.87%→基頻 −6.48 dB、9 次 −14.15 dB）。第零階梯：屏蔽＝機械手段、贵且後期難改——先治再包。另記：EMI 主來源＝時鐘產生/分配；天線清單含「接地不良設備與電纜」。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+
+<p><strong>Day 43（週五・實作日——記得帶指引到公司，今天用得到的儀器全部上場）：</strong>「把共模抓到示波器上——電流夾 DIY、近場 H 探棒尋兇、迴路面積 −20 dB 實錘」。明天是實驗指引：①用磁環＋繞線 DIY 共模電流夾（並用訊號產生器校變比）、夾 NB 充電線與螢幕線量共模頻譜（示波器 FFT）；②近場探棒掃自己手邊的板子，把「磁場熱區」對到 buck 功率環與排線迴圈；③亲手做「20 dB 免費午餐」實驗：同一訊號，走線跨槽 vs 回流直下，頻譜對照；④磁珠 vs 共模 choke 的「模式執照」對決：做一條共模注入路，親眼看磁珠無能為力、choke 一擊斃命。儀器：示波器＋訊號產生器＋直流電源＋磁環/探棒 DIY 件（明天指引給材料清單與接線圖）。今天先把練習 1 與 2 重算一遍、Anki Q1/Q2/Q4 掃熟——文法不熟，明天進了實驗室就是拿著夾子亂夾。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

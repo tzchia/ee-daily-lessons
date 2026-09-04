@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 44｜接地策略與屏蔽——單點、多點、混合的切換邏輯，與「地」的三種身分（PT2 Ch.9 對照・camera desense 案例）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 9 週・第 44 天（週六新觀念課・純閱讀日）</div>
+  <h1>Day 44：接地策略與屏蔽——單點、多點、混合的切換邏輯，與「地」的三種身分</h1>
+  <div class="meta">2026-09-05（六）｜預估學習時間：90～110 分鐘（純閱讀＋筆算，不需儀器）｜難度：★★★★☆（「地」是電路圖上最被當成理所當然的符號——今天把它還原成一根有阻抗的導體。昨天你在實驗室親手撞見的三件事：機殼地攪局、摸線法、同軸套磁環，背後的「接地哲學」今天一次講透。Perfect Timing II Ch.9 把「接地不良的設備」直接寫進天線清單，也把屏蔽定性成「機械手段、貴、量產前難救」——今天是那兩句話的展開篇。完課後週日 Day 45＝週 9 測驗。）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天這一課，你要能回答五個問題，而且每題都能畫圖講：</p>
+  <ol>
+    <li><strong>「地」到底是什麼？</strong>——為什麼電路圖上同一個接地符號，其實藏著三種身分（0 V 參考／迴流導體／安全地），混用它們是 80% 接地災難的起源。</li>
+    <li><strong>單點接地、多點接地、混合接地各自的適用條件與失效模式？</strong>——用一根導線的阻抗帳（Z＝R＋jωL）推出「低頻單點、高頻多點」的判準，並說得出「星星點在高頻會變孤島」的機理。</li>
+    <li><strong>機殼地、信號地、功率地該怎麼分、怎麼合？</strong>——給出「誰乾淨、誰髒、在哪裡單點相逢」的設計語法，連回你昨天實驗 5 態 B「產生器機殼地攪局」到底是怎麼攪的。</li>
+    <li><strong>屏蔽為什麼是「接地的延伸」？</strong>——集膚深度算出銅箔膠帶本就值幾十分貝，但勝負在縫：槽口 λ/20 管理、縫合 via 間距、360° 終止 vs pigtail 的量化差距。</li>
+    <li><strong>Camera 天線去敏（antenna desense）怎麼辦？</strong>——把「顯示排線／MIPI／I²C 諧波落在 GNSS/WiFi 頻段」的打撈流程走一遍：基線→二分嫌疑人→頻率指紋→路徑定罪→對策結算。</li>
+  </ol>
+  <p>今天是週 9「EMI 機制」的收官課：Day 42 給了你共模/差模的文法，Day 43 讓你看過案發現場，今天補上最後一塊地圖——<strong>電流回家的路（接地）與把話關在屋裡的牆（屏蔽）</strong>。週日測驗直接考。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：把「地」想成社區的排水系統</span>
+  <p>把每個電路板想成一棟房子，「地」就是排水系統。你對排水系統的期待有三層，剛好對應地的三種身分：（1）<strong>參考水位</strong>——「今天水位幾公分」要用同一個基準量，否則各棟各說各話（信號基準）；（2）<strong>排污通道</strong>——所有用過的水最終要沿管路流回淨水廠（迴流導體）；（3）<strong>雷季的安全通路</strong>——雷劈進來、漏電發生時，電要有一條路安全進土裡，別從你身體走（機殼/安全地）。</p>
+  <p><strong>單點接地＝整個社區只留一根總下水管。</strong>好處：各家污水絕不會從別家管路倒灌（每個迴流的污水各走各的支管，只在總點匯合，誰也串不到誰）——低頻時代這招乾淨漂亮。壞處：管線越拉越長，而<strong>水管對「急流水槌」（高頻）來說是彈簧</strong>——每多拉一公尺，高頻看到的阻力就大一截。拉到頭，高頻污水根本流不進總管，各棟開始從地板縫自己亂排。</p>
+  <p><strong>多點接地＝每棟直接就近排進地下含水層。</strong>每段路都短，高頻阻力小；壞處是地下水位會震動（地噪音），A 棟排污造成的水位波動，B 棟拿來當參考水位就會量到髒東西——所以它適合「大家都很快、水位波動大家都無所謂」的高頻世界，不適合「連 1 mV 水位都要量準」的音頻世界。</p>
+  <p><strong>混合接地＝社區分區</strong>：音頻類「量水位的」內部各自單點、區內乾淨；數位類「排水猛的」整區直接接含水層；兩區在一處「單點相逢」，對污水路線圖畫清楚。這正是你手上 NB 主機板的真實拓撲。</p>
+  <p><strong>屏蔽＝把噪音人家整戶包進錫箔屋，再把錫箔用短、寬、連續的金屬帶接回大地。</strong>鋁箔屋本身擋聲波幾乎不費力（一片保鮮鋁箔就夠擋手機訊號——你在家做過實驗的），漏聲的永遠是門縫、窗縫、和那根「隨意從牆上接出來、打了一條辮子」的接地線。<strong>那條辮子，工程師叫它 pigtail，它是屏蔽界的第一兇手。</strong></p>
+  <p>公式全部看不懂也沒有關係——今天的結論一句話：<strong>地是一根導體，不是無底洞；低頻比誰電阻小、高頻比誰電感短；屏蔽的價值在縫不在牆。</strong>接下來的數學只是把這句話寫得讓老闆無法反駁。</p>
+</div>
+
+<h2>0. 前情提要——你已經收過三封「地」的預告信</h2>
+<ul>
+  <li><strong>Day 42（文法課）：</strong>共模的四大來源裡，第①條就是「地彈跳/地壓差把整塊板抬高」，第②條是「屏蔽斷點：pigtail／非 360° 終止」、第④條是「接地不良的金屬件」。今天把這三條全部展開到工程做法層。</li>
+  <li><strong>Day 43（實驗日）：</strong>你親手撞見三件事，今天的課會一一具名回收——<em>①實驗 5 態 B：「產生器機殼地攪局」——訊號產生器的機殼地與 DUT 地透過示波器地夾又多出一條並聯路徑，迴路面積實驗差點被一條「沒人設計的地線」做掉；②摸線法——你的身體＋接地，等於給共模加了一條並聯迴流，分貝才會動；③同軸線夾磁環治探棒自身地環流——那就是「共模 choke 的即興接地手術」</em>。三件事同一個教戰術語：<strong>每一條你沒設計的地路徑，都會被高頻拿來當捷徑。</strong></li>
+  <li><strong>PT2 Ch.9（書中原話）：</strong>天線清單的最後一項是「<em>improperly grounded equipment</em>（接地不良的設備）」（原文：An antenna might be in the form of PCB traces, PCB rework wires, components with insufficient shielding, connectors, cables (shielded or unshielded), or improperly grounded equipment.）——書把「接地不良」與走線、電纜並列為六大天線形態之一；今天就是那一欄的專課。</li>
+</ul>
+<p><em>現代視角備註（引用 Ch.9 時的慣例）：書中例子停在 33.3 MHz PCI 時代（2002 年）；現代 NB 內部協定時鐘在數百 MHz～GHz 級、無線頻段從 GNSS/WiFi 2.4 G 一路擠到 5G/6 GHz 與 WiFi 7，「諧波撞上收頻」的概率與「地阻抗的帳」都以現代標準需上修——但物理（Z＝jωL）一分沒漲價。</em></p>
+
+<h2>1. 「地」是三種東西共用一個名字——業內最大的詞彙陷阱</h2>
+<p>先做一個思想實驗：拿萬用電表量板上兩點「地」，讀到 0.00 V，你就相信它們等位嗎？——不。電表量的是 50/60 Hz 以下 averaged 的近直流值；你的 DDR 時脈在 1.6 GHz、buck 開關在 500 kHz、MIPI 在 GHz 級，它們眼中的「地」是另一張地圖。業界把三種功能共用一個詞「ground」，災難就從這裡長出來：</p>
+
+<table>
+<tr><th>身分</th><th>官方名稱</th><th>它負責什麼</th><th>失效長相</th></tr>
+<tr><td><strong>①參考水位</strong></td><td>信號基準（signal reference）</td><td>所有電壓「相對誰量」。感測器模擬前端的 1 mV、ADC 的 LSB，全看它穩不穩。</td><td>迴流電流借道「參考地」→ 基準被調變 → 影像出現橫條紋、音頻出現嘖嘖聲。</td></tr>
+<tr><td><strong>②排污通道</strong></td><td>迴流導體（return conductor）</td><td>每個訊號電流都必須回到源頭；它選的路徑決定迴路面積（Day 42 的天線翅膀）。</td><td>迴流被槽切斷、繞大路 → 差模環變大（A×20 → +15～26 dB，你實驗 5 態 B 親眼看過）。</td></tr>
+<tr><td><strong>③保險絲的終點</strong></td><td>機殼/安全地（chassis/protective earth）</td><td>靜電、雷擊、故障電流的安全出口；也是輻射系統裡的「另一半天線」與屏蔽的錨點。</td><td>接觸阻抗過高（螺絲沒鎖/氧化/噴漆未刮）→ 靜電無路可走打進信號（週 10 ESD 見）、屏蔽變孤島天線。</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">常見誤解（面試高頻送命點）</span>
+  <ul>
+    <li><strong>「地＝0 V、是無底洞，什麼都能倒進去」</strong>——錯。地是一根導體，有電阻、有電感；你倒進去多少電流，它就按 Z 收多少「過路費」（地彈跳）。0 V 是設計<strong>意圖</strong>，不是測量結果。</li>
+    <li><strong>「兩個地符號畫在一起就是同一個節點」</strong>——原理圖上是的，銅上看頻率。低頻看到的同一個節點，100 MHz 下可能隔著幾十 Ω。</li>
+    <li><strong>「地把噪音消掉了」</strong>——地不毀滅電流，只<strong>改道</strong>。問題永遠是：改的哪條路？沿途的迴路面積多大？誰被迫共乘？</li>
+    <li><strong>「模擬地跟數位地一定要切開」</strong>——切開只是手段，目的是「讓數位迴流不借道模擬基準」。切錯了（切割迫使迴流繞路）比不切更糟——§5 給判準。</li>
+  </ul>
+</div>
+
+<h2>2. 一根導線的阻抗帳：今天全部的數學只有兩行</h2>
+<p>任何導體（地線、Via、銅帶、螺絲、屏蔽辮線）的阻抗都是：<em>Z＝R＋jωL</em>。R 隨頻率略升（集膚效應，§7），真正的主人是 jωL。把感抗算成三個背下來的錨點（1 nH 的阻抗＝2πfL）：</p>
+
+<div class="formula">
+錨點帳（1 nH 導體在不同頻點的阻抗，2πfL）：<br>
+@100 kHz：2π×10⁵×10⁻⁹ ≈ <strong>0.0006 Ω</strong>（不存在）<br>
+@1 MHz：≈ <strong>0.006 Ω</strong>（還是幾乎不存在）<br>
+@100 MHz：≈ <strong>6.3 Ω</strong>（已經可以分水嶺）<br>
+@1 GHz：≈ <strong>63 Ω</strong>（一根小線＝一個電阻）<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：同一段銅線，對 1 MHz 是水管、對 100 MHz 是細吸管、對 1 GHz 是一堵牆。「這條地線短不短」不是公分問題，是「幾分之幾個波長/幾個感抗」問題——把公分換算成 nH 才有資格討論接地。<em>1 nH≈6.3 Ω@100 MHz 這個換算式，請背到像自己的名字。</em></span>
+</div>
+
+<p>換算表（工程估算口徑：PCB 上「訊號＋地平面」的迴路感抗約 0.5～1 nH/mm 量級，隨疊層間距而變；跳線/導線的<strong>迴路</strong>感抗以每米 0.5～1 µH 量級估算——皆約值，佈線幾何決定）：</p>
+
+<table>
+<tr><th>導體（迴路口徑）</th><th>感抗 L（約）</th><th>@1 MHz</th><th>@100 MHz</th><th>@1 GHz</th></tr>
+<tr><td>PCB 走線 10 mm（貼地平面）</td><td>～5–10 nH</td><td>0.03–0.06 Ω</td><td>3–6 Ω</td><td>30–60 Ω</td></tr>
+<tr><td>Via 單顆（含上下stub 迴路）</td><td>～0.5–1 nH</td><td>忽略</td><td>0.3–0.6 Ω</td><td>3–6 Ω</td></tr>
+<tr><td>跳線/導線 20 cm（迴路）</td><td>～100–200 nH</td><td>0.6–1.3 Ω</td><td>63–126 Ω</td><td>0.6–1.3 kΩ</td></tr>
+<tr><td>Pigtail 辮子 5–8 mm</td><td>～5–8 nH</td><td>忽略</td><td>3–5 Ω</td><td>30–50 Ω</td></tr>
+</table>
+
+<p><strong>這張表就是「低頻單點、高頻多點」的全部理由</strong>：1 MHz 以下，連拉 20 cm 跳線也只收 1 Ω 級的過路費，「所有地匯到一點」的乾淨拓撲划得來；100 MHz 以上，那同一段跳線收上百 Ω——等於把星形拓撲自己掐死，迴流只好自己找路（走屏蔽、走電纜外壁、走隔壁設備，也就是你昨天量到的共模）。</p>
+
+<figure>
+<svg viewBox="0 0 920 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：左＝「1 nH＝6.3 Ω@100 MHz」阻抗帳（log-log）；右＝電流選路：低頻撿 R、高頻撿 L</text>
+
+  <!-- Left: log log Z vs f -->
+  <line x1="80" y1="330" x2="430" y2="330" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="80" y1="330" x2="80" y2="60" stroke="#64748b" stroke-width="1.5"/>
+  <text x="255" y="352" text-anchor="middle" font-size="10.5" fill="#374151">頻率（Hz，對數）</text>
+  <text x="56" y="195" text-anchor="middle" font-size="10.5" fill="#374151" transform="rotate(-90 56 195)">|Z|＝2πfL（Ω，對數）</text>
+  <!-- gridlines -->
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="80" y1="270" x2="430" y2="270"/><line x1="80" y1="200" x2="430" y2="200"/><line x1="80" y1="130" x2="430" y2="130"/>
+    <line x1="165" y1="60" x2="165" y2="330"/><line x1="250" y1="60" x2="250" y2="330"/><line x1="335" y1="60" x2="335" y2="330"/>
+  </g>
+  <!-- 1uH line: at 1MHz =6.3k; steep -->
+  <line x1="95" y1="322" x2="395" y2="86" stroke="#dc2626" stroke-width="3"/>
+  <text x="330" y="80" font-size="10.5" fill="#dc2626" font-weight="bold">跳線迴路 20 cm ≈ 150 nH（約）</text>
+  <!-- 100nH -->
+  <line x1="95" y1="330" x2="330" y2="120" stroke="#f59e0b" stroke-width="2.6"/>
+  <text x="250" y="150" font-size="10" fill="#b45309">10 cm 迴路 ≈ 100 nH</text>
+  <!-- 10 nH -->
+  <line x1="120" y1="330" x2="300" y2="235" stroke="#0e7490" stroke-width="2.6"/>
+  <text x="230" y="258" font-size="10" fill="#0e7490">貼地平面 10 mm ≈ 10 nH</text>
+  <!-- 1 nH -->
+  <line x1="150" y1="330" x2="290" y2="300" stroke="#16a34a" stroke-width="2.6"/>
+  <text x="215" y="316" font-size="10" fill="#16603a">1 顆 via ≈ 1 nH</text>
+  <!-- axis labels -->
+  <text x="80" y="345" text-anchor="middle" font-size="9.5" fill="#64748b">10k</text>
+  <text x="165" y="345" text-anchor="middle" font-size="9.5" fill="#64748b">1M</text>
+  <text x="250" y="345" text-anchor="middle" font-size="9.5" fill="#64748b">100M</text>
+  <text x="335" y="345" text-anchor="middle" font-size="9.5" fill="#64748b">10G</text>
+  <text x="74" y="274" text-anchor="end" font-size="9.5" fill="#64748b">1Ω</text>
+  <text x="74" y="204" text-anchor="end" font-size="9.5" fill="#64748b">10Ω</text>
+  <text x="74" y="134" text-anchor="end" font-size="9.5" fill="#64748b">100Ω</text>
+  <!-- marker: 1nH @100MHz -->
+  <circle cx="250" cy="312" r="5" fill="#dc2626"/>
+  <text x="258" y="308" font-size="10" fill="#dc2626" font-weight="bold">1 nH@100 MHz＝6.3 Ω（背起來）</text>
+
+  <!-- Right: current picks path -->
+  <rect x="480" y="50" width="410" height="150" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+  <text x="685" y="72" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#991b1b">低頻（f 小：ωL≪R）——撿「電阻最小」的路</text>
+  <line x1="510" y1="100" x2="600" y2="100" stroke="#334155" stroke-width="2.4"/>
+  <line x1="600" y1="100" x2="860" y2="100" stroke="#334155" stroke-width="2.4"/>
+  <line x1="600" y1="100" x2="700" y2="160" stroke="#334155" stroke-width="2.4"/>
+  <line x1="700" y1="160" x2="860" y2="160" stroke="#334155" stroke-width="2.4"/>
+  <text x="866" y="104" font-size="10" fill="#334155">目的地</text>
+  <text x="866" y="164" font-size="10" fill="#334155">目的地</text>
+  <text x="650" y="92" font-size="10" fill="#991b1b">近路 L 小但 R 0.1 Ω</text>
+  <text x="740" y="152" font-size="10" fill="#991b1b">遠路 R 0.02 Ω（電阻贏）</text>
+  <text x="516" y="180" font-size="10" fill="#991b1b">→ 電流按銅截面分賬（像水分流），拉長一點沒關係</text>
+
+  <rect x="480" y="216" width="410" height="150" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="685" y="238" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1e40af">高頻（ωL 主導）——撿「電感最小＝緊貼訊號正下方」的路</text>
+  <line x1="510" y1="262" x2="860" y2="262" stroke="#dc2626" stroke-width="3"/>
+  <text x="516" y="254" font-size="10" fill="#dc2626">訊號線（來）</text>
+  <path d="M510,292 L860,292" stroke="#2563eb" stroke-width="3" stroke-dasharray="1 0"/>
+  <path d="M510,340 Q685,336 860,340" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5 5"/>
+  <text x="516" y="308" font-size="10" fill="#1e40af">迴流：就走在正下方幾 mil（阻抗最小≠電阻最小）</text>
+  <text x="516" y="332" font-size="10" fill="#64748b">假想「更短的遠端銅路」——高頻看不上（ωL 太大）</text>
+  <text x="685" y="358" text-anchor="middle" font-size="10.5" fill="#1e40af">所以：地平面上的迴流緊貼訊號＝迴路自動折疊；切一刀，迴流被迫繞＝天線長出來</text>
+</svg>
+<figcaption>圖 1：左——同一個 nH 數字的導體，阻抗隨頻率 20 dB/十倍頻直線爬升（示意圖，數量級依幾何而變）；20 cm 跳線在射頻段動輒上百 Ω。右上——低頻世界電流按電阻分賬，「星形拉線」划得來；右下——高頻世界電流按感抗分賬，永遠找「緊貼訊號正下方」的路，這就是「地平面是高頻迴流之母」、以及「切地平面＝強迫迴流繞大路」的根由。</figcaption>
+</figure>
+
+<h2>3. 誰在選擇接地方式？——頻率＋板尺寸，兩個變數一張判準表</h2>
+<p><strong>直覺：</strong>選接地策略就是回答一個問題——「地導體上的感抗過路費，相對我的訊號還有沒有被忽略的餘地？」低頻（ωL 比訊號源內阻、比 R 還小到可忽略）→ 拉線匯一點沒問題，而且可以<strong>強制</strong>所有迴流走你畫的路、杜絕共乘；高頻（ωL 稱王）→ 只能讓每個迴流就近找參考平面，「短」壓倒「乾淨」。</p>
+
+<p>工程上的經典經驗法則（教科書與 EMC 手冊的通用慣例，非某標準硬性條文；實作以仿真與量測修正）：</p>
+<ul>
+  <li><strong>f ＜ 約 1 MHz：單點接地（串聯或星形）。</strong>典型：音頻（20 Hz–20 kHz）、感測器類比前端、DC 量測。目標：消滅地迴路串擾（low-frequency common impedance coupling）。</li>
+  <li><strong>f ＞ 約 10 MHz：多點接地（就近上地平面/機殼）。</strong>目標：把每段地的 ωL 壓到最低。代價：接受地上有高頻噪音，改用「平面＋短路徑＋分區」控制它。</li>
+  <li><strong>1～10 MHz 之間：混合式。</strong>按電路性質分區：Quieter 的模擬區內部單點匯入、高頻區多點上平面，兩區在<strong>單點或極短的距離</strong>相逢。</li>
+  <li><strong>幾何判準（輔助）：結構尺寸 ≪ λ/20 才算「電氣上小」、才談得上「一點」。</strong>例：100 MHz 的 λ＝3 m，λ/20＝15 cm——一台 14 吋 NB（最長邊約 32～35 cm）在 100 MHz 早已「不算小」，你根本沒有一塊可以當星點的「等位銅」。</li>
+</ul>
+<p><em>白話：1 MHz 是「水管還不算彈簧」的速度上限；λ/20 是「這塊銅還能被當成一個點」的尺寸上限。現代數位系統同時踩爆兩條線，所以答案是：「多點為體、單點為用、分區接縫處見真章」。</em></p>
+
+<h3>3.1 單點接地（星形）——低頻的潔癖拓撲，和高頻的孤島</h3>
+<p><strong>原理：</strong>全部電路的迴流導線匯於一個物理點，任何兩迴流的共用阻抗只有「星點」那一小塊銅，從根上消滅共阻抗耦合。<strong>致命細節（面試愛挖的洞）：星點本身有對機殼/對相鄰銅的雜散電容（十幾 pF 量級）。低頻時那顆 C 開路、星點有效；頻率一高，X_C 掉下來的速度比 jωL 爬升還不講理——高頻迴流寧可「隔著 capacitively 跳機殼」也不進星點，星點變成高頻<strong>孤島</strong>。這時候你的「乾淨模擬地」對射頻來說是一根懸空的接收天線。</strong></p>
+<ul>
+  <li>適用：麥克風前級、影像感測器的類比供電域、精密基準源、低頻音頻設備（器材音響的星形接地就是這招）。</li>
+  <li>盤點：星點要物理小、單層銅匯入、周圍留護城河（moat）防隔壁鉆進來；出星點的每一根線都要記名（迴流去哪、多大電流、什麼頻段）。</li>
+</ul>
+
+<h3>3.2 多點接地——射頻的生存法則：短、寬、連續</h3>
+<p><strong>原理：</strong>每個子電路就近以最短路徑接到低阻抗_reference（地平面或金屬機殼），迴路感抗最小化。代價是「地上到處有噪音」——但那正是高頻世界的默契：<strong>數位電路本來就不看地的絕對位，只看相對變化（地噪音被設計吸收為噪聲容限的一部分）</strong>。多點接地能不能活，取決於三件事：</p>
+<ul>
+  <li><strong>平面連續：</strong>地平面上不亂開槽；訊號被迫跨槽時，回到源頭正下方搭橋電容（Day 41/43 的槽邊搭橋——今天升級成系統語言：那不是「加個電容」，是「在地的斷崖上蓋一座高頻獨木橋」）。</li>
+  <li><strong>縫合 via（stitching via）：</strong>多層板的各層地、屏蔽殼與機殼、金手指與銅皮，都要靠 via/螺絲/導電泡棉「每 λ/20 打一顆釘子」把大塊銅釘成<strong>等位面</strong>。口徑：工作上限 f_max 的 λ/20——2 GHz→7.5 mm、6 GHz→2.5 mm（約值；規範看各家 DFM 指引）。</li>
+  <li><strong>控制「髒流」的路徑：</strong>多點接地後，大電流（buck、馬達、背光 LED driver）的迴路要<strong>用幾何引導</strong>——粗短、貼著自己的訊號回去，別借道別人的「地板」。</li>
+</ul>
+
+<h3>3.3 混合接地——真實 NB 主機板的寫照</h3>
+<p>你的 NB 主機板不會只選一種：<strong>系統主體＝地平面多點接地（射頻生存）；感測器/音頻/基準等「量水位的」電路＝區內單點＋對主地單點匯入（潔癖保留）；兩者之間＝分區接縫（seam），接縫位置、寬度、跨接方式就是設計的本體。</strong>設計語言三句：</p>
+<ul>
+  <li><strong>髒的乾淨的分開住：</strong>功率迴流（buck、VCM 驅動、背光）、數位高速（DDR、MIPI）、模擬/基準，三類各有「主迴流通道」，不共乘窄橋。</li>
+  <li><strong>相逢必單點：</strong>域與域若要相連，選一個明確位置相連（單點匯流點），讓跨域迴流只有法定通道可走——並在原理圖上把這個點「命名」（畫出星點、貼 net tie），圖面不畫＝製程不懂＝被 CAM 吃掉。</li>
+  <li><strong>分而不 Cut 死：</strong>分割地平面之前永遠先問——跨過這條分割線的訊號，它的高頻迴流打算怎麼過橋？答不出來就不準切（此為 Day 42「迴流繞大路」懲罰的預防版）。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 420" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：三種接地拓撲一圖對照＋「頻率×尺寸」切換邏輯</text>
+
+  <!-- Panel A: star -->
+  <rect x="20" y="44" width="285" height="260" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="162" y="66" text-anchor="middle" font-size="13" font-weight="bold" fill="#166534">A. 單點（星形）——低頻・潔癖</text>
+  <rect x="45" y="86" width="70" height="40" rx="5" fill="none" stroke="#166534" stroke-width="2"/>
+  <text x="80" y="110" text-anchor="middle" font-size="10" fill="#166534">類比 1</text>
+  <rect x="210" y="86" width="70" height="40" rx="5" fill="none" stroke="#166534" stroke-width="2"/>
+  <text x="245" y="110" text-anchor="middle" font-size="10" fill="#166534">類比 2</text>
+  <rect x="127" y="212" width="70" height="40" rx="5" fill="none" stroke="#166534" stroke-width="2"/>
+  <text x="162" y="236" text-anchor="middle" font-size="10" fill="#166534">電源/輸入</text>
+  <line x1="80" y1="126" x2="158" y2="180" stroke="#16a34a" stroke-width="2.2"/>
+  <line x1="245" y1="126" x2="167" y2="180" stroke="#16a34a" stroke-width="2.2"/>
+  <line x1="162" y1="212" x2="162" y2="188" stroke="#16a34a" stroke-width="2.2"/>
+  <circle cx="162" cy="183" r="7" fill="#dc2626"/>
+  <text x="176" y="176" font-size="11" fill="#dc2626" font-weight="bold">星點（全系統唯一匯合）</text>
+  <text x="162" y="160" text-anchor="middle" font-size="9.5" fill="#166534">每條迴流各走各的支管</text>
+  <path d="M150,196 q-22,10 -18,26" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="4 4"/>
+  <text x="60" y="238" font-size="9.5" fill="#7c3aed">星點雜散 C→機殼：</text>
+  <text x="60" y="252" font-size="9.5" fill="#7c3aed">高頻迴流改走這裡，</text>
+  <text x="60" y="266" font-size="9.5" fill="#7c3aed">星點淪為高頻孤島！</text>
+  <text x="162" y="292" text-anchor="middle" font-size="10" fill="#166534">優點：零共阻抗串擾｜致命傷：拉線長＝高頻死</text>
+
+  <!-- Panel B: multipoint -->
+  <rect x="318" y="44" width="285" height="260" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="460" y="66" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e40af">B. 多點（平面/機殼）——高頻・就近</text>
+  <rect x="340" y="96" width="240" height="120" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+  <text x="460" y="112" text-anchor="middle" font-size="10" fill="#1e40af">連續地平面／金屬機殼</text>
+  <g fill="#2563eb"><rect x="352" y="122" width="52" height="30" rx="4"/><rect x="424" y="122" width="52" height="30" rx="4"/><rect x="496" y="122" width="52" height="30" rx="4"/></g>
+  <text x="378" y="141" text-anchor="middle" font-size="9" fill="white">數位</text>
+  <text x="450" y="141" text-anchor="middle" font-size="9" fill="white">DDR</text>
+  <text x="522" y="141" text-anchor="middle" font-size="9" fill="white">射頻</text>
+  <g stroke="#1d4ed8" stroke-width="2"><line x1="360" y1="152" x2="360" y2="168"/><line x1="372" y1="152" x2="372" y2="168"/><line x1="435" y1="152" x2="435" y2="168"/><line x1="447" y1="152" x2="447" y2="168"/><line x1="510" y1="152" x2="510" y2="168"/><line x1="522" y1="152" x2="522" y2="168"/></g>
+  <g fill="#dc2626"><circle cx="352" cy="180" r="3.4"/><circle cx="376" cy="180" r="3.4"/><circle cx="400" cy="180" r="3.4"/><circle cx="424" cy="180" r="3.4"/><circle cx="448" cy="180" r="3.4"/><circle cx="472" cy="180" r="3.4"/><circle cx="496" cy="180" r="3.4"/><circle cx="520" cy="180" r="3.4"/><circle cx="544" cy="180" r="3.4"/></g>
+  <text x="460" y="196" text-anchor="middle" font-size="9" fill="#dc2626">縫合 via 間距 ≤ λ/20（把大銅釘成等位面）</text>
+  <text x="460" y="234" text-anchor="middle" font-size="9.5" fill="#1e40af">每個迴流就近上平面：L 最短、高頻 impedance 最低</text>
+  <text x="460" y="250" text-anchor="middle" font-size="9.5" fill="#1e40af">代價：地面上有噪音波形——靠「分區＋幾何引導」控制</text>
+  <text x="460" y="288" text-anchor="middle" font-size="10" fill="#1e40af">口訣：短、寬、連續；平面是體、縫合 is the glue</text>
+
+  <!-- Panel C: hybrid -->
+  <rect x="616" y="44" width="285" height="260" rx="10" fill="#faf5ff" stroke="#e9d5ff"/>
+  <text x="758" y="66" text-anchor="middle" font-size="13" font-weight="bold" fill="#6b21a8">C. 混合（分區＋接縫）——真實 NB</text>
+  <rect x="636" y="86" width="110" height="90" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="691" y="106" text-anchor="middle" font-size="10" fill="#166534">類比區（區內單點）</text>
+  <circle cx="691" cy="150" r="6" fill="#16a34a"/>
+  <line x1="660" y1="122" x2="688" y2="146" stroke="#16a34a" stroke-width="1.6"/>
+  <line x1="722" y1="122" x2="694" y2="146" stroke="#16a34a" stroke-width="1.6"/>
+  <rect x="776" y="86" width="110" height="90" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="831" y="106" text-anchor="middle" font-size="10" fill="#1e40af">數位/射頻區（多點）</text>
+  <g fill="#dc2626"><circle cx="794" cy="150" r="3"/><circle cx="812" cy="150" r="3"/><circle cx="830" cy="150" r="3"/><circle cx="848" cy="150" r="3"/><circle cx="866" cy="150" r="3"/></g>
+  <rect x="740" y="188" width="36" height="30" rx="4" fill="#fde68a" stroke="#b45309" stroke-width="2"/>
+  <text x="758" y="200" text-anchor="middle" font-size="8.5" fill="#7c2d12">單點</text>
+  <text x="758" y="211" text-anchor="middle" font-size="8.5" fill="#7c2d12">相逢</text>
+  <line x1="700" y1="176" x2="748" y2="192" stroke="#b45309" stroke-width="2"/>
+  <line x1="800" y1="176" x2="766" y2="192" stroke="#b45309" stroke-width="2"/>
+  <text x="758" y="240" text-anchor="middle" font-size="9.5" fill="#6b21a8">接縫（seam）位置＝設計本體：</text>
+  <text x="758" y="254" text-anchor="middle" font-size="9.5" fill="#6b21a8">跨縫訊號少、跨縫處有橋、圖面畫 net tie 命名</text>
+  <text x="758" y="272" text-anchor="middle" font-size="9.5" fill="#6b21a8">（你的 NB：PCH 數位海＋音頻/感測小島＋單點匯流）</text>
+
+  <!-- Bottom: decision axis -->
+  <line x1="60" y1="345" x2="860" y2="345" stroke="#334155" stroke-width="2"/>
+  <circle cx="220" cy="345" r="5" fill="#16a34a"/><circle cx="460" cy="345" r="5" fill="#b45309"/><circle cx="700" cy="345" r="5" fill="#1e40af"/>
+  <text x="120" y="332" font-size="11" fill="#166534" font-weight="bold">&lt;1 MHz：單點</text>
+  <text x="365" y="332" font-size="11" fill="#b45309" font-weight="bold">1–10 MHz：混合</text>
+  <text x="640" y="332" font-size="11" fill="#1e40af" font-weight="bold">&gt;10 MHz：多點</text>
+  <text x="220" y="370" text-anchor="middle" font-size="9.5" fill="#64748b">音頻/基準/感測前級</text>
+  <text x="460" y="370" text-anchor="middle" font-size="9.5" fill="#64748b">低速數位/馬達驅動交界</text>
+  <text x="700" y="370" text-anchor="middle" font-size="9.5" fill="#64748b">DDR/GHz 級/所有射頻</text>
+  <text x="460" y="402" text-anchor="middle" font-size="10.5" fill="#0f4c5c">輔助幾何判準：結構尺寸 ≪ λ/20 才存在「等位的點」——100 MHz 的 λ/20＝15 cm，一台 NB 在射頻段「沒有點」，只有面。</text>
+</svg>
+<figcaption>圖 2：A 單點（星形）——低頻潔癖拓撲，注意紅點星點的雜散電容在高頻把星點變成孤島；B 多點——就近上平面＋縫合 via（λ/20 釘釘）；C 混合——分區而治、接縫處單點相逢，真實 NB 主機板的寫照。下方頻率軸為經典經驗法則（約值、慣例），非強制標準；右半邊（含你的板子）的真實問題永遠是「髒迴流借道」而不是「選錯拓撲名字」。</figcaption>
+</figure>
+
+<h2>4. 機殼地、信號地、功率地：三張身分證與「合規的相逢」</h2>
+<p>把 §1 的三種身分落地成三張實際的銅：NB 裡通常是<strong>信號地（PCB 地平面）</strong>、<strong>功率地（電池/適配器入口、buck 功率迴路、背光/馬達大電流區）</strong>、<strong>機殼地（金屬中框、散熱模組、屏蔽殼、I/O 連接器外殼）</strong>。三者的哲學：</p>
+
+<table>
+<tr><th>域</th><th>誰住在裡面</th><th>哲學</th><th>常見失誤</th></tr>
+<tr><td><strong>信號地 SG</strong></td><td>數位/模擬訊號的迴流、參考平面</td><td>「地板」：盡量連續、少切、分區引導</td><td>為整潔切地；高速線跨槽不搭橋；縫合不足</td></tr>
+<tr><td><strong>功率地 PG</strong></td><td>電池入口→buck→負載的大脈衝迴流</td><td>「貨運通道」：粗、短、自己的貨自己送回，不借道客席</td><td>功率迴流穿過感測器區地板（地彈跳調變基準＝影像波紋/音頻嘖嘖）</td></tr>
+<tr><td><strong>機殼地 CG</strong></td><td>屏蔽、靜電洩放、接觸電流、connector 外殼</td><td>「外牆＋防雷帶」：低阻連續、多點接觸、與 SG 在受控點相接</td><td>噴漆/氧化層未破接觸阻抗 10 Ω 級；螺絲間距≫λ/20；屏蔽只靠單點搭地＝懸浮天線</td></tr>
+</table>
+
+<ul>
+  <li><strong>分合的判準（一句話）：</strong>「兩個域的迴流會不會被迫共乘一段窄路？」會——就要分（或分道）；不會——多點並聯反而好（高頻大家共享平面，低頻大電流另開貨運通道）。<strong>分合的「接縫」本身是設計物：位置明確、長度極短、最好經單點電阻/磁珠/直接銅（net tie），並在圖上註明意圖。</strong>（磁珠當接縫注意 Day 42 的執照問題：它對單導體加阻抗；跨域接縫用它是把「低頻大電流」擋在另一邊的手段之一，射頻上多半早已失效——高頻仍靠平面幾何。）</li>
+  <li><strong>機殼地不是「地裡的另外一個」：</strong>屏蔽效能（§7）完全取決於屏蔽殼與機殼地的<strong>接觸阻抗與連續性</strong>。PT2 Ch.9 的天線清單裡「接地不良的設備」，在 NB 上最常見的形態就是：屏蔽殼三顆螺絲只鎖兩顆、導電泡棉被塗料蓋住、屏蔽蓋與機座之間隔著 0.1 mm 塑膠——殼子還在，牆已不存在。</li>
+</ul>
+
+<div class="card pitfall">
+  <span class="label">回收 Day 43 的目擊證詞——三句話把實驗接回理論</span>
+  <ul>
+    <li><strong>「實驗 5 態 B，產生器機殼地攪局」</strong>＝多點接地的一角自己長出來了：產生器機殼→電源線 PE→市電地→示波器機殼→探棒地夾→DUT 地，你沒設計的路徑與你的銅箔迴路並聯，迴流分賬改變、頻譜「妖異」。教訓：<strong>射頻實驗裡每一條儀器的機殼地都是一個未經許可的接地策略。</strong></li>
+    <li><strong>「摸線法分貝會動」</strong>＝人體＋大地替共模並上一條新迴流——共模電流本來就走「你沒設計的路」，多你一條，它重算分賬，音量隨之變動（定性線索、非證據）。</li>
+    <li><strong>「同軸夾磁環治探棒自身地環流」</strong>＝給那條「未經許可的地路徑」加高頻阻抗——共模 choke 的即興手術。接地策略的三要素今天湊齊：選拓撲、控路徑、對非法路徑加阻抗。</li>
+  </ul>
+</div>
+
+<h2>5. 地環路（ground loop）：兩臺設備之間那條「多出來的一根線」</h2>
+<p><strong>Setup：</strong>設備 A 與設備 B 各有自己的「地」，之間用纜線相連。若纜線屏蔽層<strong>兩端都接地</strong>，再加上兩臺設備各自的電源地，就構成一個閉合大迴路——這就是地環路。它造成雨種傷害：</p>
+<ul>
+  <li><strong>低頻（50/60 Hz 及其諧波）：</strong>兩端「地」本來就不是同一個點（市電迴路壓降、中性線電流），環路裡被驅動出 mA～百 mA 級環流（約值，視配電環境）；這電流流過音頻線的地，經揚聲器ground參考調變＝「嗡嗡聲」（hum），是音響界百年老病。<strong>快速判別法：拔掉訊號源插頭（lift）若 hum 消失＝環路定罪。</strong></li>
+  <li><strong>射頻：</strong>這個大環就是一圈框天線（Day 42 小環公式 E∝I·A·f²：環的面積就是你賣出去的輻射）。屏蔽層兩端接地讓屏蔽層同時承擔「屏蔽」與「低頻環流受害者」雙重身分——高頻要兩端接地（屏蔽電流需要最短迴路），低頻環流要它斷路——<strong>矛盾的最後一頁，由「電容隔直流通高頻」或「360° 端接＋機殼單點匯流」翻過去。</strong></li>
+</ul>
+<p><strong>NB 實戰語境：</strong>NB 接上顯示器/擴充座（dock）的 HDMI/USB-C 後，Wi-Fi/GNSS 靈敏度掉、或出現低頻噪——先懷疑「透過 dock 又多了一條機殼地捷徑」形成環路。解法譜系：單端屏蔽接地（低頻斷環、高頻靠電容續接）、機殼地單點匯流設計、共模 choke 卡在纜線入口（把環路的高頻 impedance 拉高）。這題就是本課與週 10 的交界，面試愛考。</p>
+
+<h2>6. 接地總則背語（先記結論，後面都是註腳）</h2>
+<div class="formula">
+① 1 nH ≈ 6.3 Ω@100 MHz——任何接地討論先把公分換 nH。<br>
+② 低頻比 R、高頻比 L：f＜約 1 MHz 單點、f＞約 10 MHz 多點、中間混合（經驗慣例）；結構≪λ/20 才有「點」可用。<br>
+③ 高頻迴流永遠走在訊號正下方——切平面＝逼它繞路＝長天線；跨槽必搭橋（橋要在槽邊、容值對得起頻點）。<br>
+④ 縫合 via／螺絲／導電件間距 ≤ λ/20（2 GHz→約 7.5 mm、6 GHz→約 2.5 mm）把銅釘成等位面。<br>
+⑤ 屏蔽的效能天花板不在牆（金屬本身）在縫：槽口 ≤ λ/20、接縫導電連續、360° 端接、pigtail 每毫米都在收保護費。<br>
+⑥ 兩臺設備＝兩個「地」：纜線屏蔽兩端接地前，先算地環路這本帳。<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：高頻世界裡「地」沒有義務聽你的，它只認阻抗。你給它最近最短的回家路，它就乖乖折疊迴路；你切它、拖它、讓它共乘，它就用輻射跟你收利息。</span>
+</div>
+
+<h2>7. 屏蔽 I：牆本身幾乎免費——集膚深度的帳</h2>
+<p><strong>直覺：</strong>電磁波打進金屬就像聲音打進厚牆——每穿過一層「皮膚深度 δ」就衰掉約 8.7 dB（銅、鋁等良導體約值）。δ 隨頻率升高而<strong>變薄</strong>：波越尖、牆的「有效表層」越薄，衰得越快。</p>
+<div class="formula">
+集膚深度（良導體近似）：δ ≈ 66／√f<sub>MHz</sub> µm（銅）<br>
+　@100 MHz → δ ≈ 6.6 µm；@1 GHz → δ ≈ 2.1 µm（約值，銅）<br>
+吸收衰減 A ≈ 8.7 × (t/δ) dB（單次穿牆、忽略反射的粗估）<br>
+<strong>算給標準 PCB 銅箔聽：</strong>t＝35 µm，@100 MHz：t/δ≈5.3 → A ≈ 46 dB；@1 GHz：t/δ≈16.7 → A ≈ 145 dB——牆本身「理論上」誇張地夠用。<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：一片保鮮鋁箔（~15–20 µm）在射頻段就有 20～30 dB 級的「理論牆值」；PCB 的 35 µm 銅皮對 100 MHz 理論值 40+ dB。<strong>所以屏蔽設計的問題從來不是「牆夠不夠厚」，而是「縫、孔、與那條 pigtail 洩了多少」——牆值 46 dB 的盒子，一條 5 mm 辮子就能把整箱放回去 20 dB 以上（§8 算給你看）。</strong></span>
+</div>
+
+<h2>8. 屏蔽 II：縫、槽、360° 終止與 pigtail 之惡</h2>
+<h3>8.1 槽口是「未接完的屏蔽」——λ/20 管理與半波共振</h3>
+<p>屏蔽殼上任何開口（散熱孔、鏡頭開孔、連接器縫）都是一條槽天線：<strong>槽 longest 邊接近半波長時輻射最強</strong>；工程上以<strong>最長邊 ≤ λ/20</strong>（對關注的最高頻率）管理。例（筆算）：3 cm 的槽，半波共振在 f＝c/2L＝3×10⁸/0.06≈5 GHz——那頻段它喊得最兇；λ/20 管理則要求 1 GHz 內（λ/20＝1.5 cm@1 GHz）它已經超線——要嘛加寬度變短槽、要嘛蓋導電布/銅箔（接續時銅箔要<strong>連續繞過邊緣</strong>，貼成「C 形」比「I 形」強得多）。</p>
+
+<h3>8.2 360° 終止 vs pigtail——射頻接地與直流接地的分野</h3>
+<p>纜線屏蔽層要「接」到機殼/連接器外殼。<strong>射頻意義下的好接法＝360° 環形壓接</strong>（屏蔽層剝開處不超過 1～2 mm，用金屬夾環整圈壓在外殼上），等效接地電感 &lt;1 nH 級。<strong>壞法＝把屏蔽層絞成辮子、焊一條線接到「最近的螺絲」</strong>——那就是 pigtail：幾 mm～幾 cm 的導體，§2 的帳直接清算：</p>
+<div class="formula">
+Pigtail 帳（約值：每吋導線 ~10–25 nH）：<br>
+　8 mm 辮子 ≈ 8 nH → @100 MHz：≈ 5 Ω；@1 GHz：≈ 50 Ω<br>
+　360° 壓接 ≈ 0.5 nH → @100 MHz：0.3 Ω；@1 GHz：3 Ω<br>
+　差距 ≈ 24 dB @1 GHz——<strong>同一個機殼、同一根纜線，只是「怎麼把屏蔽接到殼上」，24 dB 就此分家。</strong><br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：直流接地看「有沒有通」，射頻接地看「多短多寬」。辮子在射頻眼裡不是接地線，是一根把屏蔽層裡的高頻電流「引出去沿纜線外壁噴」的跳板——屏蔽層沒接好，它就從牆變成天線（Day 42 共模來源②的機理，今天有了阻抗數字）。</span>
+</div>
+
+<h3>8.3 屏蔽殼／屏蔽蓋的工程清單（NB/camera 視角）</h3>
+<ul>
+  <li><strong>屏蔽蓋（shield can）不是焊上去就贏：</strong>它自己也要縫合——周邊 solder tab 間距 λ/20 口徑；蓋上開大孔（鏡頭/散熱）視同槽，回到 §8.1 管；蓋下若有天線輻射體禁區（Wi-Fi antenna keep-out 正下方別指望蓋子幫你救 desense，參考週 15）。</li>
+  <li><strong>鏡頭模組的金屬件就是屏蔽體系的一員：</strong>濾光片座、VCM 馬達外殼、FPC 露銅區通過 clip/導電布/銅箔搭到機殼地——每道搭地的「接觸阻抗」都按射頻帳算（按壓力、氧化、塗料、間距）。你在模組廠看過的「導電布少貼一片 EMI 變樣」，今天懂了它不是玄學：<strong>接縫的 jωL 就是電路本體。</strong></li>
+  <li><strong>PT2 Ch.9 給屏蔽的定性（忠於原文）：</strong>屏蔽是<strong>機械手段而非電氣解</strong>——「shielding uses metallic packaging to keep the EMI from escaping... it can sometimes be a costly solution. It also doesn't lend itself to an easy fix when an EMI problem is found shortly before a product release.」（用金屬包封把 EMI 關在機內；有時代價高昂，且產品release 前才發現問題時很難快速救）。書中因此把源頭手段（端接→慢邊框→濾波→展頻）排在屏蔽之前——這就是 Day 42「第零階梯 vs 四階梯」經濟學的原文出處。<em>現代備註：今天消費電子仍大量使用屏蔽（stiffener plate、can、導電泡棉），但「先源頭後屏蔽」的順序不變——屏蔽是保險，不是診斷。</em></li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：屏蔽的勝負在縫——360° 終止 vs pigtail、槽口 λ/20、與「牆值 vs 縫值」</text>
+
+  <!-- Left: 360 vs pigtail -->
+  <rect x="24" y="44" width="430" height="240" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="239" y="66" text-anchor="middle" font-size="13" font-weight="bold" fill="#166534">正解：360° 環形壓接（&lt;1 nH）</text>
+  <rect x="52" y="88" width="120" height="70" rx="8" fill="none" stroke="#166534" stroke-width="2.6"/>
+  <text x="112" y="120" text-anchor="middle" font-size="10" fill="#166534">機殼/連接器外殼</text>
+  <text x="112" y="136" text-anchor="middle" font-size="9" fill="#166534">（接機殼地 CG）</text>
+  <line x1="172" y1="118" x2="360" y2="118" stroke="#dc2626" stroke-width="2.6"/>
+  <text x="366" y="112" font-size="9.5" fill="#dc2626">芯線</text>
+  <path d="M172,138 L196,138 L196,104 L340,104 L340,138 L360,138" fill="none" stroke="#64748b" stroke-width="4"/>
+  <text x="250" y="96" font-size="9.5" fill="#475569">屏蔽層（金屬編織）</text>
+  <rect x="180" y="98" width="20" height="44" rx="4" fill="#facc15" stroke="#b45309" stroke-width="2"/>
+  <text x="190" y="162" text-anchor="middle" font-size="9.5" fill="#b45309">夾環：整圈壓接</text>
+  <path d="M120,164 L120,214" stroke="#16a34a" stroke-width="10" opacity=".55"/>
+  <text x="126" y="196" font-size="9.5" fill="#166534">短、寬、連續的接地面</text>
+  <text x="239" y="236" text-anchor="middle" font-size="10.5" fill="#166534">屏蔽層電流→機殼：L≈0.5 nH</text>
+  <text x="239" y="256" text-anchor="middle" font-size="10.5" fill="#166534">@1 GHz：3 Ω——牆繼續是牆</text>
+
+  <rect x="466" y="44" width="430" height="240" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+  <text x="681" y="66" text-anchor="middle" font-size="13" font-weight="bold" fill="#991b1b">邪道：pigtail 辮子（～8 nH）＝跳板</text>
+  <rect x="494" y="88" width="120" height="70" rx="8" fill="none" stroke="#991b1b" stroke-width="2.6"/>
+  <text x="554" y="120" text-anchor="middle" font-size="10" fill="#991b1b">機殼（同一個殼！）</text>
+  <line x1="614" y1="118" x2="830" y2="118" stroke="#dc2626" stroke-width="2.6"/>
+  <path d="M614,138 C640,138 648,150 662,150 C676,150 668,128 684,128 C700,128 692,150 708,150 C724,150 716,130 634,158" fill="none" stroke="#64748b" stroke-width="3.4"/>
+  <text x="700" y="170" font-size="9.5" fill="#991b1b">屏蔽絞成辮子「接最近的螺絲」</text>
+  <path d="M634,158 Q624,170 620,190" stroke="#991b1b" stroke-width="3.2" fill="none"/>
+  <text x="640" y="206" font-size="10" fill="#991b1b">@1 GHz ≈ 50 Ω</text>
+  <path d="M700,138 q34,26 60,58 q16,20 34,26" fill="none" stroke="#f59e0b" stroke-width="4" opacity=".85"/>
+  <path d="M794,222 l10,2 l-6,9 z" fill="#f59e0b"/>
+  <text x="700" y="262" text-anchor="middle" font-size="10.5" fill="#991b1b">高頻「覺得牆接地太遠」→溢出纜線外壁＝共模噴嘴</text>
+  <text x="681" y="236" text-anchor="middle" font-size="10.5" fill="#b45309">差距 ≈24 dB@1 GHz（同一根纜線、只是接法）</text>
+
+  <!-- Bottom: slot panel -->
+  <rect x="24" y="300" width="872" height="110" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="460" y="322" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">槽口管理：最長邊 ≤ λ/20（對最高關注頻）；半波長共振最兇</text>
+  <rect x="60" y="336" width="150" height="46" rx="4" fill="none" stroke="#16a34a" stroke-width="3"/>
+  <line x1="110" y1="336" x2="110" y2="382" stroke="#166534" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="135" y="364" font-size="10" fill="#166534">槽 1.5 cm → λ/20 內（≤1 GHz 合格）</text>
+  <rect x="330" y="336" width="300" height="46" rx="4" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="480" y="364" text-anchor="middle" font-size="10" fill="#991b1b">槽 3 cm → 1 GHz 超線；f=c/2L≈5 GHz 半波共振最兇</text>
+  <text x="760" y="352" text-anchor="middle" font-size="10" fill="#334155">牆值（46 dB@100 MHz 級）與整箱實測的差距</text>
+  <text x="760" y="370" text-anchor="middle" font-size="10" fill="#334155">＝所有縫的總帳（seam 品質是屏蔽的 KPI）</text>
+</svg>
+<figcaption>圖 3：上左——360° 壓接把屏蔽層用「短寬連續面」接上機殼；上右——同一根纜線改成 8 mm 辮子，@1 GHz 接地阻抗從 ~3 Ω 變 ~50 Ω（≈24 dB），屏蔽層高頻電流溢出纜線外壁變成共模噴嘴（Day 42 共模來源②的阻抗版寫照）；下——槽口以 λ/20 管理、半波共振為最壞情況（數字皆約值估算）。「牆幾乎免費、縫才是學問」。</figcaption>
+</figure>
+
+<h2>9. 實務案例主軸：Camera 天線去敏（antenna desense）——NB 場景全流程</h2>
+<p><strong>名詞一句話：</strong>desense＝你的電路讓別人的收訊機「變耳聾」——收訊靈敏度下降（desensitization）。NB 上的受害者：Wi-Fi/BT/GNSS（尤其 GNSS L1＝1575.42 MHz，訊號比噪聲還低 20 dB 以下，最容易被打）。兇手常見清單：<strong>顯示排線（eDP/MIPI）諧波、MIPI CSI-2 數據時脈、DDR、I²C/SPI、背光 PWM、鏡頭模組的 24/25 MHz XI 與其諧波、VCM/OIS 驅動 PWM</strong>。</p>
+<p><strong>為什麼 camera EE 要會抓這個：</strong>Apple Camera HW 面試最愛的 cross-team 題就是「camera 開機後 GNSS/Wi-Fi 靈敏度掉了，怎麼辦」——因為鏡頭模組是 NB 裡<strong>最接近天線、排線最長、高速訊號最密</strong>的子系統之一，而你的角色剛好站在「諧波源頭」旁邊。</p>
+<p><strong>指紋先行（Day 42 的課，先算帳再開機）：</strong>受害頻段反推嫌疑人——1575.42 MHz：25 MHz XI 的 63 次諧波（1575 MHz，奇次、方波能量在，約值對得上就是頭號嫌疑）；顯示/MIPI 時脈若在數百 MHz 級，2～3 次諧波即可撞 L1 或撞 WiFi 2.4 G（例：約 800 MHz 級時鐘的 3 次 ≈ 2.4 G）；背光 PWM 與其振盪諧振撞 2.4 G 也真實發生過。DDR 的 1.6 GHz 級時脈諧波群離 L1/WiFi 更近——所以嫌疑名單從「與受害頻段互為整數倍」開始建。</p>
+
+<h3>9.1 打撈流程 SOP（面試可直接背的六步）</h3>
+<ol>
+  <li><strong>基線凍結：</strong>量 sensitivity baseline（GNSS：C/N₀、cold-start TTFF；Wi-Fi：RSSI/吞吐量），固定站位、固定衰減器、屏蔽房或最低限度「同距離同方位」條件。沒有基線的一切「變好了」都是幻覺（Day 43 紀律）。</li>
+  <li><strong>嫌疑人二分法（turn-off search）：</strong>用可腳本化的功能開關逐層砍：camera stream on/off → sensor XI（24/25 MHz）enable → MIPI 時脈 rate 切換 → 顯示刷新率/亮度 PWM duty/頻率 → CPU C-state sleep test（全部停發時靈敏度若回復＝板源；仍差＝繼續查電源/機殼路徑）。<strong>頻點跟著嫌疑人動，才輪到定罪。</strong>（Day 42/43 的消滅實驗在 desense 場景的變體。）</li>
+  <li><strong>頻率指紋比對：</strong>頻譜儀＋近場探棒貼著天線/排線掃，把「嫌疑頻率梳」與板上時鐘清單（含 PWM 基頻與其 LC 振盪尾巴）對整數倍；只有示波器版：用 FFT 看嫌疑節點的諧波裙擺＋近場 H 探棒定位置（Day 43 裝備）。</li>
+  <li><strong>路徑定罪（本課主場）：</strong>確認諧波「怎麼」從源頭到天線口——常見四路：<em>①空間輻射（源頭離天線近）②排線/纜線傳導再轉輻射（屏蔽/共模問題）③供電共阻抗（諧波爬上天線 LNA 的供電軌——注意天線 feed 通常經 bias-tee/LNA，噪聲從電源端進去照樣殺靈敏度）④機殼縫/接地不良處洩出（接地策略失敗）</em>。判法：摸線法分流（共模徵兆）、拔屏蔽改貼銅箔對照（縫的帳）、把嫌疑線遠距離架空重供電（path A/B 對照，Day 43 治具思路）。</li>
+  <li><strong>對策按「路徑＋模式」下藥：</strong>源頭端接/慢邊框（Ch.9 階梯①②）→ 排線屏蔽續接/銅箔接地改善（縫的帳）→ 共模 choke（模式執照問題 Day 42）→ 供電軌濾波（LDO 替代/加 RC、注意 noise floor）→ 頻率規避（改 XI/PWM 頻率讓諧波躲開保護帶——NB 專案真實常見、且便宜的一招，代價是重新驗證）→ 時序規避（duty 內「靜默窗口」給 GNSS，高階玩法）。</li>
+  <li><strong>結算與防回歸：</strong>對策前後 sensitivity 差值＋頻譜差值一起交；把「受害頻段 vs 全板頻率清單」的 collision table 寫進 checklist（頻率規劃是設計階段的活，別留給暗室）。<strong>白話：desense 的終極解法是「頻率協商制度」，不是「哪邊響就貼哪邊箔」。</strong></li>
+</ol>
+
+<figure>
+  <svg viewBox="0 0 680 250" xmlns="http://www.w3.org/2000/svg" font-family="inherit" font-size="12">
+    <rect x="8" y="8" width="664" height="234" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="340" y="30" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f172a">Desense 打撈六步——「基線 → 嫌疑 → 指紋 → 路徑 → 對策 → 結算」</text>
+    <rect x="24" y="48" width="120" height="46" rx="8" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+    <text x="84" y="68" text-anchor="middle" font-weight="bold" fill="#1e3a8a">1 基線凍結</text>
+    <text x="84" y="84" text-anchor="middle" fill="#334155" font-size="10">C/N₀・TTFF・固定站位</text>
+    <line x1="144" y1="71" x2="170" y2="71" stroke="#475569" stroke-width="1.5" marker-end="url(#arDF)"/>
+    <rect x="170" y="48" width="128" height="46" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="234" y="68" text-anchor="middle" font-weight="bold" fill="#14532d">2 嫌疑二分 turn-off</text>
+    <text x="234" y="84" text-anchor="middle" fill="#334155" font-size="10">stream／XI／MIPI／PWM</text>
+    <line x1="298" y1="71" x2="324" y2="71" stroke="#475569" stroke-width="1.5" marker-end="url(#arDF)"/>
+    <rect x="324" y="48" width="128" height="46" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+    <text x="388" y="68" text-anchor="middle" font-weight="bold" fill="#713f12">3 頻率指紋</text>
+    <text x="388" y="84" text-anchor="middle" fill="#334155" font-size="10">整數倍比對・頻點跟不跟？</text>
+    <path d="M 388 94 L 388 120" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arDF)"/>
+    <rect x="324" y="120" width="128" height="46" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="388" y="140" text-anchor="middle" font-weight="bold" fill="#7f1d1d">4 路徑定罪（本課主場）</text>
+    <text x="388" y="156" text-anchor="middle" fill="#334155" font-size="10">空間／共模／電源／機殼縫</text>
+    <path d="M 324 143 L 298 143" stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arDF)"/>
+    <rect x="170" y="120" width="128" height="46" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="234" y="140" text-anchor="middle" font-weight="bold" fill="#4c1d95">5 對策分層下藥</text>
+    <text x="234" y="156" text-anchor="middle" fill="#334155" font-size="10">邊框→縫→choke→濾→頻率</text>
+    <line x1="170" y1="143" x2="144" y2="143" stroke="#475569" stroke-width="1.5" marker-end="url(#arDF)"/>
+    <rect x="24" y="120" width="120" height="46" rx="8" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+    <text x="84" y="140" text-anchor="middle" font-weight="bold" fill="#0f172a">6 結算＋防回歸</text>
+    <text x="84" y="156" text-anchor="middle" fill="#334155" font-size="10">前後差值・collision table</text>
+    <defs>
+      <marker id="arDF" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#475569"/>
+      </marker>
+    </defs>
+    <text x="84" y="190" text-anchor="middle" fill="#b45309" font-size="10">「關掉就好」≠修好</text>
+    <text x="234" y="190" text-anchor="middle" fill="#b45309" font-size="10">頻點跟人動才定罪</text>
+    <text x="388" y="190" text-anchor="middle" fill="#b91c1c" font-size="10">第③路：諧波沿電源直達 LNA</text>
+    <text x="388" y="204" text-anchor="middle" fill="#334155" font-size="10">（25 MHz×63＝1575.0 貼 L1）</text>
+    <rect x="470" y="112" width="192" height="118" rx="8" fill="#fff" stroke="#94a3b8" stroke-dasharray="4 3"/>
+    <text x="566" y="132" text-anchor="middle" font-weight="bold" fill="#334155">四條路徑的判別武器</text>
+    <text x="482" y="152" fill="#475569" font-size="11">①空間：近場探棒方位定點</text>
+    <text x="482" y="170" fill="#475569" font-size="11">②共模：摸線法／磁環夾纜</text>
+    <text x="482" y="188" fill="#475569" font-size="11">③電源：改架空獨立供電</text>
+    <text x="482" y="206" fill="#475569" font-size="11">④縫：剝封條貼銅箔 A/B 照</text>
+  </svg>
+  <figcaption>圖 4：desense 六步 SOP 與四條噪聲路徑的判別武器——每一步都只用 Day 43 自製家當（近場探棒、磁環、銅箔膠帶、頻譜儀）。路徑定罪是「本課主場」：同一條諧波，走四條路的對策完全不同。</figcaption>
+</figure>
+
+<div class="card pitfall">
+  <span class="label">新手三大坑（desense 特產）</span>
+  <ul>
+    <li><strong>「靈敏度變差＝天線問題」</strong>——先證明天線本身 OK（假天線/50 Ω 終端注入校準），再查「誰在噪音」。換天線是最貴的試錯。</li>
+    <li><strong>「把嫌疑訊號關掉就好了＝修好了」</strong>——你只是證明瞭兇手身分；「關掉」不是對策，把諧波壓到共存門檻以下、或頻率錯開、或加保護時序才是。</li>
+    <li><strong>只看發射不看傳導供電：</strong>LNA 供電軌上的 25 MHz 諧波不需要「飛過空間」——它沿電源走三分鐘就到混頻器。接地/濾波課的帳（共阻抗耦合）在 desense 照樣成立。</li>
+  </ul>
+</div>
+
+<h2>10. 動手練習（先自己做，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：接地導體的阻抗帳＋「單點能拉到多長」</strong>——兩塊子板以 20 cm 跳線互連「地」（迴路感抗約 150 nH，量級）。(a) 對 1 kHz 音頻訊號、1 MHz、100 MHz 各算該跳線的感抗。(b) 若某 100 MHz 迴流在兩板間被迫以這根線為主通道，1 mA 的迴流會在它上面產生多大壓降？這對「1 mV 解析度的感測器基準」意味著什麼？(c) 由此推導：單點接地的拉線長度上限如何被頻率綁架？</summary>
+<div class="answer">
+<p>(a) X＝2πfL：@1 kHz＝2π×10³×150×10⁻⁹≈<strong>0.001 Ω</strong>（不存在的牆）；@1 MHz≈<strong>0.94 Ω</strong>；@100 MHz≈<strong>94 Ω</strong>（一堵磚牆）。</p>
+<p>(b) V＝I×X＝1 mA×94 Ω≈<strong>94 mV</strong>的地位差——比 1 mV 解析度大 94 倍。100 MHz 的數位迴流若被迫借道這根線，它順手就把兩板「地」打成不同步；低頻感測器基準若與它共乘任何一段，基準就被調變（共阻抗耦合的數字版）。</p>
+<p>(c) 設計上限可以反算：要求地導體對某頻「不可見」（例：&lt;0.1 Ω），可用長度 L＜0.1/(2πf×1 µH/m)＝100/(2πf) 米——@1 MHz 可拉約 16 m（划得來）；@100 MHz 只剩 0.16 m（16 cm！比 NB 對角線還短）；@1 GHz 只剩 1.6 cm——「單點」在高頻根本不是拓撲選擇，是物理錯覺。結論與 §3 表一致：低頻單點划得來、高頻必須就近多點。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：星點的高頻之死＋λ/20 幾何感</strong>——某音頻板以星點接地引以為傲，星點對機殼雜散電容約 15 pF（量級）。(a) 算星點雜散容抗在 100 kHz、10 MHz、100 MHz 各多少？(b) 對比「從星點拉 30 cm 跳線到類比電路」的感抗（約 300 nH 迴路）在同三頻點的值。(c) 討論：哪一個頻點以上「星點接地」開始名存實亡？(d) 一台 15 吋 NB 最長邊約 35 cm：在哪些頻段它「電氣上不算小」（λ/20 判準）？</summary>
+<div class="answer">
+<p>(a) X_C＝1/(2πfC)：@100 kHz＝1/(2π×10⁵×15×10⁻¹²)≈<strong>106 kΩ</strong>（開路，星點有效）；@10 MHz≈<strong>1.06 kΩ</strong>；@100 MHz≈<strong>106 Ω</strong>（對射頻是「可走的小門」——機殼捷徑出現）。</p>
+<p>(b) 300 nH：@100 kHz≈0.19 Ω；@10 MHz≈19 Ω；@100 MHz≈188 Ω。比較 (a)(b)：@100 MHz 時「跳線 188 Ω vs 隔空跳機殼 106 Ω」——高頻迴流真的會棄星點走機殼（電流永遠撿阻抗低的），星點拓撲實質解體。</p>
+<p>(c) 粗略分界：當「雜散容抗 ≲ 拉線感抗」時改走機殼取決於幾何，但兩者都已在 <strong>數 MΩ→百 Ω 的交叉區</strong>（本例 10 MHz 級）——實務結論：星形接地對「射頻」從來就不是選項；它能保護的是音頻～數百 kHz 的潔癖世界。設計上常補一課：星點區周圍鋪接地護城河＋對機殼以多點短銅帶接地（射頻上「主動變多點」），別讓它懸著。</p>
+<p>(d) λ/20＝35 cm 需 λ＜7 m → f＞約 43 MHz。<strong>結論：只要板內有任何 &gt;約 43 MHz 的有意圖（幾乎必然——時鐘/開關全部超過），整台 NB 在射頻世界裡沒有一處「等位的點」，只有「面與縫」——接地策略自動淪為（也只能是）多點＋分區。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：屏蔽盒的「牆值 vs 縫值」＋ pigtail 複利</strong>——一個屏蔽盒用 35 µm 銅蓋（假想縫完美）。(a) 用 δ≈66/√f(µm)、A≈8.7×t/δ 估 @100 MHz 與 @1 GHz 的吸收衰減（牆值）。(b) 但實箱有一條纜線以 pigtail 進出（8 nH），另有一道 3 cm 接縫。若 1 GHz 時 pigtail 接地阻抗把屏蔽接地從 3 Ω 拉到 50 Ω，說明「牆值 145 dB」為何毫無意義。(c) 你只有銅箔膠帶與螺絲起子，給出三項最省錢的「縫投資」排序。</summary>
+<div class="answer">
+<p>(a) @100 MHz：δ≈6.6 µm，t/δ≈5.3，A≈8.7×5.3≈<strong>46 dB</strong>；@1 GHz：δ≈2.1 µm，t/δ≈16.7，A≈<strong>約 145 dB</strong>（單次穿牆粗估、未計多次反射修正；白話：牆的理論天花板高到離譜——設計根本不用擔心牆）。</p>
+<p>(b) 1 GHz 時 pigtail 讓屏蔽「接地不接地」：殼內電流找不到低阻出口，屏蔽改以雜散電容耦合向外輻射——整箱 SE 由最爛的縫決定，46/145 dB 的牆值被一條辮子拖回 20～40 dB 級是很常見的現場數字（量級）。同理 3 cm 縫在 1 GHz 已超 λ/20（1.5 cm）、往 5 GHz 半波共振路上走。<strong>屏蔽規格的正確問法：不是「牆幾 dB」，而是「所有縫的複合洩漏幾 dB」。</strong></p>
+<p>(c) 性價比排序（由牆外修到牆內）：①把 pigtail 改 360°（或最簡替代：以短寬銅帶把屏蔽層整圈壓接機殼，長度 &lt;5 mm）——20 dB 級、五毛錢；②接縫加導電墊片/銅箔跨縫連續（C 形繞邊）——縫的 jωL 直接砍；③縮孔/加蜂巢孔（開孔最長邊回到 λ/20 內）。記著順序哲學＝Ch.9：先花五毛把縫修好，再考慮換整面牆。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：desense  fingerprint 筆算——誰撞了 GNSS？</strong>某 NB 視訊會議（camera streaming）時 GPS 冷啟變慢。(a) L1＝1575.42 MHz，鏡頭模組常規 24 MHz 與 25 MHz 兩顆 XI 備選方案——各自第幾次諧波最接近 L1？誤差多少？(b) 顯示 MIPI 時脈若為 810 MHz 級，它的哪次諧波落在 Wi-Fi 2.4–2.4835 GHz？(c) 給出用「消滅實驗」定罪 25 MHz XI 的兩步程序（只有示波器＋近場探棒＋手機工程模式看 C/N₀）。(d) 若定罪，列三種不同層級的對策並標出代價。</summary>
+<div class="answer">
+<p>(a) 1575.42/24＝65.64→第 66 次＝1584.0 MHz（高 8.6 MHz）；1575.42/25＝63.02→第 63 次＝1575.0 MHz（<strong>低僅 0.42 MHz——貼臉</strong>）。注意：方波的偶次諧波本該小（Day 42 duty 指紋課），63 是奇次——25 MHz XI（50% duty 方波）的 63 次仍有能量（amplitude ~1/63 量級但離載波近、對 LNA 而言夠用）。所以指紋上 <strong>25 MHz 是頭號嫌疑人，24 MHz 因 66 次為偶次＋偏 8.6 MHz 雙重劣後</strong>（頻率規劃時「諧波離保護帶多遠」就是這樣算的——這題在 NB 專案裡是真的會被拿去選 XI 頻率的）。</p>
+<p>(b) 810×3＝2430 MHz——<strong>3 次諧波正好落在 2.4–2.4835 GHz 內</strong>；810×2＝1620 MHz 則貼著 GNSS 保護帶下緣。顯示時脈與其整數倍在頻譜地圖上必須逐條標紅。</p>
+<p>(c) 消滅實驗兩步：①C/N₀ 持續監控下，經測試腳本把 sensor XI 使能（power-down 線/PLL enable）反覆開關——若 1575 MHz 對應 C/N₀ 同步漲落（例如 +3～5 dBHz 回漲），嫌疑人現形；②近場探棒貼著模組 FPC/機殼縫掃 1575 MHz 附近（頻譜儀/組合天線接收），XI 關時該位置譜線消失＝路徑同時入鏡。若關掉後靈敏度不恢復＝還有共犯（顯示/電源路徑），回第 2 步繼續二分。</p>
+<p>(d) 對策分層：<strong>頻率層（最便宜、改料號）</strong>——XI 改 24.x MHz 諧波躲開 L1 保護帶，代價：重新跑全部諧波 collision table＋感測器相容性驗證；<strong>源頭層（改參數）</strong>——XI 驅動強度/串阻把高次諧波裙擺壓低（注意 SI 極限：XI 邊太快會自己打自己，查 spec）；<strong>路徑層（改銅與縫）</strong>——模組 FPC 屏蔽續接（銅箔/接地指到機殼）、XI 走線內層埋地＋跨槽搭橋、供電軌 RC/LDO 改善（防傳導進 LNA）；<strong>系統層</strong>——GNSS 側加 SAW 濾波器（L1 帶通，最常見最終手段，BOM＋插損）、或時序規避（GNSS 優先的 quiet window）。層級越高越貴——順序永遠從指紋與路徑定罪後再動。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：dock 環路懸案（機殼地/信號地/屏蔽的三選一判斷）</strong>NB 接上 HDMI dock 後 Wi-Fi 靈敏度掉 6 dB，拔掉恢復。現場只有：屏蔽房、頻譜儀、銅箔、磁環（夾式）。(a) 寫出你的假設清單（起碼三條，對應不同路徑）。(b) 設計三步實驗把「空間輻射／纜線共模傳導／電源傳導」三者分開。(c) 若定罪「纜線共模＋dock 機殼地捷徑」，給出兩種對策並說明各自動了接地策略的哪條原則。</summary>
+<div class="answer">
+<p>(a) 假設：①HDMI 線/纜線外壁共模把 NB↔dock 變成一副天線（屏蔽斷點或 pigtail 端接）；②NB 機殼地與 dock 地透過電源線 PE 形成低頻～射頻大環（環路面積＝桌面級）；③噪聲從 dock 電源經共軌/共阻抗進入 NB Wi-Fi 供電域；（加碼④：dock 自身開關電源諧波直接空間輻射）。每條假設都對應一個可殺死的實驗——假設不寫成可證偽句式就等於沒寫。</p>
+<p>(b) 三步：①<strong>拉開距離測試</strong>：把 NB 與 dock 相距 &gt;1 m、電池供電（拔適配器）重測——靈敏度恢復＝空間/地環路嫌疑上升、dock 傳導供電下降（注意：此步同時改了三個變因，只能做初篩，下步補對照）；②<strong>磁環夾纜線</strong>（HDMI 兩端各夾一次）：分貝大動＝共模傳導定罪（Day 43 手法）；③<strong>NB 單獨電池供電＋dock 正常供電、但 HDMI 屏蔽層以銅箔加強與 NB 機殼的 360° 續接</strong>——若改善＝屏蔽斷點/接地策略問題而非電源噪聲（電源傳導嫌疑用「NB 換供電/插拔適配器」矩陣對照排除）。</p>
+<p>(c) 對策一：<strong>HDMI 端 360° 屏蔽續接＋入口共模 choke（磁環/共模線圈）</strong>——動的是「屏蔽的價值在縫（§8）」＋「非法地捷徑加高頻阻抗（Day 43 同軸磁環手術的正式版）」；對策二：<strong>NB 機殼地與 dock 地的低頻環路管理</strong>——單端屏蔽接地或經電容續接（低頻斷環、高頻短接）、或規範 dock 的機殼接地拓撲（單點匯流）——動的是「兩個設備＝兩個地，兩端接地前先算環路帳（§5）」。白話結論：<strong>所有『插上某某就變差』的案件，本質都在問：你剛才有沒有未經允許加了一條地路徑。</strong></p>
+</div>
+</details>
+
+<h2>11. 面試怎麼考</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "Explain single-point versus multi-point grounding. When does each break down, and what would you actually ship in a laptop?"</strong><br><br>
+  <strong>Reference answer:</strong> Start from physics, not dogma: a ground conductor is an impedance, Z = R + jωL, and the rule I keep on a sticky note is 1 nH ≈ 6.3 Ω at 100 MHz. Single-point (star) grounding forces every return current through one deliberate node, eliminating common-impedance coupling — that is exactly what a low-frequency analog front end or an audio ground needs, and below roughly 1 MHz the wire you add is still only milliohms to an ohm, so the topology pays off. It dies two ways at RF: first, the star point carries tens of picofarads of parasitic capacitance to chassis and neighbors, and at 100 MHz that is a ~100 Ω door while the 20 cm of star wiring is ~100 Ω of inductance — return current simply stops honoring the star and leaves through the enclosure; second, a "point" only exists if the structure is much smaller than λ/20, and a 35 cm laptop exceeds that above roughly 40 MHz. So there is no equal-potential point to build a star on. What you ship is multi-point as the substrate — a continuous reference plane with returns riding directly under their signal traces, keeping loops folded — with disciplined zoning: high-current switching returns get short, wide, geometry-guided channels; sensitive analog domains keep internal star behavior and join the main ground at one defined, drawn-on-the-schematic tie point; every crossing of a plane split gets a stitching or bypass decision, and stitching screws/vias land at roughly λ/20 spacing. On the chassis side, "ground" is again not one net: signal ground, power-return ground, and chassis ground meet at controlled seams, because a shield can or EMI gasket whose contact impedance you never budgeted is precisely what Perfect Timing II lists as an antenna — improperly grounded equipment. My interview close: I don't choose a grounding topology by name; I enumerate return paths for my loudest currents and my most sensitive references, check each path's impedance at the frequency where it matters, and the topology falls out of the map.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "What is receiver desense? A customer reports GPS performance drops when the camera streams on your laptop. Walk me through your debug." </strong><br><br>
+  <strong>Reference answer:</strong> Desense is conducted or radiated energy from our own circuitry raising the noise floor at a receiver's input, reducing sensitivity — GNSS L1 is the classic victim because the signal arrives below the thermal noise floor, so even weak coupling of a clock harmonic matters. Step one, freeze a baseline: C/N₀, cold-start TTFF, fixed fixture, fixed attenuators, ideally in a shielded box — without a baseline every improvement is placebo. Step two, binary-search the culprits with scripted turn-offs: camera stream on/off, sensor crystal (typically 24 MHz) enabled/disabled, MIPI clock rate stepping, display refresh and backlight PWM. If C/N₀ tracks a switch, that signal is on the list; if performance never recovers even with everything off, look at power rails and chassis leakage. Step three, harmonic arithmetic as fingerprinting: 25 MHz × 63 = 1575.0 MHz, only 0.4 MHz off L1 — a textbook suspect — whereas 24 MHz would need harmonic 66, even-order and 8 MHz away, much weaker; display and MIPI clocks in the hundreds of MHz hit 2.4 GHz Wi-Fi on the third harmonic, so every suspect gets checked against both victim bands. Step four, path conviction: near-field probe at the module flex and chassis seams; the hand/cable trick as a qualitative common-mode flag; a clamp-on ferrite on the flex as a temporary choke; and critically, check the conducted path — noise riding the LNA supply rail reaches the receiver without ever flying through air. Step five, countermeasures priced by layer: frequency plan change (cheapest if crystal compatibility allows), source edge/termination tightening, shield seam repair — 360° shield termination instead of pigtails, foil continuity across seams, stitching at λ/20 — common-mode choke at the flex entry, rail filtering, and worst case a SAW filter on the GNSS front end plus quiet-window scheduling. Step six, close with before/after sensitivity deltas and a collision table of every clock on the board versus protected bands — because desense at mass production is prevented by a frequency negotiation, not by copper tape heroics.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <p>「我不選接地拓撲的名字，我畫迴流地圖——每個大電流、每個敏感基準，在它的頻率上走哪條路、付幾 Ω 過路費，拓撲自己會從地圖裡長出來」；「1 nH＝6.3 Ω@100 MHz：談接地之前先把公分換成 nH」；「星點在低頻是潔癖，在射頻是孤島——它對機殼的 15 pF，就是高頻的『捷徑收費站』」；「屏蔽的規格不問牆值問縫值：牆理論上 40 dB 起跳，勝負全在 pigtail、槽口與那顆沒鎖的螺絲」；「360° 壓接 vs 8 mm 辮子＝同一根纜線上的 24 dB」；「desense 的終局不是貼銅箔，是全板頻率清單與保護頻段的 collision table——頻率協商是設計階段的 KPI」；「插上某某就變差＝有人未經設計加了一條地路徑——我的第一個問題永遠是：誰的迴流多了一條 option」。把這句和 PT2 Ch.9「接地不良的設備就是天線」連起來說，書證與現場證據各一，就是滿分答法。</p>
+</div>
+
+<h2>12. 今日 Anki 卡片</h2>
+
+<div class="anki">
+  <p class="q">Q1：「地」的三種身分是什麼？為什麼說「地不是無底洞」？一句話核心換算？</p>
+  <p class="a">A1：①參考水位（信號基準——電壓相對誰量）；②迴流導體（每個訊號電流的回家路——路徑決定迴路面積＝天線）；③安全地（機殼/PE——靜電漏電的安全出口＋屏蔽的錨）。地是導體：Z＝R＋jωL，倒進去的電流按 Z 收過路費（地彈跳）；「0 V」是設計意圖不是測量結果。核心換算：<strong>1 nH≈6.3 Ω@100 MHz</strong>——接地問題先把公分換 nH。三身分混用（髒迴流借道參考地）＝80% 接地災難的起源。</p>
+</div>
+<div class="anki">
+  <p class="q">Q2：單點／多點／混合接地的判準與各自失效模式？星點高頻為什麼變孤島？</p>
+  <p class="a">A2：經典慣例：＜約 1 MHz 單點（星形）——消共阻抗串擾，失效＝拉線感抗隨頻飆升；＞約 10 MHz 多點（就近上平面）——ωL 最小化，失效＝接受地噪音、須分區＋幾何引導髒流；中間混合——分區（模區內單點、高頻區多點）＋接縫單點相逢。星點孤島機理：星點對機殼雜散電容十幾 pF（@100 MHz ≈106 Ω）vs 星形拉線感抗（30 cm≈300 nH→188 Ω）——高頻棄星點改「隔空跳機殼」，拓撲解體。幾何輔助判準：結構≪λ/20 才存在「等位的點」（35 cm NB 在 &gt;約 43 MHz 後「沒有點」）。</p>
+</div>
+<div class="anki">
+  <p class="q">Q3：機殼地/信號地/功率地的分合哲學？縫合 via 的任務與間距口徑？</p>
+  <p class="a">A3：判準一句：「兩域迴流會被迫切共乘窄路嗎？」會→分道/分開住；不會→共享平面（低頻大電流另開粗短貨運通道）。合的接縫是設計物：位置明確、極短、圖上畫 net tie 命名（不畫＝被 CAM 吃掉）。機殼地＝屏蔽的錨：接觸阻抗按射頻帳算（氧化/噴漆/按壓/間距）。縫合 via 任務＝把大銅釘成等位面（各層地、殼與銅皮間的高頻等位），間距 ≤ λ/20（2 GHz→約 7.5 mm、6 GHz→約 2.5 mm，約值）。口訣：短、寬、連續。</p>
+</div>
+<div class="anki">
+  <p class="q">Q4：屏蔽的「牆值 vs 縫值」：集膚深度算什麼？槽口與 pigtail 各怎麼管？</p>
+  <p class="a">A4：牆：δ≈66/√f(MHz) µm（銅）→6.6 µm@100 MHz、2.1 µm@1 GHz；吸收≈8.7 dB/δ → 35 µm 銅箔理論值 46 dB@100 MHz——牆幾乎免費。縫才是 KPI：槽口最長邊 ≤ λ/20（半波長共振最兇：3 cm 槽→5 GHz）；縫合/墊片使接縫導電連續（銅箔跨縫 C 形繞邊）；纜線屏蔽 <strong>360° 環形壓接（&lt;1 nH）vs 8 mm pigtail（≈50 Ω@1 GHz）≈ 24 dB 差距</strong>——辮子把屏蔽層變成共模噴嘴。PT2 Ch.9：屏蔽＝機械手段、貴、量產前難救（第零階梯經濟學）；「接地不良的設備」本身列名天線清單。</p>
+</div>
+<div class="anki">
+  <p class="q">Q5：什麼是 antenna desense？六步打撈流程＋頻率指紋兩個速算法？</p>
+  <p class="a">A5：desense＝自家電路抬高收訊機噪底、靈敏度下降（GNSS L1 1575.42 MHz 最嫩）。六步：①基線凍結（C/N₀、TTFF、固定條件）→②嫌疑二分 turn-off（stream/XI/MIPI rate/顯示 PWM）→③頻率指紋（整數倍對表：<strong>25 MHz×63＝1575.0 貼臉 L1</strong>；約 800 MHz 級×3＝2.4 G）→④路徑定罪（空間/纜線共模/電源傳導進 LNA/機殼縫；摸線、磁環、銅箔對照）→⑤對策分層（頻率規避→源頭邊框/端接→屏蔽縫/choke→軌濾→SAW/quiet window，由便宜到貴）→⑥結算＋全板頻率 collision table 進 checklist。坑：換天線式試錯、「關掉就好」不是對策、漏查供電傳導路徑。</p>
+</div>
+
+<h2>13. 總結與明日預告</h2>
+
+<p><strong>今天的三句話總結：</strong>①地是三種身分共用一個名字的導體——先把公分換成 nH（1 nH＝6.3 Ω@100 MHz），拓撲問題自動變成迴流地圖問題；②低頻比 R、高頻比 L：單點是低頻的潔癖、多點是高頻的生存、混合是真實 NB 的政治，接縫（seam）處見真章；③屏蔽的牆幾乎免費、勝負全在縫——λ/20 的釘子、C 形銅箔、360° 壓接，以及「插上某某就變差＝有人加了一條未經設計的地路徑」這條辦案直覺。</p>
+
+<p><strong>Day 45（週日・複習測驗日）：</strong>「週 9 大結算：20 題自我測驗」。範圍：週 8 收官（DC-DC 與去耦交互、PDN 單頁決策書）＋本週全部（共模/差模文法、三夾法與 DIY 校正數字、近場尋兇、迴路面積 A/B/C、X/Y-cap、法規階梯、展頻 Hershey Kiss、今天的接地三身分/拓撲判準/縫的經濟學/desense 流程）。<strong>特別預告：你自己量過/算過的數字會原題回歸——8 V/A 校正例題、改道 +26 dB、100 nF 搭橋 0.08 Ω、共模 0.5 mA 喊贏差模那題、以及今天的 25 MHz×63 貼臉 L1。今晚睡前把 Day 42/43/44 三份 Anki 一起掃一輪。</strong>週一（Day 46）進週 10：ESD 與防護——HBM/CDM/IEC 61000-4-2 模型、TVS 選型、layout 對策；屆時你會發現：ESD 是「接地與屏蔽」這門課最兇猛的期末考（8 kV 靜電打進來，那條你今天精心設計的縫就是它的逃生路線——先修課，後救命）。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

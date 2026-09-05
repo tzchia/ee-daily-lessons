@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 45｜週 9 大結算：EMI 辦案 20 題自我測驗（概念 8＋計算 6＋情境 4＋英文 2）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 9 週・第 45 天（週日複習日・第 9 週大結算）</div>
+  <h1>Day 45：週 9 大結算——20 題自我測驗（共模文法・三夾法・接地三身分・縫的經濟學）</h1>
+  <div class="meta">2026-09-06（日）｜預估學習時間：90 分鐘（作答 60＋訂正 30）｜難度：★★★★☆｜及格線：16/20——<strong>本週是「辦案學」：概念題考法條、計算題考你 Day 43 親手校過的數字（8 V/A 校正例原題回歸、改道 +26 dB、100 nF 搭橋 0.08 Ω、三夾 30 mA/1.05 A/1.0 A、8 nH@1 GHz＝50 Ω、還有 25 MHz×63 貼臉 L1）。先作答、後訂正；每題詳解都附「出自哪一天的哪一節」，錯題的復習坐標已經幫你標好。</strong></div>
+</header>
+
+<div class="card goal">
+  <h2>考試規則（先讀）</h2>
+  <ul>
+    <li><strong>範圍：</strong>Day 41（週 8 收官：DC-DC 交越頻率、容性牆、Ch.5 濾波器驗證、PDN 單頁決策書）＋Day 42–44（共模/差模文法、三夾法與 DIY 校正、近場尋兇、接地三身分與三拓撲、屏蔽縫的經濟學、camera desense 流程）。</li>
+    <li><strong>配分：</strong>Part A 概念 8 題＋Part B 計算 6 題＋Part C 情境排查 4 題＋Part D 英文面試 2 題＝20 題。</li>
+    <li><strong>閉卷。</strong>計算題可以用計算器，不可以翻課——本週的數字要長在手上。英文題請真的寫出來（寫不出來至少講一遍），再對參考答案。</li>
+    <li>Perfect Timing II Ch.9 的引用資料以課上講過為準；2002 年的數據（法規表、量級）凡涉合規判斷，一律以現代 CISPR/FCC 版與實測為準（以現代標準需上修）。</li>
+  </ul>
+</div>
+
+<div class="card intuition">
+  <h2>開考前默唸：本週四個靈魂（各一句）</h2>
+  <ul>
+    <li><strong>Day 42：</strong>差模是自家事（∝I·A·f²），共模是國際事件（∝I·L·f，搭纜線出境）；共模沒人被設計，是電位差逼出來的——面積是免費旋鈕，縮 10 倍＝−20 dB。</li>
+    <li><strong>Day 43：</strong>夾全部只看共模、夾單根看總和、8 字反繞只看差模——三夾兩算，模式分家；DIY 夾做偵探（分貝差可信）、商用夾做會計（安培數要證書）。</li>
+    <li><strong>Day 44：</strong>低頻比 R、高頻比 L：1 nH＝6.3 Ω@100 MHz——地是三種身分共用一個名字的導體，拓撲問題自動變成迴流地圖問題。</li>
+    <li><strong>Day 41：</strong>控制迴路只在頻寬之內看得見誤差（f_c 約 f_sw/10～/20）；Ch.5 的濾波器要縫在頻寬邊界的接縫上——驗（20·log(V_OUT/V_IN) 不得變正）比信值錢。</li>
+  </ul>
+  <p><strong>速查卡（本週公式與數字）：</strong>小環 E≈1.32×10⁻¹⁴·I·A·f²/r（V/m、m、A、Hz）｜短偶極 E≈40·I·L/λ（近場 E≈377·I·A/(λ·r²)）｜f_ar＝1/(2π√(LC))｜Q_ar＝√(L/C)/R｜Z_L＝2πfL：1 nH@100 MHz＝6.3 Ω、8 nH@1 GHz≈50 Ω（周長 1 cm 的孔）｜展頻：Ch.9 例 65 MHz、BW%＝3.87%→基頻降 6.48 dB（書中量測）｜λ/20@1 GHz＝15 mm｜暗室代價約每小時三位數美金（量級）。</p>
+</div>
+
+<h2>0. 開考前的兩張圖（先看清楚，考卷會問）</h2>
+
+<figure>
+<svg viewBox="0 0 920 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+  <text x="460" y="22" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：週 9 辦案一頁流——從頻譜指紋到結算（Q15–18 的情境都走在這張圖上）</text>
+  <!-- five stages -->
+  <rect x="15" y="45" width="160" height="92" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="95" y="68" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#1e40af">① 頻譜指紋</text>
+  <text x="95" y="88" text-anchor="middle" font-size="10.5" fill="#374151">超標點 ÷ 板上時鐘</text>
+  <text x="95" y="104" text-anchor="middle" font-size="10.5" fill="#374151">整除＝時鐘家族</text>
+  <text x="95" y="120" text-anchor="middle" font-size="10.5" fill="#374151">不整除＝開關係（f_sw）</text>
+  <rect x="200" y="45" width="160" height="92" rx="10" fill="#fefce8" stroke="#eab308" stroke-width="2"/>
+  <text x="280" y="68" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#9a3412">② 模式分辨</text>
+  <text x="280" y="88" text-anchor="middle" font-size="10.5" fill="#374151">三夾兩算分家</text>
+  <text x="280" y="104" text-anchor="middle" font-size="10.5" fill="#374151">摸線法：共模怕手</text>
+  <text x="280" y="120" text-anchor="middle" font-size="10.5" fill="#374151">磁珠單珠法分層</text>
+  <rect x="385" y="45" width="160" height="92" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="465" y="68" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#991b1b">③ 天線鑑定</text>
+  <text x="465" y="88" text-anchor="middle" font-size="10.5" fill="#374151">A 案：小環 I·A·f²</text>
+  <text x="465" y="104" text-anchor="middle" font-size="10.5" fill="#374151">B 案：偶極 I·L·f</text>
+  <text x="465" y="120" text-anchor="middle" font-size="10.5" fill="#374151">H 探棒畫熱區定位</text>
+  <rect x="570" y="45" width="160" height="92" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="650" y="68" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#166534">④ 對策階梯</text>
+  <text x="650" y="88" text-anchor="middle" font-size="10.5" fill="#374151">layout→端接→慢速</text>
+  <text x="650" y="104" text-anchor="middle" font-size="10.5" fill="#374151">小 cap／跨槽搭橋</text>
+  <text x="650" y="120" text-anchor="middle" font-size="10.5" fill="#374151">choke→屏蔽（機殼最後）</text>
+  <rect x="755" y="45" width="150" height="92" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="830" y="68" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#5b21b6">⑤ 結算</text>
+  <text x="830" y="88" text-anchor="middle" font-size="10.5" fill="#374151">板級近場 Δ dB</text>
+  <text x="830" y="104" text-anchor="middle" font-size="10.5" fill="#374151">暗室只做結算</text>
+  <text x="830" y="120" text-anchor="middle" font-size="10.5" fill="#374151">只宣稱儀器撐得起的結論</text>
+  <line x1="177" y1="91" x2="198" y2="91" stroke="#9ca3af" stroke-width="2.5" marker-end="url(#r5)"/>
+  <line x1="362" y1="91" x2="383" y2="91" stroke="#9ca3af" stroke-width="2.5" marker-end="url(#r5)"/>
+  <line x1="547" y1="91" x2="568" y2="91" stroke="#9ca3af" stroke-width="2.5" marker-end="url(#r5)"/>
+  <line x1="732" y1="91" x2="753" y2="91" stroke="#9ca3af" stroke-width="2.5" marker-end="url(#r5)"/>
+  <!-- grounding strip -->
+  <rect x="15" y="160" width="890" height="60" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="460" y="183" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0f766e">全程心法（Day 44）：把「地」換成 nH 來讀——1 nH＝6.3 Ω@100 MHz；先分清手上這個地是哪種身分（參考平面／回流行員／安全基準），再決定單點（低頻）、多點（高頻）、混合（真實 NB）</text>
+  <text x="460" y="205" text-anchor="middle" font-size="11.5" fill="#374151">屏蔽的牆幾乎免費、勝負全在縫：λ/20 釘子、C 形銅箔、360° 壓接——「插上某某就變差＝有人加了一條未經設計的地路徑」</text>
+  <!-- feedback arrow -->
+  <path d="M 830 137 L 830 250 L 95 250 L 95 141" fill="none" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#r5)"/>
+  <text x="462" y="244" text-anchor="middle" font-size="11.5" fill="#6b7280">每次只改一個變因、每張頻譜都要前後對照——結算不勝，帶著新指紋回到 ① 重跑</text>
+  <defs>
+    <marker id="r5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker>
+  </defs>
+</svg>
+<figcaption>圖 1：本週知識的办案動線。情境題（Q15–18）全落在這張圖的不同站位上。</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 920 270" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
+  <text x="460" y="22" text-anchor="middle" font-size="16" font-weight="bold" fill="#9a3412">圖 2：Q14 用圖——25 MHz（±0.5% 展頻）的諧波梳撞上 L1 導航頻段（Day 44 的 63 次諧波案重繪）</text>
+  <line x1="60" y1="210" x2="890" y2="210" stroke="#374151" stroke-width="2"/>
+  <text x="880" y="232" text-anchor="end" font-size="11" fill="#374151">頻率</text>
+  <!-- harmonic comb: sparse representative lines -->
+  <g stroke="#2563eb" stroke-width="2">
+    <line x1="95" y1="210" x2="95" y2="170"/><line x1="120" y1="210" x2="120" y2="182"/>
+    <line x1="150" y1="210" x2="150" y2="190"/><line x1="190" y1="210" x2="190" y2="196"/>
+    <line x1="240" y1="210" x2="240" y2="200"/><line x1="300" y1="210" x2="300" y2="203"/>
+    <line x1="370" y1="210" x2="370" y2="204"/><line x1="450" y1="210" x2="450" y2="206"/>
+    <line x1="540" y1="210" x2="540" y2="207"/><line x1="640" y1="210" x2="640" y2="208"/>
+  </g>
+  <text x="95" y="160" text-anchor="middle" font-size="11" fill="#1e40af">25 MHz 基頻</text>
+  <text x="120" y="252" text-anchor="middle" font-size="10" fill="#6b7280">諧波梳：每 25 MHz 一根（示意）</text>
+  <!-- GPS band -->
+  <rect x="735" y="60" width="80" height="150" fill="#fee2e2" opacity=".7"/>
+  <line x1="735" y1="210" x2="735" y2="60" stroke="#dc2626" stroke-width="1.5"/>
+  <line x1="815" y1="210" x2="815" y2="60" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="775" y="52" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626">L1：1567–1577 MHz（保護頻段）</text>
+  <text x="775" y="246" text-anchor="middle" font-size="10" fill="#991b1b">25×63＝1575.0 MHz｜展頻 ±0.5%→±125 kHz×63 倍＝±7.875 MHz？（先想清楚再算，Q14b）</text>
+  <!-- spread bump centered at 1575 -->
+  <path d="M 736 200 C 745 198, 750 196, 756 188 C 762 178, 764 150, 769 120 C 772 100, 773 88, 775 80 C 777 88, 778 100, 781 120 C 786 150, 788 178, 794 188 C 800 196, 805 198, 814 200" fill="none" stroke="#991b1b" stroke-width="3"/>
+  <text x="700" y="96" text-anchor="end" font-size="11" fill="#991b1b" font-weight="bold">「髮夾形」寬凸塊＝時鐘諧波＋展頻的指紋</text>
+  <line x1="703" y1="100" x2="760" y2="112" stroke="#991b1b" stroke-width="1.5" marker-end="url(#r6)"/>
+  <defs>
+    <marker id="r6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#991b1b"/></marker>
+  </defs>
+</svg>
+<figcaption>圖 2：諧波梳＋保護頻段＋髮夾凸塊。Q14 請用它做完整驗算與「現場確認三板斧」的回憶。</figcaption>
+</figure>
+
+<h2>Part A｜概念題（Q1–Q8，每題先自己想 2 分鐘再翻詳解）</h2>
+
+<details>
+<summary><strong>Q1（Day 41）：</strong>buck 控制迴路為什麼「過了 f_c 就裝聾」？f_c 的常見量級是什麼？以及： datasheet 明明寫「多加輸出電容更穩」，為什麼「隨手多焊兩顆大容」反而是新手最愛的穩定性殺手？（三段都要答）</summary>
+<div class="answer">
+<p><strong>①裝聾的機制：</strong>控制迴路的「修正能力」來自迴路增益，而增益以約 −20 dB/十倍頻的斜率滾降，落到 0 dB 的頻率就是交越頻率 f_c——過了它，迴路對誤差「說不上話」，對高頻雜訊等於透明人（PT2 Ch.12 引用 PLL 平均化概念（原文大意）同構：「平均化只發生在迴路頻寬之內」——buck 與 PLL 是同一類動物）。</p>
+<p><strong>②量級：</strong>f_c ≈ f_sw/10～f_sw/20（保守類比控制，約值；現代數位控制可到 f_sw/5 上下，以現代標準視設計而異）。例：f_sw＝750 kHz→f_c 約 37～75 kHz。此外多數控制器一個開關週期只有一次修正機會，天然有「一拍＋數十拍時間常數」的延遲。</p>
+<p><strong>③多焊大容的代價：</strong>輸出極點 f_p＝1/(2π√(LC)) 會隨 C 增大下移（例：2.2 µH//220 µF→約 7.2 kHz，再併 470 µF→約 4.1 kHz）；若補償原本設計在 f_p 之上（跨極點補償），極點往下偷跑進交越區、偷走相位→相位邊際縮水。加上 MLCC 時代 ESR 只有 mΩ 級、補零點的「ESR 救援」失蹤——datasheet 的「最大負載電容」欄位就是這條紅線的官方版本。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q2（Day 41・PT2 Ch.5）：</strong>Ch.5 濾波器驗證法則：Attenuation＝20·log(V_OUT/V_IN)，全頻掃描曲線「不得變正」。曲線在 10 MHz 以上變正代表什麼物理？處方是什麼？以及：為什麼磁珠「DCR 最低」不等於「濾波器最好」？</summary>
+<div class="answer">
+<p><strong>變正的物理意義：</strong>輸出比輸入還大＝濾波器變了諧振放大器（LC 反諧振／串聯諧振尖峰），在那個頻點不但不衰、還在舉手投降加倍收雜訊。書中實測：某些料號組合在 10 MHz 以上 Attenuation 變正——「驗證」的意義就在這裡：<strong>曲線必須親手量，不能靠 datasheet 想像。</strong></p>
+<p><strong>處方：</strong>把「L」換回「R」或換不同特性的磁珠——Ch.5 的哲學是電阻性濾波器全頻不諧振、磁珠有頻段個性（例：某料號 600 Ω@100 MHz、1.2 kHz@600 MHz——頻率錯配就完全沒衰；以現代標準需上修：今天磁珠型錄更細，更要照曲線選、不照名字選）。</p>
+<p><strong>DCR 陷阱：</strong>DCR 管的是直流壓降（DC 帳），濾波器要的是「交流頻段內的高阻＋低 Q 不成峰」（AC 帳）。低 DCR 常意味著低損、低損就高 Q——衰減不夠還可能長出反諧振尖峰。所以驗證曲線同時看：衰得夠不夠、有沒有變正。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q3（Day 42）：</strong>用一句話分别定義差模與共模電流。然後：共模電流「沒有人在電路圖上設計它」，它為什麼還是存在？（寫出至少三條來源，並說共同本質）</summary>
+<div class="answer">
+<p><strong>一句話：</strong>差模＝訊號「去」與「回」大小相等、方向相反的一對（功能性電力/訊號輸送）；共模＝兩條（或整束）線上的電流「同方向一起流」，經寄生電容與環境完成迴路。</p>
+<p><strong>四條來源（任寫三）：</strong>①開關節點對地 dV/dt 位移電流（Q1、寄生電容就是通道）；②地彈跳／地壓差——迴路兩端「地」不同電位，把共模「泵」進電纜；③屏蔽剝落處／連接器斷點的阻抗不連續，把差模轉成共模；④電位參考不同的兩塊板（FG、PE 與訊號地）把大地平當迴路用。<strong>共同本質：</strong>只要有「兩點地電位不同」或「對地 dV/dt」，共模就有泵；它的存在不是設計錯，是常態——設計目標是「不給它出路（離開機殼的導體）」與「縮小泵本身」。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q4（Day 42）：</strong>寫出小環（差模）與短偶極（共模）的遠場輻射近似式，各自依賴哪些變數？由此推出的「三個旋鈕」裡，哪兩個最接近免費、為什麼？跨槽走線「搭橋」的兩個條件是什麼？</summary>
+<div class="answer">
+<p><strong>兩式：</strong>小環 E≈1.32×10⁻¹⁴·I·A·f²/r（∝電流×面積×頻率平方）；短偶極 E≈40·I·L/λ（∝電流×線長×頻率一次方）。（教科書近似，數字標量級。2002 年後法規與量測口徑已更新，設計判斷照用、合規以現代 CISPR/FCC 為準。）</p>
+<p><strong>三個旋鈕：</strong>①面積縮 10 倍＝−20 dB——<strong>免費且最猛</strong>（layout 折迴路，回流緊貼訊號，是 Ch.9 四階梯之前的「第 0 階梯」）；②端接殺過衝＝削源頭電流（幾乎免費，SI 還加分）；③串阻/慢速要付 SI 的錢、濾波要付 BOM 的錢、展頻要付「接收端也要吃展頻」的系統代價。</p>
+<p><strong>搭橋兩條件：</strong>①位置——橋要搭在<strong>槽的起始邊</strong>（迴流改道的入口），搭在中間無效；②容抗——橋在案發頻點要「真的像短路」：X_C 要遠低於大環感抗（例：100 nF 在 20 MHz 約 0.08 Ω vs 大環約 75 Ω），同時引線電感要顧（10 nH 引線@100 MHz 已加 6 Ω，就快破功）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q5（Day 43）：</strong>三夾法的三種夾法各讀到什麼（寫出口徑與式子）？「夾全部讀值為零」能證明什麼、不能證明什麼？</summary>
+<div class="answer">
+<p><strong>三口徑：</strong>①夾全部導體＝|ΣI|＝2·I_CM（一去一回的差模自己抵銷，只剩共模×2）；②夾單根＝|I_DM＋I_CM|（總和）；③8 字反繞差動＝2·I_DM（共模對消）。聯立①③得 I_CM、I_DM，②做交叉驗證。</p>
+<p><strong>讀值為零：</strong>能證明「在夾子頻寬與靈敏度之內、這個頻點沒有可測共模」；<strong>不能</strong>證明「沒有共模」——夾子頻寬外（DIY 夾高頻 Z_t 滾降）、小於雜訊底的共模看不見；也不能證明板內沒有共模（只有「這條被夾的纜線」上沒有）。實驗室誠實版結論要帶口徑：「以 DIY 夾、於 X MHz，讀值低於本底」。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q6（Day 44）：</strong>為什麼「高速裝置的地」是一個會動的節點、而不是 0 V？「低頻比 R、高頻比 L」各用一個課上的數字例子說明。</summary>
+<div class="answer">
+<p><strong>地會動的機制：</strong>地導體有阻抗 Z＝R＋jωL（＋趨膚效應讓 R 隨頻率升）。電流流過就有壓降 V＝IZ——低頻時 R 贏（直流 1 A 流過 10 mΩ，地差 10 mV，「這是直流壓降問題」），高頻時 ωL 贏：同樣這段導體若 5 nH，@200 MHz 就是約 6 Ω，數十 mA 的共模就能讓它「地」振動幾十 mV——對 1 V 內部的 10 mV 雜訊＝高敏感電路的惡夢。所以高速設計的地是<strong>「會動的節點」</strong>，要當訊號來管（它是每條傳輸線 100% 電流的回流行員——Day 16）。</p>
+<p><strong>兩個課上數字：</strong>低頻比 R：單點接地對低頻有效，因為低頻時地環路的干擾由 R 主導、共阻抗耦合＝I×R，一條粗地就能壓住。高頻比 L：300 mil（約 7.6 mm）的地跳線約 4～5 nH→300 MHz 約 25～31 Ω——高頻下這是「斷路」，所以高頻要多點（λ/20 節距的地孔）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q7（Day 44）：</strong>屏蔽要成立有哪兩個條件？為什麼 EMI 縫上要「每 λ/20 打釘」而不是「開一堆圓孔通風」？「插上顯示器 Wi-Fi 就變差」這句觀察，對接地設計意味著什麼？</summary>
+<div class="answer">
+<p><strong>兩個條件：</strong>①連續導體把 wanted 場關在牆內（趨膚效應＋反射損）；②縫（seam）的阻抗要低到不讓 wanted 電流改道——牆再完整，一條未設計縫＝一槽天線。</p>
+<p><strong>λ/20 釘子 vs 圓孔：</strong>縫的洩漏由縫長對波長的比值決定：縫長 ≳λ/2 就是高效天線（Ch.9 天線清單：「遮蔽不良的元件／接地不良的設備」都算天線）。釘子的作用是把一條長縫切成 λ/20 的小段，每段遠低於諧振、洩漏不遠場（例：1 GHz→λ/20＝15 mm；500 MHz→30 mm）。圓孔則要按「孔最大尺寸 ≪ λ/20～λ/10」控制直徑與陣列——通風孔設計是另一門正課，「開一堆」不給免費。</p>
+<p><strong>「插上就變差」：</strong>它告訴你：那條線／那個裝置<strong>加入了一條未經設計的地路徑</strong>（屏蔽 360° 壓接不良、適配器沒 FG、DP 殼地與主機板地在機殼內亂接）——案犯不是顯示器本身，是它補上的那條路把共模泵進了 Wi-Fi 天線的地。所以 desense 排查第一步就是「插拔矩陣＋變因凍結」：能插拔重現，就有嫌疑清單。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q8（Day 44・PT2 Ch.9）：</strong>「把接地當接地來 debug」的查緝順序四步是什麼（以鏡頭 desense 為例）？「量測點是法律」在這套流程裡出現過幾次、各在哪裡？</summary>
+<div class="answer">
+<p><strong>四步：</strong>①<strong>定頻點</strong>：先量出被干擾的敏感頻點（例 Wi-Fi 5 GHz 鏈路、GPS L1）與影像條紋的時域週期→換頻域指紋；②<strong>插拔矩陣</strong>：把所有可插拔的（顯示器、USB、適配器、dock）逐一插上/拔除重測，找出「加害開關」；③<strong>分貝定位</strong>：近場探棒掃熱區、夾子分共/差模（三夾法），鎖定路徑（哪條線離開機殼、哪道縫）；④<strong>對策結算</strong>：按四階梯由便宜到貴試（折迴路/端接→慢速/小 cap→搭橋/choke→360° 屏蔽），每步記前後 dB，暗室只做結算。</p>
+<p><strong>「量測點是法律」至少三處：</strong>(a) desense 基準要在<strong>天線端口</strong>收、不在板中間收（換點＝換案情）；(b) PDN 的 remote sense／load-point 量測點沒接對，IR drop 與穩定性判斷基準全錯位（Day 41）；(c) 近場探棒的距離/角度/頻寬要固定——5 cm 換 3 cm 不是同一次實驗（Day 43）。口徑不一致的兩個數字，永遠不能相減。</p>
+</div>
+</details>
+
+<h2>Part B｜計算題（Q9–Q14，寫出算式，數量級要對）</h2>
+
+<details>
+<summary><strong>Q9（Day 43 原題回歸）：</strong>DIY 電流夾校正：產生器在 50 Ω 終端量得 V_term＝500 mV，穿環導體的電流 I＝？；夾子輸出讀得 V_out＝80 mV，變比 Z_t＝？；之後在某頻點夾到 V_out＝24 mV，該導體電流約＝？（同頻點同位置）</summary>
+<div class="answer">
+<p>I＝V_term/50＝0.5/50＝<strong>10 mA</strong>；Z_t＝V_out/I＝0.080/0.010＝<strong>8 V/A</strong>（此頻點，約 10 MHz 處校）；I＝V_out/Z_t＝0.024/8＝<strong>3 mA</strong>。</p>
+<p><strong>加註（必考口徑）：</strong>Z_t 隨頻率變（鐵氧體磁導率滾降＋匝間電容分流），換頻點要重校；DIY 夾做偵探（同探棒同頻點取比值，Z_t 約掉、分貝差可信），商用夾做會計（絕對安培數）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q10（Day 43 實驗 5 原題）：</strong>迴路改道實驗：態 A（回流緊貼）H 探棒 5 cm 讀 20 mVpp@10 MHz；態 B 回流繞遠、環路面積 ×20。(a) 近場小環公式預測態 B 讀值？(b) 實際讀 400 mV 代表什麼？(c) 態 C 在槽邊搭 100 nF 後讀值應該怎样？若<strong>沒</strong>掉回來，先查什麼？</summary>
+<div class="answer">
+<p>(a) 近場 E∝A（同頻、同距離、同電流）：20×20＝<strong>400 mVpp</strong>；轉 dB＝20·log(20)≈<strong>+26 dB</strong>——這是「縮小環路＝免費減輻射」最便宜的證明題（課上改道 +26 dB 的原題）。</p>
+<p>(b) 讀值剛好 400 mVpp：面積線性律成立，案發機制確認是該環路的磁通（近場 H 域）。</p>
+<p>(c) 應該掉回態 A 附近（幾 dB 內）——高頻迴流改走容抗近路、大環被拆一半。<strong>沒掉回來先查橋本身</strong>：X_C@案發頻率是否夠低（100 nF@20 MHz≈0.08 Ω 才算數）、引線電感（3 cm 引線≈10 nH 級，@100 MHz 加 6 Ω 就破功）、橋的位置是否在槽的起始邊。橋不成立＝資料不會說謊，是你的橋不是短路。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q11（Day 43／Day 44 數字題）：</strong>(a) 100 nF 橋在 20 MHz 的容抗？對比大環約 75 Ω，高頻迴流「抄近路」的分貝比約多少？(b) 橋的引線 3 cm（約 10 nH 級）在 100 MHz 加多少感抗？由此寫出「跨槽搭橋」兩條紀律。(c) 周長 1 cm 的屏蔽孔等效約 8 nH 電感——它在 1 GHz 的阻抗是多少？這是什麼設計語言？</summary>
+<div class="answer">
+<p>(a) X_C＝1/(2πfC)＝1/(2π·2×10⁷·1×10⁻⁹)≈<strong>0.08 Ω</strong>；75/0.08≈940 倍≈<strong>約 59 dB</strong> 的近路偏好——20 MHz 下高頻迴流幾乎全走橋。</p>
+<p>(b) Z_L＝2πfL≈2π·10⁸·1×10⁻⁸≈<strong>6 Ω</strong>——對 20 MHz（0.08 Ω 時代）無感，對 100 MHz 卻比橋本身的容抗大一個量級：橋在高頻變「電感橋」，破功。紀律：<strong>①橋要搭在槽邊（迴流入口）；②橋的高頻上限由引線電感決定——料要小封裝、引線要短（0402 遠勝 1206＋長腳），容值要在案發頻點仍像短路。</strong></p>
+<p>(c) Z≈2π·10⁹·8×10⁻⁹≈<strong>50 Ω</strong>（約值）——設計語言：1 GHz 下「1 cm 的一圈孔」不是通風、是一顆 8 nH 的電感擺在屏蔽回流路上；屏蔽孔陣列的尺寸間距要按波長算（λ/20 邏輯），不是按美觀。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q12（Day 42 練習 2 原題回歸）：</strong>某纜線（L＝40 cm）於 150 MHz 超標。三夾讀值：①夾全部＝30 mA；②夾單根＝1.05 A；③8 字差動＝1.0 A。(a) 求 I_CM、I_DM。(b) 共模是差模的幾個百分比（約幾個 dB）？(c) 用兩式估 3 m 處輻射（DM 迴路 A＝3 cm²），誰是主嫌、差約幾 dB？(d) 給主嫌兩層對策、並寫出「不要做的事」。</summary>
+<div class="answer">
+<p>(a) ①＝2·I_CM→I_CM＝<strong>15 mA</strong>；③＝2·I_DM→I_DM＝<strong>0.5 A</strong>（②單根≈I_DM＋I_CM＝0.515 A，口徑交叉驗證合理）。</p>
+<p>(b) 15 mA/0.5 A＝<strong>3%</strong>（≈20·log0.03≈−30 dB）——「小角色」。</p>
+<p>(c) DM 小環：E≈1.32×10⁻¹⁴×0.5×3×10⁻⁴×(1.5×10⁸)²/3≈1.5×10⁻² V/m≈<strong>83 dBµV/m</strong>；CM 短偶極：E≈188×0.015×0.4/(2×3)≈0.19 V/m≈<strong>105 dBµV/m</strong>。<strong>共模比緊貼的差模環高約 22 dB</strong>——3% 的電流、碾壓的音量（「小角色大音量」實錘；數字為量級粗估）。</p>
+<p>(d) <strong>源頭層：</strong>找同向電流泵（地壓差/地彈跳/屏蔽斷點逐條巡）；<strong>攔截層：</strong>纜線加共模 choke（先夾磁環快速驗證：分貝掉＝定罪共模路徑）、屏蔽 360° 續接。<strong>不要做的事：</strong>繼續加板上差模去耦（案犯不差模）、給訊號線串磁珠就交差。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q13（Day 44 原題）：</strong>(a) 一段 150 nH 的地跳線在 100 MHz 與 400 MHz 的阻抗各多少？若它流過 100 mA 高頻電流，地差各多少？(b) 300 mil 的地跳線約 4～5 nH→300 MHz 約幾 Ω？(c) 三個答案合起來說明什麼？</summary>
+<div class="answer">
+<p>(a) Z＝2πfL：@100 MHz≈2π×10⁸×1.5×10⁻⁷≈<strong>94 Ω</strong>；@400 MHz≈<strong>377 Ω</strong>（約值——正好是自由空間波阻的數字，記住它好背）。地差：以寫實的 1 mA 高頻電流計：94 mV@100 MHz、377 mV@400 MHz——對 mV 級余量的類比/時序電路就是致命傷；若真有 100 mA，94 V 當場證明這種地跳線在高頻根本不存在（等於斷路）。</p>
+<p>(b) 4～5 nH@300 MHz：2π×3×10⁸×4.5×10⁻⁹≈<strong>25～30 Ω</strong>（課上算法取 31.4 Ω）——「幾毫米的銅線，高頻下就是一顆幾十歐的電阻」。</p>
+<p>(c) 三題一句話：<strong>1 nH＝6.3 Ω@100 MHz</strong> 是本週最該長在手上的換算率——凡看到「地」先換成 nH，單點/多點、縫的釘距、360° 壓接的理由全部自動出現（把公分換成 nH，拓撲問題變成迴流地圖問題）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q14（Day 44＋Ch.9 混考，配圖 2）：</strong>dock 時鐘 25 MHz，開展頻 ±0.5%。(a) 基頻的掃頻範圍是多少 kHz？(b) 它的 63 次諧波落在哪？展開後的掃頻寬度在諧波上是「±125 kHz」還是「±7.875 MHz」？為什麼？(c) 這解釋了 L1（1567–1577 MHz）的什麼指紋？(d) PT2 Ch.9 的 65 MHz 案例：BW%＝3.87% 時基頻降 6.48 dB——對策設計者從這個數該讀到什麼？</summary>
+<div class="answer">
+<p>(a) 25 MHz×0.5%＝125 kHz→基頻掃 24.875–25.125 MHz（±125 kHz）。</p>
+<p>(b) 25×63＝<strong>1575.0 MHz</strong>——正落在 L1。展頻是「頻率被調變」，諧波把偏移<strong>同倍數放大</strong>：±125 kHz×63＝<strong>±7.875 MHz</strong>（不是 ±125 kHz）——一根基頻髮夾在 63 次諧波被吹成覆蓋近 16 MHz 寬的巨髮夾，蓋住整個 L1。</p>
+<p>(c) 指紋：保護頻段內出現「以某頻為中心的寬凸塊」且凸塊中心 ÷ 板上時鐘恰為整數（1575/25＝63）→時鐘諧波＋展頻的雙重證據；現場確認三板斧＝降頻/換頻（指紋跟著搬）、關展頻（髮夾變回細線，但注意此舉僅供定位、不合規）、近場探棒找出境導體。</p>
+<p>(d) 讀兩件事：①減輻射量主要由<strong>調變頻寬 BW</strong> 決定（Ch.9 原話：加大 BW 就加大 dB 降低——6.48 dB 對應約 ±2% 量級，書中數據；以現代標準需上修：今天常規 ±0.5% 且接收端要支持）；②展頻是「借來的 dB」——下游 PLL 要吃得了展頻（Ch.9：調變率過高會被下游迴路頻寬濾掉；且 GPS/GLONASS 等導航接收要守規則），所以展頻排四階梯末端，絕不能用它遮 layout 的債。</p>
+</div>
+</details>
+
+<h2>Part C｜情境排查（Q15–Q18，面試官最愛的「你會怎麼做」）</h2>
+
+<details>
+<summary><strong>Q15（Day 44 dock 案）：</strong>NB 接 dock 且經 DP 接外接顯示器時，Wi-Fi 吞吐量掉一半；拔顯示器恢復；同一條 DP 線接桌上型電腦沒事。請說出你的第一假設＋最快的三個現場實驗（含預期結果）。</summary>
+<div class="answer">
+<p><strong>第一假設：</strong>DP 線屏蔽與顯示器/接頭間 360° 壓接不良（或 dock 的 DP 殼地與主機板地在機殼內形成未設計迴路）→DP 纜上的高頻共模沿機殼地跑進 Wi-Fi 天線地，天線地彈跳＝接收靈敏度被攪（desense）。桌上型電腦沒事是因為它的機殼接地結構不同（FG/PE 路徑完整），不構成同一條泵。</p>
+<p><strong>三個現場實驗：</strong>①<strong>插拔矩陣再確認</strong>：DP 插/拔、螢幕電源插/拔（僅 DP vs 僅 AC）——定位泵在訊號側還是電源側；預期：僅 DP 就能重現→共模走 DP 屏蔽層。②<strong>磁環法</strong>：鐵氧體磁環夾 DP 線根部——若 Wi-Fi 恢復幾 dB→定罪該纜的共模（磁環只對共模有效）。③<strong>換線對照</strong>：有無屏蔽夾的 DP 線各一條——更換後分貝差＝屏蔽壓接的品質帳。三招都用「插拔重現＋前後對照」，全程凍結 Wi-Fi 位置與鏈路條件（量測點是法律）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q16（Day 42 案例變體）：</strong>某相機燈板用無 FG 的兩腳牆插適配器，金屬燈殼可觸摸。問題：手碰燈殼時「嗡嗡聲消失」，不碰就有。用共模與洩放路徑原理解釋，並給兩種修法＋一個「為什麼加 X-cap 沒用」。</summary>
+<div class="answer">
+<p><strong>原理：</strong>兩腳無 FG→初級/次級對金屬殼的 Y 角色漏電流（約 µA～mA 級）沒有回來源的路，殼的電位「浮」著；人手一碰＝用身體補上迴路（人成為那條沒設計的路徑），電流通過人體→經過音頻參考地形成 audible hum。手碰＝把浮動的高阻抗共模源拉回參考——消失不是因為沒漏電，是因為迴路被你改道了。</p>
+<p><strong>兩種修法：</strong>①提供真正的共模回途：改用有 FG 的三腳適配器、殼接大地（Y 漏電流走 PE，安全合規），並在 AC 入口加 Y-cap 提供高頻共模低阻回途＋共模 choke 攔截；②源頭減泵：電源 EMI 濾波器補齊（X＋Y＋CM choke 的組合，不是單加 X）或把音頻地與殼地的單點接法釐清。</p>
+<p><strong>X-cap 為什麼沒用：</strong>X-cap 跨在 L–N 之間，只管<strong>差模</strong>；案犯是「殼上浮壓＋對地路徑」的<strong>共模</strong>問題——加錯腳色。這題就是 Day 42「X/Y 名稱像但角色不同」的期末考：X 跨線（差模）、Y 對殼（共模＋安全漏電預算）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q17（Day 43 §2.3 觀念）：</strong>你在實驗室用近場探棒把板上某輻射熱區打掉了 20 dB，信心滿滿送暗室——結果仍超標 3 dB。兩件變更：纜線 30→50 cm、機殼上蓋沒鎖（樣品是裸板）。請解釋：為什麼近場的 −20 dB 沒有「帶過去」？Ch.9 三個接地實驗的教訓對你的啟示？你接下來的兩個動作？</summary>
+<div class="answer">
+<p><strong>為什麼沒帶過去：</strong>近場探棒讀的是<strong>板上某個場的強度</strong>，暗室收的是<strong>所有出境天線的總和遠場</strong>。你把板上熱區（小環案犯）壓掉了，但 50 cm 纜線改變了天線系統（短偶極的 L 變長、諧振點搬移，共模照樣出境甚至更高效），沒鎖上蓋則把屏蔽帳也撤了——<strong>板上分貝差≠暗室分貝差</strong>，中間隔著「誰離開機殼、以什麼天線模式」（近場→遠場換算要打折，Day 43）。DIY 治具的絕對值不作數、差值才是證物，同理適用於近場→暗室。</p>
+<p><strong>Ch.9 三個實驗的啟示：</strong>書中三個實驗（地迴路、屏蔽、layout）證明的正是：同樣的板上源，接地與屏蔽的處置可以讓「出去的量」差一大截——<strong>EMI 的帳最後記在「路徑」上，不是記在「源」上</strong>；所以板級對策完成後，必須在「整機＋纜線＋機殼」的真實配置下驗證。</p>
+<p><strong>兩個動作：</strong>①恢復受控樣品（鎖上蓋、標準纜長）重送測，或先在實驗室用纜線+機殼治具做「整機版近場版」預掃——把纜線長度與機殼列入變因清單（凍結後方可調整對策）；②對 50 cm 纜線做三夾法：夾全部讀共模，若明顯→磁環快速驗證→對策回到纜線端（choke/屏蔽 360°/縮短），因為近場已證明板上環路不再是主嫌。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q18（Day 41＋Day 44 設計整合題）：</strong>你為一個新鏡頭模組（sensor＋MIPI 序列器＋VCM 馬達驅動）設計「地與屏蔽」。三處接點：(a) 模組小板地→FPC；(b) FPC→主機板；(c) VCM 驅動區與 sensor 類比區之間。各給你的做法與一句理由。最後寫出 MIPI 差分對＋時鐘的兩條「折迴路」紀律及各自的 dB 紅利（量級即可）。</summary>
+<div class="answer">
+<p>(a) <strong>模組地→FPC：</strong>FPC 地線與訊號線一一配對（每對訊號至少一條伴隨地線）、兩側地銅連續——高頻迴流要「緊貼去線」（±3h 法則的 FPC 版），避免 FPC 成為 100% 電流的未控迴路。</p>
+<p>(b) <strong>FPC→主機板：</strong>連接器兩側地腳直接縫到完整地平面、跨槽處若有分割<strong>必搭橋</strong>（橋在槽邊、0402、容值在案發頻點 X_C 夠低）；屏蔽蓋的接合圈按 λ/20 釘距（1 GHz 級→約 15 mm）與機殼 360° 壓接——牆免費、勝負在縫。</p>
+<p>(c) <strong>VCM 驅動↔sensor 類比：</strong>低頻單點（驅動的大電流脈衝不借道類比參考）＋高頻多點（共地平面在開關頻段保持低感）＝混合拓撲的最小尺度版；VCM PWM 走線不跨類比地平——低頻比 R（共阻抗）、高頻比 L（平面緊貼）。</p>
+<p><strong>折迴路紀律：</strong>①差分對與時鐘全程有連續參考平面上方走、不跨槽（跨了就在槽邊搭橋）——迴路面積每縮 10 倍≈−20 dB（免費旋鈕，Ch.9 表 9.3 的 −20 dB 桌面版）；②時鐘/MIPI 避開纜線出口與屏蔽縫的 λ/4 變壓器位置、線長盡量短於 λ/20 目標——不給共模「出境的月台」（L 縮短＝短偶極效率下降，∝L）。</p>
+</div>
+</details>
+
+<h2>Part D｜英文面試題（Q19–Q20，先寫再對答案）</h2>
+
+<details>
+<summary><strong>Q19（Day 44）：</strong>"Explain single-point vs. multi-point grounding. In a notebook PC with a 1 GHz-class processor, which do you use — and where does the 'mix' actually live?"</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>Single-point grounds all returns to one node — no low-frequency ground loops, but the conductors pick up inductance: ~6 Ω per nH at 100 MHz, so it fails at high frequency. Multi-point bonds returns to a plane everywhere — low inductance (skin-effect-limited loop), but low-frequency currents share impedance and couple. A notebook uses <em>both</em>: a solid ground plane (multi-point) for everything above tens of kHz, plus disciplined single-point behavior at DC/mixed-signal boundaries (audio codec, sensor analog). The "mix" lives at the <em>seams</em>: connector pins, FPC returns, shield bonding, split-plane bridges — that's where I place the stitches (λ/20 spacing) and where ESD/EMI currents choose their escape paths.</p>
+<p><strong>加分句：</strong>"I size grounds in nH, not copper: first question is always which identity this node plays — reference plane, return-path current-carrying member, or safety reference."</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q20（Day 42–44 統合）：</strong>"A radiated emissions test fails at 1575 MHz, in the GPS band. Walk me through your debug plan, from chamber to fix." （考：指紋→模式→路徑→對策→結算的完整办案鏈）</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>(1) <em>Fingerprint:</em> 1575 MHz divided by on-board clocks — is it an integer harmonic (e.g. 25 MHz × 63) or a switching-frequency artifact? Check whether the source clock has spread spectrum (the "hairpin bump" is its signature). (2) <em>Mode split:</em> current clamp three-grip on the suspect cable — clamp-all shows common mode; figure-8 shows differential. GPS band failures are usually common mode on cables/enclosure seams, not the differential loop itself. (3) <em>Path/antenna:</em> near-field probe for the hot region; find the conductor leaving the chassis (cable, seam at λ/20, connector gap). (4) <em>Fixes, cheap to expensive:</em> fold the loop / terminate / slow edges (Ch.9 duty-cycle and edge-rate limits); bridge slots at the entry edge; common-mode choke or ferrite on the cable; 360° shield bonding; SSC only as a last, system-approved layer (receiver must tolerate it; GPS is protected band — often not allowed). (5) <em>Settlement:</em> every step with before/after dB at the same measurement point; chamber only for settlement, not discovery.</p>
+<p><strong>加分句：</strong>"I don't claim what my instruments can't support — DIY probes are detectives (ratios), commercial ones are accountants (absolute dBµV/m)."</p>
+</div>
+</details>
+
+<h2>訂正指南：錯題的復習坐標</h2>
+
+<div class="card warning">
+  <h2>錯 1–3 題：點對點補</h2>
+  <ul>
+    <li>錯 <strong>Q1/Q2</strong>（DC-DC 交越、Ch.5 驗證）→ Day 41 §3–§5 重讀，重做 Day 41 練習。</li>
+    <li>錯 <strong>Q3/Q4/Q12</strong>（共模文法、兩式、三夾）→ Day 42 §3–§4＋練習 1/2 重做。</li>
+    <li>錯 <strong>Q5/Q9/Q10/Q11</strong>（三夾法、校正、搭橋算術）→ Day 43 §1–§6（你親手做過的實驗，重讀圖 1 與練習 5）。</li>
+    <li>錯 <strong>Q6/Q7/Q13</strong>（nH 心法、屏蔽縫）→ Day 44 §2–§5，把「1 nH＝6.3 Ω@100 MHz」重新推一遍。</li>
+    <li>錯 <strong>Q8/Q15/Q16/Q17/Q18</strong>（流程與整合）→ Day 44 §7–§9＋Day 43 §2.3。</li>
+    <li>錯 <strong>Q14</strong>（展頻×諧波）→ Day 44 §8（63 次諧波貼臉案）＋Ch.9 的 BW%→dB 對應。</li>
+  </ul>
+  <h2>錯 ≥5 題：本週重跑（三天版）</h2>
+  <ul>
+    <li>Day 42/43/44 三份 Anki 全掃＋本測驗重考（換一張紙、不看任何課）。重點補「數字→公式」的反向反射：聽到 150 nH@400 MHz，手上要自己寫出 377 Ω，不是翻到詳解點頭——點頭是誤解最像理解的時刻。</li>
+  </ul>
+  <h2>全對的處理</h2>
+  <ul>
+    <li>全對＝週 9 結案，而且你手上有 40 題測驗（週 6/7/8/9）的戰績。把錯題分布（含之前週次）寫成一頁「弱點地圖」——那是之後 Anki 自製卡的優先級清單，也是面試前一週唯一的復習範圍。</li>
+  </ul>
+</div>
+
+<div class="card takeaway">
+  <h2>本週自我研讀任務（結案手續）</h2>
+  <ul>
+    <li><strong>一分鐘面試敘事：</strong>「我在 Day 43 親手做過 20 dB 免費午餐（改道 +26 dB）與 100 nF 搭橋 0.08 Ω 的實驗，也做過三夾法定罪共模 15 mA 壓過差模 0.5 A 的案子——我知道暗室只是結算、對策都在實驗室」——把這段講到不看稿、60 秒、含三個數字。</li>
+    <li><strong>單頁筆記：</strong>「EMI 办案一頁流」（照圖 1 手繪，含每個站位的公式與一個你實測過的數字）——面試前一日只看這一頁。</li>
+  </ul>
+</div>
+
+<h2>今日 Anki 卡片（週 9 收官套：五張，背熟＝本週結業）</h2>
+
+<div class="anki">
+  <p><strong>卡 1｜Q：</strong>三夾法的三口徑與公式？DIY 夾能報什麼、不能報什麼？<br><strong>A：</strong>①夾全部＝2·I_CM；②夾單根＝I_CM＋I_DM；③8 字反繞＝2·I_DM；聯立①③、②交叉驗證。DIY 夾（自绕磁環、Z_t 隨頻變）只能報「同探棒同頻點同位置」的分貝差（比值時 Z_t 約掉）——偵探；絕對安培數要商用夾——會計。</p>
+  <p><strong>卡 2｜Q：</strong>小環 vs 短偶極的輻射式與三條設計推論？<br><strong>A：</strong>小環 E≈1.32×10⁻¹⁴·I·A·f²/r；短偶極 E≈40·I·L/λ。推論：①面積縮 10 倍＝−20 dB，免費最猛（折迴路＝第 0 階梯）；②頻率×2＝+6 dB；③電纜＝最高效天線（1.5 m＝100 MHz 半波）——失敗先查「離開機殼的導體」。</p>
+  <p><strong>卡 3｜Q：</strong>「1 nH＝6.3 Ω@100 MHz」能推出哪些課上數字？<br><strong>A：</strong>300 mil 地跳 4–5 nH→300 MHz 約 25–31 Ω；150 nH→94 Ω@100 MHz、377 Ω@400 MHz；周長 1 cm 孔≈8 nH→1 GHz 約 50 Ω；搭橋引線 10 nH→100 MHz 加 6 Ω（橋破功）。口訣：凡看到地，先換 nH。</p>
+  <p><strong>卡 4｜Q：</strong>屏蔽成立的兩條件與「縫的經濟學」？λ/20 是什麼？<br><strong>A：</strong>①連續導體的牆（反射＋趨膚）；②縫阻抗低到不讓迴流改道（一條未設計的縫＝一槽天線）。釘子把長縫切成 λ/20 小段（1 GHz→15 mm、500 MHz→30 mm），每段遠低於諧振。牆幾乎免費、勝負全在縫：360° 壓接、C 形銅箔、通風孔按孔徑≪λ/20 設計。</p>
+  <p><strong>卡 5｜Q：</strong>展頻（SSC）的四句關鍵語？<br><strong>A：</strong>①Hershey Kiss：能量攤平成髮夾、峰值降（Ch.9 量測：65 MHz、BW%＝3.87%→基頻 −6.48 dB；減輻射量由 BW 決定）；②諧波把偏移同倍放大（25 MHz±125 kHz→63 次諧波 ±7.875 MHz 蓋住 GPS L1）；③下游 PLL 要吃得了展頻（mod 率過高會被濾掉、接收端要支持）；④排四階梯末端——借來的 dB，絕不用它遮 layout 的債、導航保護頻段多半不允許。</p>
+</div>
+
+<h2>明日預告</h2>
+
+<p><strong>Day 46（週一・週 10 開週）：</strong>「ESD 與防護 I——從閃電到晶片：HBM/CDM 模型與 IEC 61000-4-2」。為什麼 2 kV 的 HBM 只有幾百 mA、CDM 卻可以上 kA？8/20 µs 波形的 8 和 20 是什麼意思（約）？IEC 61000-4-2 的Contact/Air 與 Level 1–4？明天起你這週修的「接地與屏蔽」立刻變成期末考現場：8 kV 打進來，那條你精心設計的縫、那顆 TVS 的 5 nH 引線、保護地的路徑長度，全部要在 1 ns 內答卷。先修課，後救命——週五（Day 48）是實作日：TVS 鉗位曲線實測與「保護路徑阻抗大掃除」，把要帶的儀器清單先在 Day 48 課裡看。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

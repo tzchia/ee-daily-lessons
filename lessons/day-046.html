@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 46｜ESD 與防護 I——從閃電到晶片：HBM／CDM／IEC 61000-4-2 三個模型，與 TVS 選型三顆數</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 10 週・第 46 天（週一新觀念課・週 10 開工）</div>
+  <h1>Day 46：ESD 與防護 I——從閃電到晶片：三個模型（HBM／CDM／IEC 61000-4-2）與 TVS 選型三顆數</h1>
+  <div class="meta">2026-09-07（一）｜預估學習時間：90～110 分鐘（純閱讀＋筆算，不需儀器）｜難度：★★★★☆｜上週你學會了「共模怎麼走最小的路逃跑」；本週問的是同一件事的暫態版：<strong>8 kV 的閃電（縮小一萬倍）打進你的 NB，它選哪條路？你那顆 0402 的 TVS 來不來得及、撐不撐得住、裝的位置算不算數？</strong>ESD 在《Perfect Timing II》（2002，時鐘書）裡沒有專章——今天不硬引書，全部用你自己上週的武器（1 nH＝6.3 Ω@100 MHz、三夾法、360° 壓接）升級成「暫態版」。週五（本週實作日）是把鉗位曲線和放電事件真正抓上示波器的日子，本課先把帳本建立起來。</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天這一課，你要能回答五個問題，而且每題都能畫圖、報數：</p>
+  <ol>
+    <li><strong>靜電放電到底是什麼樣的「電源」？</strong>——為什麼它不像電源供應器、更像一顆會自己放電的電容＋一根電阻？三個元件級/系統級模型（HBM、CDM、IEC 61000-4-2）各自的電容、電阻、上升時間、峰值電流與「該怕的對象」分别是什麼？</li>
+    <li><strong>為什麼 2 kV 的 HBM 峰值只有約 1.3 A，500 V 的 CDM 卻能打進安培級？</strong>——用 I＝V/R 和 τ＝RC 兩個式子手算給面試官看，並說出先進製程「電壓更低卻更致命」的物理。</li>
+    <li><strong>IEC 61000-4-2 的接觸放電與空氣放電差在哪？等級 1–4 是什麼？A/B/C/D 四個表現判準怎麼影響「測試過不過」與「要不要改」的判斷？</strong></li>
+    <li><strong>TVS 怎麼選？</strong>——三顆數（V_RWM、V_C＝V_BR＋I_PP×R_dyn、I_PP）的先後順序、為什麼「過得了 2 kV HBM」不等於「受得了鉗位電壓」、以及線上電容對 MIPI／USB 這種高速線的「分壓／負載效應」。</li>
+    <li><strong>保護器件裝在哪裡才算數？</strong>——「鉗得低、吞得下、看得見」三句話；為什麼 HDMI／USB／鏡頭 FPC 邊緣是事故熱點；8 kV 的逃生路線怎麼畫，以及那條「看起來很短」的 TVS 接地線在 30 A/ns 面前收多少過路費（1 nH＝30 V）。</li>
+  </ol>
+  <p>今天是週 10「ESD 與防護」的開週課：上週的接地與屏蔽是你<strong>親手修過的場子</strong>，本週要把「暫態來襲 1 奈秒内誰接住」補完。週五實作日量 TVS 鉗位曲線與捕捉放電事件；週日結算考。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：把 ESD 想成颱風天的水塔與防洪閘</span>
+  <p>想像你的電路板是一座小城，「地」是排水系統（上週的比喻，今天繼续沿用）。平常的供電是自來水——穩壓、恆流、慢慢流。<strong>靜電放電不是自來水，是屋頂水塔在瞬間把整箱水倒進你家門口的細水管。</strong>水的總量其實不多（一顆 150 pF 充電到 8 kV，能量約 4.8 毫焦耳——燒不開一壺水），但它的<strong>流量上升速度快到離譜（1 奈秒內從 0 衝到數十安培）</strong>：再粗的水管，水錘效應（就是 L·di/dt）都能在瞬間打出幾十倍的壓力。所以 ESD 殺人靠的兩件事：<strong>瞬間壓力（鉗位電壓＋線路電感上炸出的尖峰）與集中攻擊（能量全塞進一個奈米級的閘氧極小洞）</strong>。</p>
+  <p><strong>三個模型＝三種水源。</strong>「人體放電模型 HBM」：一個摸過門把手的人（大電容）透過手指的接觸電阻（1.5 kΩ）碰你的晶片——水量中等、水喉很細，峰值才約 1 A 級，但電壓高。「元件帶電放電 CDM」：晶片自己充電成高電位（像一架被摩擦起電的無人機），然後自己的某個腳對地放電——水量小、但水喉極粗（電阻只有幾十 Ω）、速度快到百皮秒級，所以<strong>同樣電壓下 CDM 的峰值電流反而大兩個數量級</strong>。「IEC 61000-4-2」：這不是元件的災難模型，是<strong>驗收標準</strong>——用一把標準化的「放電槍」打你的成品（手機、NB），模擬使用者摸到金手指、插纜線瞬間、對著縫隙打空氣放電。你公司在實驗室那把槍，打的就是它。</p>
+  <p><strong>TVS（瞬態電壓抑制器）就是村口的防洪閘。</strong>平時它關得死死的（漏電只有 nA～µA 級，完全不影響訊號）；一旦水壓超過它的設定值（崩潰電壓），它<strong>在皮秒級之內整個攤平</strong>，把水從自己這裡泄洪到河裡（地），讓村民（IC）看到的水壓最多只比設定值高一點點（鉗位電壓）。防洪閘要選對三件事：<strong>設定值別亂跳（鉗得低）、閘門材質撐得住洪峰（吞得下）、而且裝在村口而不是村尾（看得見——讓威脅第一眼撞到的就是你，不是讓它先衝進村莊再說）。</strong></p>
+  <p>所有公式看不懂也沒關係——今天的結論先記住：<strong>ESD 是一個電壓很高、能量不大、但速度快到讓「一根線」變阻抗的暫態事件；保護的本質不是「消滅它」，是「比被保護者更快、路比它預期的更短」。</strong>接下來的數學，只是把這句話寫成面試官無法反駁的帳。</p>
+</div>
+
+<h2>0. 前情提要——上週你已經收過三封暫態的預告信</h2>
+<ul>
+  <li><strong>Day 45 測驗 Q16（浮地案）：</strong>「手碰機殼雜訊消失＝浮地靠人體完成共模迴路」。那是一條<strong>穩定</strong>的共模路徑；ESD 是它的暫態大哥——<strong>8 kV 的位移電流同樣只認一件事：最小瞬時阻抗路徑</strong>。上週你用三夾法看的是 100 MHz 的共模；本週你要學會尊重 dV/dt 從 0 到 8 kV 只花 1 ns 的共模。</li>
+  <li><strong>Day 44（360° 壓接）：</strong>連接器屏蔽若只用 pigtail（辮子線）接地，5–8 nH 在 100 MHz 已經收 3–5 Ω。<strong>ESD 來了，同樣那段 pigtail 收的不是 Ω，是 L·di/dt 的伏特數——30 A/ns × 5 nH＝150 V 的尖峰</strong>，直接打爆它「接地」的那顆 IC。屏蔽在穩態 保護你，在暫態可能是害你的那根引線。</li>
+  <li><strong>Day 42（Y-cap／漏電流預算）：</strong>你在電源端學會「任何跨接元件都要進漏電流帳」。TVS 同樣要進帳：漏電流（nA～µA）、結電容（pF～百 pF），一個管睡眠功耗、一個管高速訊號。<strong>保護器件不是加了就安全，是先登記再發牌。</strong></li>
+</ul>
+<p><em>本課書目說明：《Perfect Timing II》為 2002 年時鐘設計指南，全書無 ESD／保護器件專章——依課程規例不硬引。今天需要的「迴流路徑」與「端接」觀念，出自課上已引用的 Ch.6（PCB Layout／return path，Day 40 回收過）與 Ch.7（端接，Day 20 前後引用過）之既有結論，引用時一律標註「課上既有」不再新引原文。</em></p>
+
+<h2>1. ESD 不是電壓源，是「充電完畢的電容＋一根電阻」——三個模型一表看清</h2>
+<p>先用一句話拆掉最大的誤解：<strong>靜電放電沒有「供應器」，它只有一筆已蓄好的電荷 Q＝CV，和一條放電時的阻抗路徑。</strong>所以每一次 ESD 事件都只需要三個數字就能描述：<strong>存了多少電（電容）、以多快速度放（電阻＋電感決定上升時間）、流過多高峰值（I≈V/R）。</strong>業界把「誰蓄的電、透過什麼路徑放」標準化成幾個模型，各有對應的標準與害怕對象：</p>
+
+<table>
+<tr><th>模型</th><th>等效電路（標準值）</th><th>波形特徵（約）</th><th>誰在怕</th></tr>
+<tr><td><strong>HBM</strong><br>人體模型<br>(JS-001／MIL-STD-883)</td><td>100 pF 充電＋1 500 Ω 串聯</td><td>τ＝RC＝150 ns；峰值立即到達 I＝V/R（2 kV→<strong>約 1.33 A</strong>），指數衰减</td><td>組裝線：人體摸到引脚（有腕帶／墊子就基本絕跡）</td></tr>
+<tr><td><strong>CDM</strong><br>元件帶電模型<br>(JS-002)</td><td>晶片自帶小電容（約幾 pF 量級）＋極低放電阻抗（約幾十 Ω 量級）</td><td>上升 <strong>百 ps～sub-ns 級</strong>；電壓只要幾百 V，峰值電流卻可上 <strong>數十～百 A 量級</strong>，脈寬僅數 ns</td><td>自動貼片／編帶：晶片自己被摩擦充電——<strong>先進製程頭號殺手</strong></td></tr>
+<tr><td><strong>MM</strong><br>機械模型</td><td>200 pF＋0.75 µH＋約 10 Ω</td><td>振鈴式（電感造成振盪）</td><td>機械手臂／治具；業界已多被 CDM 規範取代</td></tr>
+<tr><td><strong>IEC 61000-4-2</strong><br>系統級免疫標準</td><td>150 pF＋330 Ω（放電槍的網路）</td><td>接觸放電上升 <strong>約 1 ns</strong>、第一峰值<strong>約 3.75 A／kV</strong>（8 kV→約 30 A 量級），後有衰減尾巴；空氣放電上升較慢（數 ns 量級）但可打更高電壓</td><td><strong>你的成品</strong>：NB、手機、鏡頭模組——客戶驗收打的這一槍</td></tr>
+</table>
+
+<p><strong>三個模型是三種完全不同的暴力。</strong>HBM 像有人拿高壓水槍隔著細管滋你——電壓高、流量中等、持續久（百 ns）；CDM 像晶片自己變成一顆微型炸彈——<strong>500 V 而已，但能量在不到 1 ns 內、擠過一個奈米級接面釋放</strong>，閘氧極穿（gate oxide punch-through）就是它的手筆；IEC 61000-4-2 則是「使用者實際能對你的產品做什麼」的官方定義——它打的不是晶片引腳，是<strong>你的機殼、縫隙、連接器，和你在 Day 44 精心設計的那條迴流路徑</strong>。</p>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：三種暴力——等效電路與電流波形對照（時間軸尺度不同！）</text>
+
+  <!-- ===== Panel 1: HBM ===== -->
+  <rect x="15" y="40" width="288" height="190" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="159" y="64" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#1e40af">HBM 人體模型</text>
+  <!-- C -->
+  <line x1="45" y1="100" x2="80" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="80" y1="86" x2="80" y2="114" stroke="#374151" stroke-width="3"/>
+  <line x1="89" y1="86" x2="89" y2="114" stroke="#374151" stroke-width="3"/>
+  <text x="72" y="80" font-size="11" fill="#1e40af" font-weight="bold">100 pF</text>
+  <!-- R -->
+  <line x1="89" y1="100" x2="115" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="115" y="92" width="52" height="16" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="141" y="86" font-size="11" fill="#1e40af" font-weight="bold" text-anchor="middle">1 500 Ω</text>
+  <!-- switch + pin -->
+  <line x1="167" y1="100" x2="192" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="192" y1="100" x2="212" y2="88" stroke="#374151" stroke-width="2"/>
+  <circle cx="192" cy="100" r="3" fill="#374151"/><circle cx="215" cy="100" r="3" fill="#374151"/>
+  <line x1="218" y1="100" x2="250" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="250" y="88" width="40" height="24" rx="4" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="270" y="104" font-size="10" fill="#1e40af" text-anchor="middle">pin</text>
+  <!-- return -->
+  <line x1="45" y1="126" x2="45" y2="132" stroke="#374151" stroke-width="2"/>
+  <text x="130" y="136" font-size="10" fill="#6b7280">τ＝RC＝150 ns｜I_pk＝V/R（2 kV→約 1.33 A）</text>
+  <!-- waveform -->
+  <line x1="45" y1="212" x2="285" y2="212" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="60" y1="212" x2="60" y2="150" stroke="#9ca3af" stroke-width="1.5"/>
+  <path d="M 60 158 L 64 156 C 90 160, 130 178, 180 196 C 220 206, 260 210, 285 211" fill="none" stroke="#2563eb" stroke-width="3"/>
+  <text x="172" y="228" font-size="10" fill="#6b7280" text-anchor="middle">t →（百 ns 尺度）</text>
+  <text x="72" y="150" font-size="10" fill="#2563eb" font-weight="bold">≈1 A 級、慢（百 ns）</text>
+
+  <!-- ===== Panel 2: CDM ===== -->
+  <rect x="316" y="40" width="288" height="190" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="460" y="64" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#991b1b">CDM 元件帶電模型</text>
+  <line x1="346" y1="100" x2="381" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="381" y1="86" x2="381" y2="114" stroke="#374151" stroke-width="3"/>
+  <line x1="390" y1="86" x2="390" y2="114" stroke="#374151" stroke-width="3"/>
+  <text x="368" y="80" font-size="11" fill="#991b1b" font-weight="bold">數 pF（晶片本身）</text>
+  <line x1="390" y1="100" x2="416" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="416" y="92" width="52" height="16" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="442" y="86" font-size="11" fill="#991b1b" font-weight="bold" text-anchor="middle">約十 Ω 級</text>
+  <line x1="468" y1="100" x2="493" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="493" y1="100" x2="513" y2="88" stroke="#374151" stroke-width="2"/>
+  <circle cx="493" cy="100" r="3" fill="#374151"/><circle cx="516" cy="100" r="3" fill="#374151"/>
+  <line x1="519" y1="100" x2="551" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="551" y="88" width="40" height="24" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="571" y="104" font-size="10" fill="#991b1b" text-anchor="middle">pin</text>
+  <text x="430" y="136" font-size="10" fill="#6b7280">電壓只有幾百 V，峰值卻上數十～百 A 量級</text>
+  <line x1="346" y1="212" x2="586" y2="212" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="361" y1="212" x2="361" y2="150" stroke="#9ca3af" stroke-width="1.5"/>
+  <path d="M 361 212 L 366 156 L 372 200 L 378 190 L 386 205 L 400 210 L 430 212 L 586 212" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="466" y="228" font-size="10" fill="#6b7280" text-anchor="middle">t →（百 ps～ns 尺度，比左圖快約百倍）</text>
+  <text x="392" y="150" font-size="10" fill="#dc2626" font-weight="bold">上升 sub-ns！集中攻擊</text>
+
+  <!-- ===== Panel 3: IEC ===== -->
+  <rect x="617" y="40" width="288" height="190" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="761" y="64" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#166534">IEC 61000-4-2（系統級標準）</text>
+  <line x1="647" y1="100" x2="682" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="682" y1="86" x2="682" y2="114" stroke="#374151" stroke-width="3"/>
+  <line x1="691" y1="86" x2="691" y2="114" stroke="#374151" stroke-width="3"/>
+  <text x="676" y="80" font-size="11" fill="#166534" font-weight="bold">150 pF</text>
+  <line x1="691" y1="100" x2="717" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="717" y="92" width="52" height="16" fill="#fff" stroke="#374151" stroke-width="2"/>
+  <text x="743" y="86" font-size="11" fill="#166534" font-weight="bold" text-anchor="middle">330 Ω</text>
+  <line x1="769" y1="100" x2="794" y2="100" stroke="#374151" stroke-width="2"/>
+  <line x1="794" y1="100" x2="814" y2="88" stroke="#374151" stroke-width="2"/>
+  <circle cx="794" cy="100" r="3" fill="#374151"/><circle cx="817" cy="100" r="3" fill="#374151"/>
+  <line x1="820" y1="100" x2="852" y2="100" stroke="#374151" stroke-width="2"/>
+  <rect x="852" y="88" width="40" height="24" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="872" y="104" font-size="10" fill="#166534" text-anchor="middle">EUT</text>
+  <text x="731" y="136" font-size="10" fill="#6b7280">E(8 kV)＝½·150p·64M≈4.8 mJ＝HBM 2 kV 的約 2 萬 4 千倍</text>
+  <line x1="647" y1="212" x2="887" y2="212" stroke="#9ca3af" stroke-width="1.5"/>
+  <line x1="662" y1="212" x2="662" y2="150" stroke="#9ca3af" stroke-width="1.5"/>
+  <path d="M 662 212 L 668 154 L 676 176 C 690 188, 720 198, 760 206 C 800 210, 850 211, 887 212" fill="none" stroke="#16a34a" stroke-width="3"/>
+  <text x="775" y="228" font-size="10" fill="#6b7280" text-anchor="middle">t →（ns～百 ns）</text>
+  <text x="682" y="148" font-size="10" fill="#166534" font-weight="bold">8 kV→約 30 A／1 ns</text>
+
+  <!-- ===== bottom summary ===== -->
+  <rect x="15" y="256" width="890" height="190" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="460" y="282" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#0f4c5c">同一支筆算出三種命運（I＝V／R，τ＝RC，E＝½CV²）</text>
+  <text x="46" y="310" font-size="11.5" fill="#374151"><tspan font-weight="bold">HBM 2 kV：</tspan>I＝2000／1500≈1.33 A｜τ＝150 ns｜E＝½×100p×2000²＝200 µJ——「高壓細水管」</text>
+  <text x="46" y="336" font-size="11.5" fill="#374151"><tspan font-weight="bold">CDM 500 V：</tspan>假設放電路徑約幾十 Ω→峰值可到數十 A 量級；能量僅 µJ 級但塞在＜1 ns、一個接面上——「微型定向能武器」</text>
+  <text x="46" y="362" font-size="11.5" fill="#374151"><tspan font-weight="bold">IEC 8 kV：</tspan>第一峰≈3.75 A/kV×8≈30 A（約）；上升約 1 ns→<tspan font-weight="bold" fill="#dc2626">di／dt≈30 A／ns：每 1 nH 走線＝炸出 30 V！</tspan></text>
+  <text x="46" y="388" font-size="11.5" fill="#374151"><tspan font-weight="bold">為什麼先進製程更怕 CDM？</tspan>閘氧越薄耐壓越低（觸擊電壓可降到約 250 V 以下，以製程規格為準）、接面越小電流密度越高——電壓降了十倍，致命性升了十倍。</text>
+  <text x="46" y="414" font-size="11.5" fill="#6b7280">白話翻譯：同樣是「閃電」，HBM 是慢而長的一刀、CDM 是快而尖的一針、IEC 是拿 standardized 的鎚子每半年敲你成品一次。</text>
+  <text x="46" y="436" font-size="11.5" fill="#6b7280">面試愛問：「同樣電壓誰比較毒？」——看路徑阻抗與速度：CDM 靠低阻抗＋sub-ns 上升把峰值電流抬高一到兩個數量級。</text>
+</svg>
+<figcaption>圖 1：三模型等電路與波形（注意三個時間軸尺度差約百倍——圖是示意，數字以各標準現行版為準）。</figcaption>
+</figure>
+
+<h2>2. 數學只有三行，但要算到像呼吸</h2>
+<p>ESD 的所有定量推理都從三個式子長出來。先推，再背。</p>
+
+<div class="formula">
+①峰值電流：I<sub>pk</sub> ≈ V<sub>ESD</sub>／R<sub>放電路徑</sub>（HBM：2 000 V／1 500 Ω≈1.33 A）<br>
+②時間常數：τ＝R×C（HBM：1 500 Ω×100 pF＝150 ns；IEC 槍：330 Ω×150 pF≈49.5 ns）<br>
+③蓄能：<strong>E＝½CV²</strong>（HBM 2 kV：200 µJ；IEC 8 kV：½×150 pF×(8 000)²＝<strong>4.8 mJ</strong>）
+<span style="font-size:.9em;color:#6b7280"><br>白話翻譯：能炸壞東西的不是「電壓」那個嚇人的數字，是「能量除以時間除以面積」＝功率密度。8 kV 的能量也只有 4.8 mJ——燒不開一滴水——但它集中在 1 ns、塞進 0.1 µm² 的接面，功率密度足以把金屬熔融再汽化。</span>
+</div>
+
+<p><strong>最關鍵的第四行是 L·di/dt——上週「1 nH＝6.3 Ω@100 MHz」的暫態版。</strong>穩態下你問「這段銅線阻抗幾 Ω」；暫態下你要問「這段銅線在電流衝上去的瞬間炸出幾伏特」：</p>
+
+<div class="formula">
+V<sub>尖峰</sub>＝L×di／dt｜IEC 接觸放電 di／dt≈30 A／ns（8 kV 級）→<strong>每 1 nH＝30 V</strong><br>
+<span style="font-size:.9em;color:#6b7280">對照組：HBM 慢（峰值 1.3 A、上升數十 ns 級），di／dt 小三個數量級——所以 HBM 對「佈線多長」沒那麼計較；<strong>CDM／IEC 對引線長度極度計較：一條 5 mm 的 TVS 接地跳線（約 5 nH）在 8 kV 事件裡是額外加 150 V 的炸彈，保護器自己變加害者。</strong>（di／dt 非常數，以上為量級估算口徑）</span>
+</div>
+
+<p>背三個錨點（跟「1 nH＝6.3 Ω@100 MHz」同樣待遇）：</p>
+<ul>
+  <li><strong>HBM 2 kV ≈ 1.33 A、150 ns、200 µJ</strong>——「人」的暴力。</li>
+  <li><strong>IEC 8 kV ≈ 30 A、1 ns、4.8 mJ</strong>——「使用者」的暴力，比 HBM 2 kV 的能量大約兩萬四千倍。</li>
+  <li><strong>1 nH × 30 A/ns＝30 V</strong>——暫態世界裡的匯率。via 0.5–1 nH、接地跳線 5 mm≈5 nH、一段 20 cm 排線迴路百 nH 級（課上既有，Day 44 換算表）——把每條路徑先換算成「伏特炸彈當量」再討論保護。</li>
+</ul>
+
+<h2>3. IEC 61000-4-2：客戶手裡那把槍的說明書</h2>
+<p>HBM／CDM 是<strong>元件級</strong>模型（IC 出廠規格書上的「2 kV HBM」指的是它），IEC 61000-4-2 是<strong>系統級免疫測試</strong>——你的 NB 整機在 EMC 實驗室被驗收的那一槍。五個要點：</p>
+
+<h3>3.1 接觸放電 vs 空氣放電：兩種完全不同的打法</h3>
+<ul>
+  <li><strong>接觸放電（contact discharge）：</strong>槍頭（圓頭電極）先貼住被測金屬，再觸發放電。因為有導體接觸，能量全部灌進 EUT；波形上升最快（約 1 ns 級）、峰值最高（約 3.75 A/kV）。<strong>這是「電流攻擊」——殺傷主力。</strong></li>
+  <li><strong>空氣放電（air discharge）：</strong>對著絕緣體或縫隙打，距離擊穿（你上週的 λ 概念：距離越小擊穿電壓越高，空氣約 3 kV/mm 量級起跳——「約」，受濕度與電極形狀影響很大）。放電點游移不定、上升較慢，但<strong>放電瞬間同時是一顆超寬頻的輻射源</strong>（1 ns 的邊沿＝能量蓋到數百 MHz～GHz）——所以空氣放電還會「隔空」耦合進縫隙，回聲就是上週 Ch.9 那張天線清單的暫態版。</li>
+  <li><strong>測試動作也是標準的一部分：</strong>水平／垂直耦合板、機殼縫隙、操作件、連接器每個 pin，正負極性、每個電壓點重複多次（現行版每個測試點通常 10 次正、10 次負——以標準版本為準）。你公司實驗室跑過的就是這套。</li>
+</ul>
+
+<h3>3.2 等級與產品規格的關係（「現行標準」口徑）</h3>
+<p>IEC 61000-4-2 現行版（第 2 版＋A1，業界通稱 Ed 2.0）的建議測試等級：<strong>接觸放電 2／4／6／8 kV，空氣放電 2／4／8／15 kV（Level 1～4），另有「X」由買賣雙方自訂</strong>（1995 舊版的等級表不同——凡引用舊版等級對照，以現代標準需上修／改版核對）。產品端的慣例（非標準強制，是規格書慣例）：消費電子普遍以<strong>接觸 ±4 kV</strong> 為驗收基線；<strong>金屬機殼、外露埠、工業／車用</strong>常上到<strong>接觸 ±8 kV</strong>。你的 NB：USB／HDMI 外殼、轉軸附近縫隙、鏡頭鏡筒與機殼的開口，就是規格書上那一行的靶心。</p>
+
+<h3>3.3 四個判準 A／B／C／D：「重開機就好」不是免死金牌</h3>
+<table>
+<tr><th>判準</th><th>現象（白話）</th><th>工程含義</th></tr>
+<tr><td><strong>A</strong></td><td>全程正常，像沒發生過</td><td>最高目標；高階產品規格常直接鎖「Criterion A on all discharge points」</td></tr>
+<tr><td><strong>B</strong></td><td>暫時失能、自自動恢復</td><td>規格上多半可接受，但使用者看到的就是「螢幕閃一下」——品質口碑帳</td></tr>
+<tr><td><strong>C</strong></td><td>暫時失能、<strong>要人重開機／重新插拔才恢復</strong></td><td>測試報告上可能「過」，但<strong>這是 latch-up 或韌體掛死的典型腳印——工程上視為必須整改</strong>（Day 45 Q16 的浮地案就常以 C 判準現形）</td></tr>
+<tr><td><strong>D</strong></td><td>永久損壞、資料遺失</td><td>FAIL。硬體工程師的恥辱柱</td></tr>
+</table>
+<p><strong>面試關鍵句：</strong>「Criterion C is a warning written in the attacker's handwriting——recovery after power-cycle usually means latch-up or firmware crash, not immunity.」重開機復活的案子，追的是 <em>latch-up（ SCR 效應）、韌體 hard-fault、還是暫態把 EEPROM/I²C 寫壞</em>，三者的處方完全不同。</p>
+
+<h2>4. TVS：村口的防洪閘——物理、曲線、三區</h2>
+<p>TVS（Transient Voltage Suppressor）本質是一個<strong>專為「快」與「洩洪」最佳化的二極體</strong>。Reverse 方向平時只有 nA～µA 級漏電；電壓越過 V_BR（崩潰電壓）後，矽的雪崩（avalanche）效應讓它<strong>在皮秒級之內（物理本質；實際受封裝與線路極限，system 層級看 ns）</strong>從絕緣體變良導體，把電流從自己身上泄進地。</p>
+
+<figure>
+<svg viewBox="0 0 920 380" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：TVS 的 I–V 曲線與「三顆數」——選型就是在地圖上畫三條豎線</text>
+  <!-- axes -->
+  <line x1="60" y1="300" x2="880" y2="300" stroke="#374151" stroke-width="2"/>
+  <line x1="470" y1="330" x2="470" y2="50" stroke="#374151" stroke-width="2"/>
+  <text x="872" y="322" font-size="11" fill="#374151" text-anchor="end">電壓 V →</text>
+  <text x="470" y="44" font-size="11" fill="#374151" text-anchor="middle">電流 I</text>
+  <text x="452" y="66" font-size="10" fill="#6b7280" text-anchor="end">正偏（一般二極體導通）</text>
+  <!-- forward curve -->
+  <path d="M 200 298 L 440 297 C 455 296, 462 290, 465 270 L 467 240" fill="none" stroke="#9ca3af" stroke-width="2.5"/>
+  <!-- zones on left (reverse) -->
+  <rect x="520" y="70" width="120" height="230" fill="#f0fdf4" opacity=".7"/>
+  <text x="580" y="88" text-anchor="middle" font-size="11" fill="#166534" font-weight="bold">①工作區</text>
+  <text x="580" y="104" text-anchor="middle" font-size="10" fill="#374151">V ≤ V_RWM</text>
+  <text x="580" y="118" text-anchor="middle" font-size="10" fill="#374151">漏電 nA～µA</text>
+  <rect x="655" y="70" width="95" height="230" fill="#fefce8" opacity=".7"/>
+  <text x="702" y="88" text-anchor="middle" font-size="11" fill="#9a3412" font-weight="bold">②膝點</text>
+  <text x="702" y="104" text-anchor="middle" font-size="10" fill="#374151">V_BR</text>
+  <rect x="765" y="70" width="105" height="230" fill="#fef2f2" opacity=".7"/>
+  <text x="817" y="88" text-anchor="middle" font-size="11" fill="#991b1b" font-weight="bold">③鉗位區</text>
+  <text x="817" y="104" text-anchor="middle" font-size="10" fill="#374151">V_C＝V_BR＋I·R_dyn</text>
+  <!-- reverse curve: leakage flat then knee then steep -->
+  <path d="M 500 296 C 580 295, 640 293, 690 289 C 715 286, 735 280, 748 262 C 758 246, 764 218, 768 180 C 772 140, 775 110, 777 86" fill="none" stroke="#0e7490" stroke-width="3.5"/>
+  <!-- vertical lines -->
+  <line x1="535" y1="300" x2="535" y2="130" stroke="#16a34a" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="680" y1="300" x2="680" y2="120" stroke="#eab308" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="778" y1="300" x2="778" y2="110" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 4"/>
+  <text x="535" y="318" font-size="11" fill="#16a34a" text-anchor="middle" font-weight="bold">V_RWM ≥ V_op</text>
+  <text x="680" y="318" font-size="11" fill="#9a3412" text-anchor="middle" font-weight="bold">V_BR（雪崩開始）</text>
+  <text x="778" y="318" font-size="11" fill="#dc2626" text-anchor="middle" font-weight="bold">V_C＝V_BR(max)＋I_PP×R_dyn</text>
+  <!-- Ipp marker -->
+  <line x1="778" y1="150" x2="860" y2="150" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="862" y="146" font-size="10.5" fill="#dc2626" text-anchor="end" >I_PP（規格化雷電流）</text>
+  <!-- clamp voltage brace -->
+  <path d="M 470 150 L 778 150" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="624" y="142" font-size="11" fill="#dc2626" text-anchor="middle" font-weight="bold">V_C：被保護 IC「看到」的最高電壓</text>
+  <!-- annotation -->
+  <text x="95" y="90" font-size="11.5" fill="#374151">三條豎線的紀律：</text>
+  <text x="95" y="112" font-size="11" fill="#166534">① V_RWM 要大於等於工作電壓（不然日常漏電給你好看）</text>
+  <text x="95" y="132" font-size="11" fill="#9a3412">② V_BR 要高出電源上緣夠多（容差＋紋波＋溫度）</text>
+  <text x="95" y="152" font-size="11" fill="#991b1b">③ V_C 要低於被保護者的脈衝耐受（留 ≥30％ 餘裕，工程慣例）</text>
+  <text x="95" y="176" font-size="11" fill="#6b7280">鉗位比 V_C／V_BR 典型約 1.3～1.4（約）——R_dyn 越小曲線越「直上」，鉗得越平。</text>
+  <text x="95" y="196" font-size="11" fill="#6b7280">為什麼電容不行？電容「反應」靠 dV／dt＝I／C 充電——大電容充到高電位時被保護者早已阵亡；TVS 的雪崩是載流子雪崩倍增，物理本質是 ps 級。</text>
+</svg>
+<figcaption>圖 2：TVS 反向 I–V 示意（非任何料號的實際曲線）。三顆數的選型順序：V_RWM→V_BR→V_C，最後才是 I_PP 與封裝。</figcaption>
+</figure>
+
+<h3>4.1 三顆數，選型順序不可顛倒</h3>
+<div class="formula">
+第 1 顆：<strong>V_RWM（反向工作電壓）≥ V_op(max)</strong>——常壓之下完全關斷（漏電帳、訊號負載帳都從這裡開始）<br>
+第 2 顆：<strong>V_C（鉗位電壓）＝V_BR(max)＋I_PP×R_dyn ＜ 被保護者的脈衝耐受 ×0.7</strong>——鉗得低的具體意義<br>
+第 3 顆：<strong>I_PP（規格化湧浪電流）≥ 事件會打到的電流</strong>——吞得下的具體意義（IEC 8 kV 直打訊號線、無串聯限流時是十 A 量級的挑戰）
+</div>
+<p><strong>為什麼順序不能顛倒？</strong>因為第 1 顆是「不打擾日常」的門檻，第 2 顆是「救命有效性」的門檻，第 3 顆決定封裝體積與成本。先選 3 再選 2 的工程師，最後會拿到一個「吞得下、但鉗位比 IC 耐壓還高」的鐵尺——什麼都擋住了，就是擋不住要害。</p>
+<div class="formula" style="border-style:solid;border-color:#f59e0b;background:#fffbeb">
+<strong>面試陷阱（今天最重要的一題）：</strong>IC 規格書寫「2 kV HBM」，TVS 鉗位 15 V——受得了嗎？<br>
+<span style="font-size:.95em;color:#374151;text-align:left;display:inline-block"><strong>錯的算法：</strong>15 V ≪ 2 000 V，綽綽有餘。<strong>對的算法：</strong>HBM 的 2 kV 是「100 pF 透過 1.5 kΩ 慢放」的座標系；TVS 鉗位 15 V 疊著的是 ns 級、幾十 A 的尖刺。<strong>兩個數字不在同一個波形宇宙裡，禁止直接比較。</strong>要比，比的是：IC datasheet 的「surge／transient 耐受」（若有）或依 JEDEC 脈衝模型對照——很多 IC 的 absolute max 根本沒定義 ns 脈衝，這時只能靠鉗位餘裕＋實測。把 HBM class 拿去和鉗位電壓比大小，是 ESD 面試的頭號送命點。</span>
+</div>
+
+<h3>4.2 第二把刀：線上電容與負載效應（高速線專屬）</h3>
+<p>普通 TVS 的接面電容是<strong>數十～百 pF 量級</strong>；低容 ESD 陣列（rail-protection diode）可以壓到 <strong>&lt;1 pF（0.1～0.5 pF 級，約）</strong>。在 1 GHz 面前，電容帳是：</p>
+<div class="formula">
+X_C＝1／(2πfC)：100 pF@1 GHz≈<strong>1.6 Ω</strong>（訊號直接入地——線死了）；0.5 pF@1 GHz≈<strong>318 Ω</strong>（暈一點，仍可活）
+<span style="font-size:.9em;color:#6b7280"><br>白話翻譯：低頻線（I²C、GPIO、電源）隨手掛大 TVS；GHz 級線（MIPI D-PHY HS、USB 3、DP）必須用低容器件，還要把它們當成一個「阻抗不連續點」來看待——Day 20（端接與不連續）的反射課在這裡二週目重逢：每顆掛上去的 TVS 都是一個 stub，距離越小、via 越少，反射越小。</span>
+</div>
+<table>
+<tr><th>線路（NB／鏡頭模組場景）</th><th>速率量級</th><th>保護器件選擇（慣例）</th></tr>
+<tr><td>I²C（EEPROM、感測器控制）、HPD、GPIO</td><td>&lt;MHz</td><td>一般 TVS 或小陣列；電容幾十 pF 都無妨，重點在位置與接地</td></tr>
+<tr><td>USB 2.0（480 Mb/s）</td><td>基波約百 MHz 級</td><td>低容陣列（約 1～3 pF 級）＋V_BUS 用大顆</td></tr>
+<tr><td>MIPI CSI-2（鏡頭→主機板，1～2.5 Gb/s/lane）</td><td>基波 GHz 級</td><td>超低容（&lt;0.5 pF 級）；很多設計改「不掛器件、靠結構逃」——見 §6</td></tr>
+<tr><td>HDMI／DP TMDS、USB 3 Superspeed</td><td>數 Gb/s／lane</td><td>低容 ESD＋差分對稱性（兩條線容值失配＝模式轉換→共模！上週文法）</td></tr>
+</table>
+
+<h2>5. 保護三句話：鉗得低、吞得下、看得見（失靈三態）</h2>
+<p>把 TVS 資料書上的所有參數歸納成三句話，以及它們各自的死法：</p>
+<table>
+<tr><th>口訣</th><th>指的是什麼</th><th>失靈態（死法）</th></tr>
+<tr><td><strong>鉗得低</strong></td><td>V_C 低於被保護者耐受（V_BR＋I_PP·R_dyn 算得出來）</td><td><strong>①鉗太高：</strong>TVS 安全著陸，IC 先走——「保護器完好無損、被保護者火化」是最常見的驗屍報告</td></tr>
+<tr><td><strong>吞得下</strong></td><td>I_PP／能量耐量 ≥ 事件規模（看 8/20 µs 或 IEC 規格化曲線，不是看「峰值功率」大數字）</td><td><strong>②吞爆：</strong>接面燒穿——通常短路（比較好的死法，電路還在）、壞運氣是開路（保護消失、下一發直接命中）</td></tr>
+<tr><td><strong>看得見</strong></td><td>威脅從外面進來<strong>第一步</strong>就撞見保護：位置在連接器入口、接地路徑短粗、鉗位後的能量就近入地不再進村</td><td><strong>③沒看見：</strong>TVS 裝在板子深處、或接地用 5 mm 跳線——8 kV 先沿著走線打進 IC，再過 1 nH 收 30 V 的「自己人稅」；保護成為旁觀者</td></tr>
+</table>
+<p><strong>第三句是 ESD 佈局（layout）的總綱，也是今天從「選零件」升級到「設計系統」的關鍵。</strong>選型三顆數是零件的事；「看得見」是銅皮的事——而上週你已經把銅皮的匯率背下來了（1 nH＝6.3 Ω@100 MHz），今天再疊一個暫態匯率：<strong>1 nH＝30 V@IEC 8 kV</strong>。</p>
+
+<h2>6. 8 kV 的逃生路線圖：為什麼事故熱點永遠是連接器與 FPC 邊緣</h2>
+<p>ESD 選路只認一個原則（課上既有、Day 42 文法的暫態版）：<strong>瞬時阻抗最小、到「參考大地板（chassis／PE）」路徑最短</strong>。所以事故熱點不是「最靠近 IC 的地方」，而是「使用者能打到、且你的屏蔽／接地有縫的地方」——全部集中在<strong>導體進出機殼的邊界</strong>：</p>
+<ul>
+  <li><strong>HDMI／USB／DP 連接器：</strong>插拔瞬間，插頭先碰到的可能不是地 pin（接地 pin 較長是連接器的防呆設計之一）；HPD 這類慢速 GPIO 常常是「裸露的最後一道崗哨」——NB 維修史上最常見的燒傷部位之一（HPD 線燒蝕、DDC 死機）。<strong>外殼屏蔽如果只靠 pigtail，放電瞬間整條纜線屏蔽被抬高上百伏特</strong>，反手打進相鄰訊號 pin。</li>
+  <li><strong>鏡頭模組 FPC 邊緣：</strong>鏡筒與機殼的開口縫（光學孔周圍）是空氣放電的入口；FPC 金手指在模組側半裸露，手指捏裝時直接對接面放電；FPC 從轉軸穿到主機板——排線地線若只有一條細線，它就是 100 nH 級的「細水管」，8 kV 事件裡 FPC 兩端地電位差可達數十～百 V 量級，像素類比參考被掀翻（輕則當幀雪花、重則感測器 latched）。</li>
+  <li><strong>音訊孔、MIC／SPK 開孔、按鍵縫：</strong>手指／線材可觸達→接觸或短距離空氣放電→耦合進類比前端。</li>
+  <li><strong>天線周圍（回收上週）：</strong>GNSS LNA 對面就是天空——它不但怕輻射雜訊（desense），也怕放電事件瞬間的場；LNA 輸入端常掛超低容保護或串聯隔直電容兼作緩衝（以設計而異）。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2b：8 kV 的逃生路線圖——同一台 NB，左邊是設計過的生路，右邊是沒設計的死路</text>
+  <!-- NB body -->
+  <rect x="60" y="150" width="800" height="130" rx="14" fill="#f1f5f9" stroke="#334155" stroke-width="2.5"/>
+  <text x="460" y="176" text-anchor="middle" font-size="12" fill="#334155" font-weight="bold">NB 主機板（PCB GND）＋金屬機殼（CHASSIS）</text>
+  <!-- lid -->
+  <path d="M 90 150 L 150 60 L 500 60 L 445 150" fill="#e2e8f0" stroke="#334155" stroke-width="2.5"/>
+  <text x="295" y="112" text-anchor="middle" font-size="11.5" fill="#334155">螢幕總成／金屬上蓋</text>
+  <!-- camera module at lid top-left -->
+  <rect x="165" y="68" width="64" height="30" rx="5" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="197" y="87" text-anchor="middle" font-size="10.5" fill="#1e40af">鏡頭模組</text>
+  <!-- FPC through hinge -->
+  <path d="M 200 98 C 195 130, 210 160, 250 195 C 290 228, 360 240, 430 240" fill="none" stroke="#2563eb" stroke-width="5" opacity=".85"/>
+  <text x="238" y="230" font-size="10.5" fill="#1e40af" transform="rotate(30 238 230)">FPC（地線＝細線→百 nH 級）</text>
+  <!-- discharge to camera gap -->
+  <path d="M 130 20 C 150 40, 160 55, 178 70" fill="none" stroke="#dc2626" stroke-width="3.5" stroke-dasharray="7 4"/>
+  <text x="86" y="16" font-size="11.5" fill="#dc2626" font-weight="bold">8 kV 空氣放電→鏡筒縫</text>
+  <!-- HDMI connector right -->
+  <rect x="785" y="180" width="75" height="70" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="822" y="208" text-anchor="middle" font-size="10.5" fill="#166534" font-weight="bold">HDMI</text>
+  <text x="822" y="224" text-anchor="middle" font-size="9.5" fill="#166534">360° 屏蔽</text>
+  <line x1="785" y1="215" x2="740" y2="215" stroke="#16a34a" stroke-width="3"/>
+  <!-- GOOD path -->
+  <path d="M 830 250 C 820 268, 780 272, 745 268 C 700 262, 660 250, 640 236" fill="none" stroke="#16a34a" stroke-width="5" opacity=".9"/>
+  <circle cx="700" cy="256" r="16" fill="#16a34a"/>
+  <text x="700" y="260" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">TVS</text>
+  <path d="M 700 272 L 700 292 L 730 316" fill="none" stroke="#16a34a" stroke-width="4"/>
+  <circle cx="736" cy="320" r="5" fill="#16a34a"/>
+  <text x="700" y="340" font-size="11" fill="#166534" font-weight="bold" text-anchor="middle">生路：屏蔽（360°）→機殼→入口 TVS→最近 ground stitch 入地（總長 &lt;λ／20 量紀律）</text>
+  <!-- BAD path -->
+  <path d="M 760 215 C 700 210, 620 205, 540 210 C 470 215, 420 220, 380 222" fill="none" stroke="#dc2626" stroke-width="3.5"/>
+  <rect x="380" y="205" width="34" height="34" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="397" y="226" text-anchor="middle" font-size="9" fill="#991b1b">IC</text>
+  <circle cx="540" cy="240" r="16" fill="#dc2626"/>
+  <text x="540" y="244" text-anchor="middle" font-size="10" fill="#fff" font-weight="bold">TVS?</text>
+  <path d="M 540 256 C 545 272, 560 284, 580 296" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="4 3"/>
+  <text x="596" y="302" font-size="10" fill="#991b1b">接地跳線 5 mm≈5 nH</text>
+  <text x="540" y="120" font-size="11.5" fill="#dc2626" font-weight="bold" text-anchor="middle">死路 1：TVS 裝在板子深處——8 kV 沿走線先打進 IC（保護在 IC 身後舉手）</text>
+  <text x="560" y="322" font-size="11.5" fill="#dc2626">死路 2：鉗位點的地彈跳＝L·di／dt→5 nH×30 A／ns＝150 V，TVS 自己變成加害者</text>
+  <text x="460" y="398" font-size="11.5" fill="#374151" text-anchor="middle">死路 3（鏡頭）：FPC 單條細地線＋模組浮地→放電把像素參考當高速公路（Day 45 Q16 的暫態版）</text>
+  <text x="460" y="424" font-size="11.5" fill="#0f4c5c" text-anchor="middle" font-weight="bold">設計紀律：讓外來客「從哪裡進、從哪裡走」——入口屏蔽→入口 TVS→最近最短的地；任何繞進內部的 ESD 路徑都是沒設計的路徑。</text>
+</svg>
+<figcaption>圖 2b：同一台機器、三種命運。綠線是你設計過的逃生路線；紅線是 8 kV 自己發明的。</figcaption>
+</figure>
+
+<h3>6.1 NB 拆機經驗談：TVS 位置對 vs 錯，拆三台就看懂</h3>
+<ul>
+  <li><strong>對的做法：</strong>TVS 緊貼連接器信号 pin 的第一顆器件（solder 面優先、走線最短的一站）；接地腳用<strong>多顆 via 直接打在 TVS 焊盤上／旁邊</strong>（3～4 顆 via 並聯：約 0.5 nH 一顆）；TVS 地直接連到機殼螺柱／屏蔽壓接點，<strong>不穿越敏感區</strong>。鉗位後的能量在「進村口」就入地了。</li>
+  <li><strong>錯的做法（拆過的真實樣態）：</strong>TVS 在板子中間「保護整組訊號」；接地用單 via＋2 mm 引線；TVS 的地打到模擬地平——結果 ESD 事件把鉗位彈跳直接送進 ADC 參考。<strong>保護要接在導體進入內部的第一步，且鉗位後能量入地的路徑長度與穿越區，比 TVS 本身廠牌重要。</strong></li>
+  <li><strong>兩段式保護（高風險埠的標準解）：</strong>入口放一顆「大胃王」（吞能量，鉗位鬆一點）＋串聯 R／L（利用它分擔壓降：ESD 的 mA→A 級電流流過 100 Ω 就再吃 100 V 壓降，平常訊號几乎不受影響，但要注意訊號頻寬與端接）＋IC 端一顆「低鉗、低容小顆」。兩顆分工，才同時滿足「吞得下」與「鉗得低」。</li>
+  <li><strong>結構優先於零件：</strong>很多 NB 的外露埠其實沒在訊號線上放器件，而是靠「放電結構」——機殼開孔與電極之間預留空氣縫隙（讓放電在機殼外的設計點跳火，跳完沿機殼外壁回殼），或內壁銅箔做「假靶」（honey via／stinger）引導放電繞行。<strong>先讓閃電走你的設計路線，再讓 TVS 收尾。</strong>（Gap 尺寸視產品與規範，以結構規範為準——不在此報數）</li>
+</ul>
+
+<h3>6.2 鏡頭模組專屬：本週把上週的接地作業驗收</h3>
+<p>Day 45 測驗 Q18 你畫過鏡頭地拓撲（模組板多點低感、FPC 地線隔段接、每訊號線配地）。今天加上暫態視角，三個動作升級：</p>
+<ul>
+  <li><strong>FPC 地線從「訊號品質」議題升級為「逃生通道capacity」議題：</strong>放電電流要沿 FPC 地線跑回主機板再入地——地線寬度與條數決定了它扛不扛得住、以及 L·di/dt 在模組端掀起多高的地彈跳（每條細線都是 1 nH／mm 級帳單）。<strong>多條地線、對稱分佈、每訊號線配地</strong>從上週的「抗擾建議」變成本週的「救命設施」。</li>
+  <li><strong>模組側手指可觸的金手指：</strong>裝配製程 CDM 風險（手指/吸嘴碰觸）——這是 CDM 規範的案發現場：自動化的吸嘴接地、離子風棒（ionizer）中和，是模組廠 SMT/組裝線標配（以廠内規範為準）。<strong>元件級風險在製程，系統級風險才在你的 layout。</strong></li>
+  <li><strong>VCM／OIS 的驅動回線：</strong>線圈是大電感、驅動是 PWM——ESD 事件疊加在 VCM 回線上會讓馬達「被踢一腳」（對焦彈跳、畫面上瞬間波浪）。處方：VCM 驅動的地與感測器模擬地分開、回線短、驅動端就近入地（回收 Day 44 的混合拓撲，小尺度版）。</li>
+</ul>
+
+<h3>6.3 漏電流與安規預算：TVS 也要進帳（回收 Day 42）</h3>
+<p>上週 Y-cap 課的帳本今天續用，三個欄位：</p>
+<ul>
+  <li><strong>DC 漏電（待機帳）：</strong>TVS 漏電 nA～µA 級（約，溫度每升 10 °C 約再翻倍——以 datasheet 曲線為準）。NB 待機功耗預算以 mA 級計、手機以百 µA～mA 級計（量級），單顆 nA 級無感；但<strong>整板數十顆、加上高溫邊緣，量產回收率（RMA）會替你記帳</strong>——車用/醫療的漏電規格就是這條帳的正式版本。</li>
+  <li><strong>跨絕緣／AC 側（若有電源板場景）：</strong>任何跨在「初級↔外殼」的新增元件都動到 Y-cap／漏電流預算（資訊產品對地洩漏常以 0.25 mA 級為閘值——依適用安規版本為準，回收 Day 42：Y-cap 上限、漏電流公式 I＝2πfC·V 都要重新點名）。訊號埠 TVS 多數不跨這個絕緣界，但 <strong>外殼↔地 的放電結構（假靶、放電縫隙）確實改變高頻下的外殼電位</strong>——它動的不是漏電流帳，是上週的共模帳。</li>
+  <li><strong>電容帳（訊號品質）：</strong>§4.2 已算——高速線上的每 1 pF 都是 318 Ω@1 GHz 的 stub 與反射點；差分對兩側容值失配直接把差模「翻」成共模（上週文法：共模才是出境的那張機票）。</li>
+</ul>
+<p><strong>位移電流的驚奇帳（上週共模文的暫態版，必背）：</strong>TVS 把 8 kV 在約 1 ns 內鉗住，等於對它接地的節點打進一顆 dV/dt 極陡的脈衝；任何掛在事件導體上的電容都會分到一份位移電流 i＝C·dV/dt——<strong>纜線屏蔽上多出 0.5 pF，8 kV／1 ns 邊沿就是約 4 A 的共模尖峰</strong>（量級估算）。這解釋了保護設計裡一個反直覺現象：<strong>「加了保護器件，傳導發射反而變差」——保護器把暫態轉成了共模，接錯地的 TVS 是共模泵。</strong>處方不是拆掉它，是讓它的接地路徑回到圖 2b 的綠線上。</p>
+
+<h2>7. 常見誤解（面試高頻送命區）</h2>
+<div class="card pitfall">
+  <span class="label">常見誤解</span>
+  <ul>
+    <li><strong>「多掛幾顆電容就是 ESD 保護」</strong>——錯。電容充電需要時間（dV/dt＝I/C），對 sub-ns 事件等於一根開路＋事後短路；而且大電容掛高速線直接殺訊號。<em>「我加過 100 nF 當 ESD」的句子講出去，面試官就知道你沒拆過被 8 kV 親手修改過的板子。</em></li>
+    <li><strong>「TVS 把靜電消滅了」</strong>——錯。能量守恆：4.8 mJ 一毫不少全部換了地方去——變成熱、變成地彈跳、變成你上週量到的共模。<strong>保護設計的實質是替能量規劃路線，不是消滅它。</strong></li>
+    <li><strong>「IC 有 2 kV HBM，系統就不用保護了」</strong>——錯兩個層次：①元件級 HBM ≠ 系統級 IEC（電路板上的路徑會繞過 IC 內部二極體）；②IC 內部保護管吞的是「自己腳上的小事件」，吞不了沿 20 cm 走線配上 100 nH 迴路打進來的系統級事件。系統規格（±8 kV）從來不是元件規格（2 kV HBM）除以二。</li>
+    <li><strong>「過不了 ESD 就加 TVS」</strong>——順序反了。先看逃生路線圖（結構放電點、屏蔽 360°、地路徑），TVS 是補刀不是主菜；沒路線圖就加器件，常常只是把死期往後移或把共模叫醒。</li>
+    <li><strong>「測試 PASS＝沒有 ESD 問題」</strong>——判準 B／C 掩蓋的「重開機就好」與間歇性損傷（損傷累積、漏電上升、可靠度縮水）不進 FAIL 欄，但進客戶的 RMA 欄。ESD 測試看的是分布不是单次（同一點 10＋10 發、逐點掃）。</li>
+  </ul>
+</div>
+
+<h2>8. 動手練習（先筆算再展開——今天的數字要長在手上）</h2>
+
+<details>
+<summary><strong>練習 1（三行算術・HBM）：</strong>4 kV HBM 事件：(a) 峰值電流？(b) 時間常數？(c) 總能量？(d) 跟 IEC 61000-4-2 接觸 8 kV 的能量比，哪個大幾倍？</summary>
+<div class="answer">
+<p>(a) I<sub>pk</sub>＝V／R＝4 000 V／1 500 Ω≈<strong>2.67 A</strong>（理想模型立即到達峰值）。<br>
+(b) τ＝RC＝1 500 Ω×100 pF＝<strong>150 ns</strong>（與電壓無關——電壓只改振幅不改節奏）。<br>
+(c) E＝½CV²＝0.5×100×10⁻¹² F×(4 000 V)²＝0.5×10⁻¹⁰×1.6×10⁷＝<strong>800 µJ</strong>。<br>
+(d) IEC 8 kV：E＝0.5×150×10⁻¹²×(8 000)²＝4.8 mJ。比值＝4 800 µJ／800 µJ＝<strong>6 倍</strong>（對比 HBM 2 kV 的 200 µJ 則是約 24 倍——今天圖 1 用那個對照，注意基準！）。<br>
+<strong>面試加分句：</strong>「系統級槍（IEC）不只電壓高，電容大 50%、電阻小 4.5 倍——峰值電流與能量雙殺，所以元件級的 HBM class 換不來系統級的免死。」</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2（L·di/dt・暫態匯率）：</strong>IEC 接觸 8 kV（di/dt 以 30 A/ns 量級估算）打進三條路徑：(a) TVS 接地單 via（約 0.5–1 nH）；(b) TVS 接地跳線 5 mm（約 5 nH）；(c) 一段 FPC 地線迴路 100 nH。各自炸出多少附加電壓？這題在問什麼？</summary>
+<div class="answer">
+<p>V＝L×di/dt（量級估算，di/dt 非常數）：<br>
+(a) 0.5～1 nH × 30 A/ns＝<strong>15～30 V</strong>——鉗位電壓之外「免費奉送」的彈跳。<br>
+(b) 5 nH × 30 A/ns＝<strong>≈150 V</strong>——TVS 鉗在 15 V？焊盤另一端實際看到 100 V＋。保護器變成電壓加法器。<br>
+(c) 100 nH ×（FPC 上實際到達的 di/dt 會被入口衰減，保守取 1 A/ns 量級）＝<strong>≈100 V 量級</strong>——模組端對主機板端的地電位差，像素參考平面被整塊抬走。<br>
+<strong>這題在問的是「看得見」：</strong>鉗位電壓是 TVS 資料書上的數字；被保護者實際看到的＝鉗位電壓＋沿途 L·di/dt。<strong>暫態設計＝把每一段 nH 從腳本裡刪掉</strong>（多 via 並聯、焊盤直連、就近入地）。回收 Day 44：「凡看到地，先換 nH」——今天再加半句：<strong>凡看到 ESD，先把 nH 乘上 di/dt。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3（TVS 選型三顆數・教學範例）：</strong>HDMI 的 HPD 線（3.3 V GPIO）。教學仮設數：候選 TVS：V_RWM＝3.3 V、V_BR(min)＝4 V、V_BR(max)＝5.5 V、R_dyn＝1.2 Ω；設計假設事件會送到它身上的 I_PP＝10 A。被保護 IC 的 GPIO 脈衝耐受（datasheet 假設）＝12 V。三顆數依序檢查，結論？</summary>
+<div class="answer">
+<p><strong>第 1 顆（不打擾日常）：</strong>V_RWM＝3.3 V ≥ V_op＝3.3 V ✓（邊緣但合格；對電源上緣＋紋波要留餘裕，保守者可上一檔 V_RWM＝5 V）。<br>
+<strong>第 2 顆（救命有效性）：</strong>V_C＝V_BR(max)＋I_PP×R_dyn＝5.5＋10×1.2＝<strong>17.5 V ＞ 12 V ✗</strong>——鉗太高，失靈態①。IC 先陣亡、TVS 完好。處方：改兩段式——入口大顆（可維持 17.5 V 鉗位）＋串聯 R（例如 33～100 Ω，ESD 期間分攤壓降；HPD 慢速線，頻寬無慮）＋IC 端低鉗小顆把最後一段壓到 12 V 內。<br>
+<strong>第 3 顆（吞量）：</strong>10 A 對 SMB 級（例如 600 W／8/20 µs 級別——教學範例對號，實際以料號曲線為準）線性區內 ✓。<br>
+<strong>本題心法：</strong>第 2 顆沒過，第 1、3 顆再漂亮都是零——這就是「順序不可顛倒」。另記：I_PP 用「會到達的電流」不是「槍口峰值」，入口若有串聯阻抗／電纜感抗，到器件的電流會被削（量級設計：先結構限流、再器件吞量）。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4（負載效應・低容之爭）：</strong>MIPI CSI-2 lane（100 Ω 差分、1 Gb/s/lane）。工程師把一顆普通 TVS（单側 100 pF）掛上 lane。(a) 1 GHz 下 X_C 多少？(b) 對訊號做什麼事？(c) 換成 0.3 pF 超低容呢？(d) 差分對稱性為什麼重要？</summary>
+<div class="answer">
+<p>(a) X_C＝1/(2πfC)＝1/(2π×10⁹×100×10⁻¹²)≈<strong>1.6 Ω</strong>。<br>
+(b) GHz 訊號在掛載點直接入地——等於在傳輸線中間對地打了一根 1.6 Ω 的樁：深null（陷波）＋反射，眼圖當場關眼（回收 Day 25 眼圖、Day 3 不連續判讀）。這顆器件「保護成功、殺死人質」。<br>
+(c) 0.3 pF：X_C≈1/(2π×10⁹×0.3×10⁻¹²)≈<strong>530 Ω</strong>——對 100 Ω 系統是輕微擾动；但仍是一個 stub：掛載位置盡量靠近連接器、via 縮短（Day 3 的 via stub 課二週目）。實務上很多 camera FPC 設計<strong>MIPI lane 根本不掛器件</strong>，靠結構逃生＋連接器屏蔽保護——「不給它打得到的機會」比「接住它」高級。<br>
+(d) 差分兩側容值失配（例如 0.30 vs 0.45 pF）→ 兩邊 delay／負載不同 → 差模轉共模（SCD21 變差）→ 上週文法：共模是會搭纜線出境的那一半。<strong>低容器件選型要看「差分對稱性／matched」欄位。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5（情境・上週武器本週用）：</strong>測試室回報：對 NB 鏡筒開口以 4 kV 空氣放電，偶發影像凍結，重新插拔模組排線或重開機恢復（IEC 判準 C）。你手上有：示波器、ESD 槍、近場探棒、電流夾（DIY＋商用）、待測機兩台。排你的办案順序（提示：先分「誰倒下了」，再追「能量走哪條路」，最後對策照「看得見」三態開獎）。</summary>
+<div class="answer">
+<p><strong>Step 0 定性：</strong>判準 C＝要重開機/重插——先假設 <em>latch-up 或 I²C/MIPI 接收端掛死</em>，不是永久損傷。把凍結瞬間的 log／reg dump 抓下來（sensor 的 link status 暫存器是否掉 lane）。</p>
+<p><strong>Step 1 定位受害者：</strong>示波器掛 MIPI HS（高速探棒，Day 30 手法）與 I²C——放電瞬間先看誰的波形變形；若 HS lane 瞬間失 lock，受害者在傳輸層；若 link 還在但畫面凍——查 sensor 供電／復位暫存器（可能被擾動寫入）。</p>
+<p><strong>Step 2 描出能量路線：</strong>4 kV 空氣放電同時打進「傳導」與「輻射」兩個通道：(i) 用商用夾／DIY 夾夾 FPC 束（三夾法 Day 43：夾全部看共模）——放電瞬間的共模尖峰是傳導路徑的直接證據；(ii) 近場 H/E 探棒掃鏡筒縫→FPC→主機板入口，看場的路徑；(iii) 對照實驗：手指貼住機殼放電 vs 貼住接地銅箔放電——分貝/現象變不變（Day 45 Q16 的「人體路徑」手法反用）。</p>
+<p><strong>Step 3 開獎三態：</strong>常見三個真兇——①模組浮地：放電靠 FPC 細地線＋機殼縫完成迴路，模組地彈跳掀翻 sensor 參考（失靈態③的結構版）；②主機板端 FPC connector 地 pin 单點：鉗位後能量要跑 10 cm 才入地（100 nH 量級，每 A/ns 收 100 V）；③機殼內壁沒有放電結構，閃電自己選路穿過 FPC 上方空間容性耦合。</p>
+<p><strong>Step 4 對策（便宜→貴）：</strong>FPC 地線加寬/加條數（免費）→ 連接器地 pin 就近 ground stitch 加密（λ/20 紀律本週版：讓入地路徑最短，非輻射版）→ 鏡筒開口內側加放電結構（假靶 copper stinger 朝機殼、留縫讓跳火發生在設計點）→ 主機板入口兩段式鉗位（I²C/復位線）→ 最後才是換更兇的 TVS。每一步前後對照 10＋10 發，記錄判準變化（A/B/C 分布也是數據）。<strong>結算句：把 C 修成 B 是治標，修成 A 才是路線圖設計完成。</strong></p>
+</div>
+</details>
+
+<h2>9. 面試怎麼考（英文題＋參考答案）</h2>
+
+<details>
+<summary><strong>Q1（概念對決）：</strong>"A device passes 2 kV HBM but is killed by a 500 V CDM event. How is that possible? Walk me through the physics, then tell me which process nodes care more."</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>They are different sources, not different severities of the same source. HBM is 100 pF discharged through 1.5 kΩ — gentle rise, ~150 ns time constant, peak I = V/R ≈ 1.33 A at 2 kV; the energy (200 µJ) is dumped slowly and spread through the die's internal clamp diodes. CDM charges the die itself (a few pF) and discharges through tens of ohms with sub-nanosecond rise — peak current runs to tens of amps. Two kill mechanisms: (1) current density — the whole discharge squeezes through one pin's bond wire and one junction; (2) the rise time is faster than the internal protection can turn on, and gate-oxide damage is an electric-field-time-integral phenomenon, not a total-energy phenomenon. Advanced nodes care more: thinner gate oxides have lower breakdown fields, smaller junctions concentrate current, and internal ESD structures shrank faster than oxide voltages. Rule of thumb I quote: HBM failures look like melted metal; CDM failures look like pinhole gate-oxide scars — the failure analysis lab tells them apart.</p>
+<p><strong>加分句：</strong>"In my modules' assembly lines, CDM is a process-control problem — grounded nozzles, ionizers — while on the board, it becomes a path-inductance problem. I size both in the same currency: volts = L × di/dt."</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q2（設計深挖）：</strong>"Design the ESD protection for a camera module flex cable that runs from the sensor through a hinge to the mainboard — MIPI lanes, I²C, power, VCM. TVS everywhere? Where exactly, and what stops you?"</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>No — TVS everywhere is how you fail twice. First I draw the escape-route map: where can a discharge couple in? The barrel gap (air discharge), exposed FPC fingers (handling/CDM), the connector at the mainboard. Then protection follows the route, not the pin count. (1) <em>Structural first:</em> enclosure vent gap and a sacrificial discharge structure so the arc lands where I design it; connector shell bonded 360°, no pigtail — at 30 A/ns, 5 nH of braid is 150 V. (2) <em>MIPI lanes:</em> at 1–2.5 Gb/s a TVS is an impedance discontinuity; I use matched &lt;0.5 pF parts only if the event can actually reach the lane, otherwise rely on the shielded path — and symmetry matters, because mismatched pads convert differential to common mode, which is exactly what escapes on the cable. (3) <em>I²C / reset / power:</em> real TVS at the mainboard entry, ground via array directly at the pad — each nH costs ~30 V at IEC 8 kV, and the clamp's ground bounce is the product, not its datasheet clamp voltage. (4) <em>VCM loop:</em> keep the motor return off the sensor's analog reference — mixed topology at millimeter scale. What stops me: junction capacitance vs link speed, standby leakage budget, and board real estate near the connector. I verify with the 4 kV air / ±4 kV contact gun against criteria — and I treat 'recovers after re-seat' (criterion C) as a finding, not a pass.</p>
+<p><strong>加分句：</strong>"Protection is route planning, not component shopping: every joule of a 4.8 mJ event ends up somewhere — as heat, as ground bounce, or as common-mode current in my emissions test. My job is to pick where."</p>
+</div>
+</details>
+
+<h2>10. 今日整理：從上週到手的全部武器換上暫態彈頭</h2>
+<div class="card takeaway">
+  <span class="label">今日整理（takeaway）</span>
+  <ul>
+    <li><strong>ESD 本質：</strong>蓄好的電荷（½CV²）＋放電路徑（R、L）；殺傷力＝功率密度不是電壓數字。三個模型三種暴力：HBM（100 pF／1.5 kΩ，慢、約 1 A 級）、CDM（幾 pF／幾十 Ω，sub-ns、安培級，先進製程頭號殺手）、IEC 61000-4-2（150 pF／330 Ω，系統驗收的標準槍，接觸 8 kV≈30 A／1 ns、4.8 mJ）。</li>
+    <li><strong>暫態匯率：</strong>1 nH×30 A/ns＝30 V——把「1 nH＝6.3 Ω@100 MHz」升級成伏特帳：via、跳線、FPC 地線全部重新標價。</li>
+    <li><strong>TVS 三顆數（順序不可顛倒）：</strong>V_RWM≥V_op → V_C＝V_BR(max)＋I_PP×R_dyn＜耐受×0.7 → I_PP 吞量。<strong>HBM class 與鉗位電壓禁止直接比較</strong>（不同波形宇宙）。高速線：低容＋對稱＋stub 最小化。</li>
+    <li><strong>保護三句話：</strong>鉗得低（V_C 帳）、吞得下（能量帳）、看得見（位置與接地路徑帳）；三態失靈各對應一種驗屍報告。</li>
+    <li><strong>系統觀：</strong>保護＝替能量規劃路線（結構放電→屏蔽 360°→入口鉗位→最近入地）；判準 C「重開機就好」是工程問題不是測試通過；TVS 接錯地＝共模泵（位移電流帳 i＝C·dV/dt）。</li>
+  </ul>
+</div>
+
+<h2>今日 Anki 卡片（五張）</h2>
+
+<div class="anki">
+  <p class="q">卡 1｜Q：三個 ESD 模型的標準電路、波形特徵與害怕對象？</p>
+  <p class="a">HBM＝100 pF＋1 500 Ω（JS-001）：τ＝150 ns，I_pk＝V/R（2 kV→約 1.33 A），人體碰引脚。CDM＝晶片自帶幾 pF＋幾十 Ω（JS-002）：上升 sub-ns、峰值數十 A 量級，先進製程頭號殺手（閘氧針孔）。MM＝200 pF＋0.75 µH（振鈴，業界多被 CDM 取代）。IEC 61000-4-2＝150 pF＋330 Ω（系統級標準槍）：接觸上升約 1 ns、約 3.75 A/kV（8 kV→約 30 A）、8 kV≈4.8 mJ；打的是成品與你的接地／屏蔽設計。</p>
+  <p class="q">卡 2｜Q：為什麼「2 kV HBM 的 IC」不能直接比較「TVS 鉗位 15 V」？</p>
+  <p class="a">不同波形宇宙：HBM 是 100 pF 經 1.5 kΩ 的 150 ns 慢放；TVS 鉗位疊在 ns 級幾十 A 的尖刺上。HBM class 量的是「元件耐慢刀」，鉗位電壓量的是「系統暫態被壓到多低」——要比較得換到同一脈衝座標（surge 耐受或實測）。把兩個數字排大小＝面試送命點。</p>
+  <p class="q">卡 3｜Q：TVS 選型三顆數與順序？保護三句話？</p>
+  <p class="a">①V_RWM≥V_op(max)（日常不打擾）；②V_C＝V_BR(max)＋I_PP×R_dyn＜被保護者脈衝耐受×0.7（救命有效性）；③I_PP≥事件到達電流（吞量）。三句話：鉗得低、吞得下、看得見；三態失靈：鉗太高（IC 先走）、吞爆（TVS 自焚）、沒看見（裝錯位／接地長——保護變旁觀者）。</p>
+  <p class="q">卡 4｜Q：「1 nH＝30 V」怎麼來、用在什麼場合？</p>
+  <p class="a">IEC 接觸 8 kV 的 di/dt≈30 A/ns（量級）；V＝L·di/dt→每 1 nH 炸出約 30 V。用途：TVS 接地 via（0.5–1 nH＝15–30 V 彈跳）、5 mm 跳線（5 nH＝150 V）、FPC 地線與 pigtail 重新標價。設計動作：多 via 並聯、焊盤直連、就近入地。口訣：凡看到 ESD，先把 nH 乘上 di/dt。</p>
+  <p class="q">卡 5｜Q：IEC 61000-4-2 接觸 vs 空氣放電？A／B／C／D 判準的工程意義？</p>
+  <p class="a">接觸：槍頭貼導體，能量全進 EUT，上升約 1 ns、峰值高（電流攻擊）；空氣：對縫隙打（約 3 kV/mm 量級起跳），上升較慢但同時是超寬頻輻射源（場攻擊）。判準：A 全程正常／B 暫時失能自復／C 要人工恢復／D 永久損壞。測試報告可能把 B、C 記過，工程師要把 C 當線索：重開機復活≈latch-up、韌體掛死或匯流排 lock——都是必須整改的案底。</p>
+</div>
+
+<h2>明日預告</h2>
+<p><strong>Day 47（週二・ESD 防護 II）：</strong>「系統級防護設計——連接器、屏蔽與地彈跳的完整戰術」。今天你學會了單點鉗位與逃生路線圖；明天把戰術鋪滿整台 NB：連接器屏蔽的 360° 與放電釘（λ/20 紀律的暫態版）、機殼假靶與空氣縫隙的設計流程、地彈跳傳導進類比前端的完整路徑分析（VCM 被踢一腳的物理）、電源埠（DC-in、電池）的保護策略與安規界、以及「ESD 測試計畫怎麼寫」——測哪些點、多少發、什麼判準、失敗怎麼歸檔。本週五＝實作日（平日進公司）：TVS 鉗位曲線量測＋ESD 槍放電事件的示波器捕捉（1 ns 邊沿挑戰示波器頻寬——Day 30 的probe 負載課會先你一步到達）。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

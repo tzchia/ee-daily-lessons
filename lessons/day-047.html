@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 47｜ESD 防護 II——佈局對策與系統級防護設計：從「選對零件」到「鋪好路徑」</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 10 週・第 47 天（週二新觀念課）</div>
+  <h1>Day 47：ESD 防護 II——佈局對策與系統級防護設計：從「選對零件」到「鋪好路徑」</h1>
+  <div class="meta">2026-09-08（二）｜預估學習時間：90～110 分鐘（純閱讀＋筆算，不需儀器）｜難度：★★★★☆｜昨天的你學會了替一顆 TVS 算命（三連問、1 nH＝30 V、逃生路線圖）；今天的問題是：<strong>零件選對了，它還是可能保護失敗——因為鉗位電壓是資料書上的數字，被保護者看到的是「鉗位＋路徑帳單」。</strong>今天把單點鉗位鋪成整套系統戰術：接地 via 陣列的實作細節、兩段式保護的壓力分攤、多板機殼的放電主幹道、IC 與板廠的責任分界語言，最後收官成一張「ESD-safe 佈局檢查清單」。本週五（Day 49）＝實作日：鉗位曲線與放電事件上示波器——今天的帳本是那天的對照表。</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天這一課，你要能回答五個問題，而且每題都能畫圖、報數：</p>
+  <ol>
+    <li><strong>TVS 的接地路徑怎麼做才算實作正確？</strong>——via 陣列要幾顆、為什麼「超過兩三顆之後邊際遞減」（Perfect Timing II Ch.6 的既有教誨）、為什麼「共用地路徑」會讓鉗位成功卻毒死鄰居？</li>
+    <li><strong>為什麼單顆 TVS 常常不夠？兩段式保護怎麼分攤壓力？</strong>——用 I＝(V_C1−V_C2)／R 算出每道閘門各吞多少電流，並說明這和 Day 39 的「大電容＋小電容」去耦網絡是同幾何。</li>
+    <li><strong>一台 NB 有主機板、IO 小板、鏡頭模組、鍵盤、電池——8 kV 打進來，放電主幹道怎麼鋪？</strong>——三問法（從哪進？走哪條主幹回機殼？有沒有繞經別人的訊號排線？），轉軸 FPC 的金屬旁路帶（strap）為什麼是救命設施。</li>
+    <li><strong>IC 規格書寫「內建 ESD 保護、系統級符合 IEC 61000-4-2」，板級還要不要加 TVS？</strong>——器件級與系統級規格語言的分界、責任矩陣怎麼劃、你的 20 cm 走線憑什麼要求晶圓保證。</li>
+    <li><strong>拿到一張「IEC 測試失敗」的報告，你的辦案 SOP 是什麼？</strong>——五步流程（固證→定位受害者→分傳導／輻射→歸因機制→對策階梯），以及今天收官的 ESD-safe 佈局檢查清單（14 項，接上 Day 44 的天線清單）。</li>
+  </ol>
+  <p>今天的定位：Day 46 是「武器學」，今天是「戰役學」。你五年 NB 主機板經驗裡畫過的每一條接地、每一個 via、每一條轉軸排線，今天都要被 ESD 重新審計一次。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：村莊防洪二期工程——寬溝、雙閘、與雨水幹道</span>
+  <p>昨天我們說 TVS 是村口的防洪閘。但水患從來不是「有閘門」就結算的——二期工程要補三件事。</p>
+  <p><strong>第一，閘門前面的排水溝要夠寬夠短。</strong>閘門本身能把水位壓到 1 公尺沒問題，但如果閘門後面接的是一條庭院小水溝（一條細細的接地線），洪水擠過小水溝的瞬間，溝壁承受的水壓（L·di/dt）比閘門外還高——你的閘門不但沒救命，還把水壓集中倒灌進村子。<strong>解法：把小水溝改成十併列的寬渠道（via 陣列），而且渠道筆直入河，不經過任何人家的院子（不共用別人家的地）。</strong></p>
+  <p><strong>第二，一道閘門要兼差太多，就拆成兩道。</strong>外門要大（吞得下整條河的洪峰），但大閘門做工粗，水位壓到 3 公尺才完全關住；內門可以小而精緻（壓到 1.2 公尺），但小而精緻的門擋不住整條河的洪峰。<strong>解法：外門先擋下八成洪水、把水位從 10 公尺壓到 3 公尺，中間隔一道減壓牆（串聯電阻），剩餘的洪峰被牆擋掉一半壓力，內門只面對「余波」，輕輕鬆鬆壓到 1.2 公尺。</strong>你昨天背的去耦網絡——大電容應付低頻能量、小電容緊貼晶片應付高頻——就是同一套分工幾何，今天只是從「濾波」換成「鉗位」。</p>
+  <p><strong>第三，全城要有雨水幹道，雨水不準繞進客廳。</strong>NB 不是一個村子，是一棟大樓：主機板、IO 小板、鏡頭模組、鍵盤各是一個單元。閃電打在陽台（USB 埠），雨水必須沿「大樓外壁的雨水管」（機殼金屬＋螺柱＋編織帶）直接回地基（地），<strong>絕對不能從 25 樓客廳的電話線（轉軸 FPC）裡穿過去再回地基</strong>——那條電話線就會像昨天那條小水溝一樣，兩端瞬間出現數十伏特的電位差，電話那頭（感測器）當場聽不懂對方說話。</p>
+  <p>所有公式可以先跳過——今天的結論只有一句：<strong>鉗位電壓是零件的事，被保護者看到的電壓是路徑的事；保護設計的品質，取決於你把「能量回家的路」鋪得多短、多寬、多不經彆人家。</strong>接下來的數學，是把這句話寫成面試官無法反駁的帳。</p>
+</div>
+
+<h2>0. 前情提要——昨天交到你手上的四本帳</h2>
+<ul>
+  <li><strong>暫態匯率：1 nH × 30 A/ns＝30 V</strong>（IEC 接觸 8 kV 量級）。今天每一段 via、接地跳線、排線迴路都要先換算成伏特。</li>
+  <li><strong>TVS 選型三連問（順序不可顛倒）：</strong>V_RWM ≥ 工作電壓 → V_C＝V_BR(max)＋I_PP×R_dyn ＜ 耐受×0.7 → I_PP 吞量。今天假設零件已經選對了——因為「選對」只是「裝對」的必要條件。</li>
+  <li><strong>保護三句話：鉗得低、吞得下、看得見。</strong>今天的課幾乎全在第三句與它的兩個兄弟：「看得見」升級成入口工程＋兩段式；「吞得下」升級成壓力分攤算術。</li>
+  <li><strong>Day 39／40 舊帳回收：</strong>你學過「電容的效能由封裝與 via 的安裝雜感決定，不是由標稱容值決定」——同一條教誨今天原封不動送給 TVS：<strong>鉗位曲線再漂亮，都要經過你的 via 和銅皮才見得到客人。</strong>（Perfect Timing II Ch.8 對去耦電容說的話：安裝雜感往往比元件本身先失效——今天把它翻譯成 ESD 語言。）</li>
+</ul>
+<p><em>書目說明：《Perfect Timing II》（2002）無 ESD／保護器件專章，依課程規例不硬引。今天唯一直接引用的是 Ch.6（PCB Layout）對 via 的既有教誨——一針一地、多 via 並聯、超過兩顆邊際遞減——那是穩態雜訊阻抗的語境，本課會明確標註它與暫態語境的異同。</em></p>
+
+<h2>1. 接地路徑實作：TVS 的「生命線」細節——via 陣列、寬短路徑、與不共用</h2>
+<p>昨天的圖 2b 告訴你死路：5 mm 接地跳線＝5 nH＝150 V。今天把「生路」畫到佈局等級——四個動作加一條紀律。</p>
+
+<h3>1.1 動作一：鉗位器件的電流路徑，每一 nH 都要簽名</h3>
+<p>把 TVS 的放電迴路從焊盤開始逐段解剖：TVS 芯片→封裝引線架（約 0.5～1 nH，視封裝，約）→焊盤→<strong>接地 via</strong>→內層大地平面→機殼螺柱／屏蔽壓接點（每一接觸界面又有 0.1～0.5 nH 量級接觸雜感，約）→機殼。設計者的工作順序就是<strong>逐段砍 nH</strong>：</p>
+<ul>
+  <li><strong>焊盤直連（direct connect）：</strong>訊號先經過 TVS 焊盤再繼續走（TVS 串在路徑上當「收费站」），接地腳以最短銅皮直抵 via——不讓電流「繞路來收」。</li>
+  <li><strong>via 陣列：</strong>接地腳焊盤上／貼邊打 3～4 顆 via 並聯（單顆 via 約 0.5～1 nH；並聯後有效值遞減，練習 1 手算）。<strong>Perfect Timing II Ch.6 對 via 的教誨（原文大意）：每個接地腳至少一顆 via、緊貼元件接地銅皮與地平面交會處；「超過兩顆 per pin 邊際效益持續遞減」；且 via 的銅壁鍍層粗糙，其電阻與雜感本身就是要精算的資產（加大孔徑、加重鍍銅、多顆並聯都是工具）。</strong>注意語境：書中說的是去耦／時脈緩衝的<strong>穩態高頻阻抗</strong>優化；在 ESD 暫態下，多 via 並聯依然是對的方向（並聯降 L），但「遞減」同樣成立——3～4 顆之後省下的 nH 已小於事件間的散布，繼續加只是擠壓佈局。<em>2002 年之後的現代之變：HDI 鐳射孔（0.1～0.15 mm）與 via-in-pad（鏤孔電容／TVS 正下方直接打孔、填銅蓋油）讓「多 via 直連」從願景變成常態——書中介入方式以現代標準需上修，但「安裝雜感先於元件本體失效」的結論不朽。</em></li>
+  <li><strong>寬而短：</strong>接地銅皮的_dc 電阻在 ns 事件裡無感，但寬度決定雜感——同樣長度下，從 0.2 mm 細線改成 2 mm 銅皮，nH 數可降一個量級（量級概念，非精算值）。</li>
+  <li><strong>目的地意識：</strong>TVS 鉅位後電流的最終歸宿是<strong>機殼螺柱／連接器外殼壓接點</strong>，不是「某個地平」。接地路徑要在銅皮層上畫得出來、且不穿越敏感區（見紀律）。</li>
+</ul>
+
+<h3>1.2 紀律：共用地路徑＝暫態版的共阻抗耦合</h3>
+<p>上週 Day 42／44 的單字今天原價重購：<strong>兩股電流共用一段阻抗，彼此就「分享」上面的電壓。</strong>TVS 鉅位的 30 A 與感測器的 mA 級回流出走同一段銅皮——平常 mA 在上面留不下 µV，ESD 瞬間它變成 30 A 高速公路，旁人的「地」被整段抬走。處方：</p>
+<ul>
+  <li>TVS 接地路徑<strong>獨立且直達</strong>其目的地（螺柱／外殼），不順路串過任何其他器件的接地。</li>
+  <li>鉅位能量<strong>不進模擬地島</strong>：ADC／感測器參考平面與入口鉅位點之間，用「遠距離＋單點匯流」的舊文法（Day 44 混合拓撲）安排，讓 30 A 永遠走不到參考平面。</li>
+  <li>同一顆 TVS 保護多條線時，各線分叉點要小、公共段要短——公共段上每一個 nH 都會分給所有分支當彈跳。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：同一顆 TVS、兩種接地——失敗板與生還板的佈局解剖（橫斷面示意）</text>
+
+  <!-- ===== Panel A: WRONG ===== -->
+  <rect x="15" y="40" width="430" height="280" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="230" y="64" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#991b1b">錯誤：細長接地路徑＋單 via＋順路收人頭稅</text>
+  <!-- board -->
+  <rect x="40" y="200" width="380" height="26" fill="#e7e5e4" stroke="#78716c" stroke-width="1.5"/>
+  <text x="415" y="218" font-size="9.5" fill="#78716c" text-anchor="end">PCB</text>
+  <!-- inner ground plane -->
+  <line x1="40" y1="244" x2="420" y2="244" stroke="#9ca3af" stroke-width="3"/>
+  <text x="415" y="258" font-size="9.5" fill="#6b7280" text-anchor="end">內層地平面</text>
+  <!-- connector -->
+  <rect x="55" y="168" width="42" height="32" rx="4" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="76" y="188" text-anchor="middle" font-size="9.5" fill="#991b1b">連接器</text>
+  <!-- TVS far inside board -->
+  <rect x="210" y="176" width="44" height="24" rx="4" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="232" y="192" text-anchor="middle" font-size="9.5" fill="#991b1b">TVS</text>
+  <!-- signal detour -->
+  <path d="M 97 184 L 210 184" stroke="#dc2626" stroke-width="2.5" fill="none"/>
+  <text x="152" y="178" font-size="9" fill="#991b1b" text-anchor="middle">訊號繞 14 mm 才收費</text>
+  <!-- ground pigtail: thin long trace to a shared point -->
+  <path d="M 254 200 L 254 212 L 330 212 L 330 200" stroke="#dc2626" stroke-width="2" fill="none"/>
+  <text x="292" y="226" font-size="9.5" fill="#991b1b" text-anchor="middle">接地細線 5 mm≈5 nH</text>
+  <!-- single via -->
+  <line x1="330" y1="200" x2="330" y2="244" stroke="#dc2626" stroke-width="2.5"/>
+  <circle cx="330" cy="244" r="4" fill="#dc2626"/>
+  <text x="345" y="238" font-size="9.5" fill="#991b1b">單 via ≈0.7 nH</text>
+  <!-- other IC shares return -->
+  <rect x="352" y="170" width="52" height="30" rx="4" fill="#f5f5f4" stroke="#78716c" stroke-width="1.5"/>
+  <text x="378" y="182" text-anchor="middle" font-size="8.5" fill="#57534e">感測器</text>
+  <text x="378" y="193" text-anchor="middle" font-size="8.5" fill="#57534e">模擬地</text>
+  <line x1="378" y1="200" x2="378" y2="244" stroke="#78716c" stroke-width="2"/>
+  <path d="M 330 244 L 378 244" stroke="#dc2626" stroke-width="4" opacity=".45"/>
+  <text x="356" y="272" font-size="9" fill="#991b1b" text-anchor="middle">共用平面段：TVS 彈跳沿此段「代收人頭稅」</text>
+  <!-- math -->
+  <text x="40" y="300" font-size="11" fill="#991b1b" font-weight="bold">帳單：鉅位 12 V＋(5 nH＋0.7 nH)×30 A／ns≈＋170 V → 實際「地」被抬到 180 V 級；共用段再對鄰居加收 L·i 稅。</text>
+
+  <!-- ===== Panel B: RIGHT ===== -->
+  <rect x="475" y="40" width="430" height="280" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="690" y="64" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#166534">正確：入口直連＋via 陣列＋銅皮直抵螺柱</text>
+  <rect x="500" y="200" width="380" height="26" fill="#e7e5e4" stroke="#78716c" stroke-width="1.5"/>
+  <line x1="500" y1="244" x2="880" y2="244" stroke="#9ca3af" stroke-width="3"/>
+  <text x="875" y="258" font-size="9.5" fill="#6b7280" text-anchor="end">內層地平面</text>
+  <!-- connector at edge -->
+  <rect x="512" y="168" width="42" height="32" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="533" y="188" text-anchor="middle" font-size="9.5" fill="#166534">連接器</text>
+  <!-- TVS hugging connector: signal passes through pad -->
+  <rect x="568" y="176" width="44" height="24" rx="4" fill="#fff" stroke="#16a34a" stroke-width="2"/>
+  <text x="590" y="192" text-anchor="middle" font-size="9.5" fill="#166534">TVS</text>
+  <path d="M 554 184 L 568 184 M 612 184 L 660 184" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="636" y="178" font-size="9" fill="#166534" text-anchor="middle">訊號先過收費站</text>
+  <!-- via array under pad -->
+  <g fill="#16a34a">
+    <circle cx="576" cy="213" r="3.6"/><circle cx="586" cy="213" r="3.6"/><circle cx="596" cy="213" r="3.6"/><circle cx="586" cy="222" r="3.6"/>
+  </g>
+  <path d="M 576 200 L 576 213 M 586 200 L 586 213 M 596 200 L 596 213 M 586 213 L 586 222" stroke="#16a34a" stroke-width="2"/>
+  <text x="590" y="238" font-size="9.5" fill="#166534" text-anchor="middle">焊盤 via 陣列 ×3~4（≈0.2 nH 級）</text>
+  <!-- copper pour to chassis stud -->
+  <path d="M 570 244 L 570 244" stroke="none"/>
+  <rect x="560" y="240" width="60" height="8" fill="#16a34a" opacity=".35"/>
+  <path d="M 620 244 L 780 244" stroke="#16a34a" stroke-width="6" opacity=".5"/>
+  <!-- chassis stud -->
+  <rect x="780" y="228" width="14" height="16" fill="#0f4c5c"/>
+  <line x1="787" y1="228" x2="787" y2="200" stroke="#0f4c5c" stroke-width="3"/>
+  <rect x="720" y="150" width="160" height="18" fill="#cbd5e1" stroke="#0f4c5c" stroke-width="1.5"/>
+  <text x="800" y="163" text-anchor="middle" font-size="9.5" fill="#0f4c5c">金屬機殼 CHASSIS</text>
+  <path d="M 787 200 L 787 228 M 620 246 C 680 258, 740 246, 780 236" stroke="#0f4c5c" stroke-width="2.5" fill="none" stroke-dasharray="5 4"/>
+  <text x="700" y="280" font-size="9.5" fill="#166534" text-anchor="middle">鉅位電流的目的地＝螺柱／屏蔽壓接點，路徑不穿越敏感區</text>
+  <text x="500" y="300" font-size="11" fill="#166534" font-weight="bold">帳單：鉅位 12 V＋0.2 nH×30 A／ns≈＋6 V；感測器參考全程無感。</text>
+
+  <!-- bottom citation box -->
+  <rect x="15" y="344" width="890" height="112" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="460" y="368" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f4c5c">Perfect Timing II Ch.6 教誨的 ESD 轉譯（書講穩態去耦阻抗，今天借它的幾何、換它的帳）</text>
+  <text x="46" y="392" font-size="11.5" fill="#374151">① 每個接地腳至少一顆 via，緊貼元件接地銅皮與地平面交會處——ESD 版：via 要打在焊盤正下方／貼邊，越近越好。</text>
+  <text x="46" y="414" font-size="11.5" fill="#374151">② 「超過兩顆 per pin，效果持續遞減」——ESD 版同樣成立：3～4 顆後省下的 nH 遠小於封裝引線與接觸電阻的貢獻，瓶頸搬家。</text>
+  <text x="46" y="436" font-size="11.5" fill="#374151">③ via 銅壁鍍層粗糙、電阻與雜感不可省——現代工具（HDI 小孔、via-in-pad、填銅）讓 2002 年的「加顆數」難題變成「加密度」：<span fill="#b45309" font-weight="bold">書中介入方式以現代標準需上修。</span></text>
+</svg>
+<figcaption>圖 1：同一顆 TVS，左板死、右板活——差別全在接地路的「寬、短、直、不共用」四件事（電感數字為量級估算）。</figcaption>
+</figure>
+
+<h2>2. 兩段式保護：外門粗、內門精，中間一道減壓牆</h2>
+
+<h3>2.1 為什麼單顆 TVS 在高風險埠幾乎必輸——三角權衡</h3>
+<p>把 yesterday 的三連問攤開，你會看到一個不可能三角：<strong>鉅得低（V_C 小）、吞得多（I_PP／能量大）、容值小（C_j 低）三者在同一顆矽上互斥。</strong>大顆（SMC／800 W～kW 級別，約）吞量大但 V_C 高、C_j 大（數十～百 pF）；小顆低容陣列（&lt;0.5 pF）鉅得低、容值小，但脈衝耐量只剩幾百 W／十幾 A 級（約）。高風險現場——DC-in、USB 供電、FPC 出口——事件規模是安培級，單一器件無解。解法是<strong>分工</strong>：</p>
+
+<div class="formula">
+入口大顆（吞量優先，V_C 寬鬆）＋ 串聯阻抗 R（減壓牆）＋ IC 端小顆（低鉅＋低容）<br>
+分工算術：串聯牆兩端的壓差＝V_C1（大顆鉅位）−V_C2（小顆鉅位）→ 流經牆的電流 I＝(V_C1−V_C2)／R<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：外門把洪水壓到 3 公尺（V_C1），內門把院子壓到 1.2 公尺（V_C2），中間 1.8 公尺的水位差全部壓在減壓牆（R）身上——牆按壓差和自身粗細（阻值）決定漏過去多少水。牆越粗細得當，內門面對的余波越小。</span>
+</div>
+
+<p><strong>減壓牆的三種材料與各自的坑：</strong></p>
+<ul>
+  <li><strong>電阻（10～100 Ω 級，依頻寬）：</strong>最可預測。事件期間牆上的瞬時功率 P＝(V_C1−V_C2)×I 要在電阻脈衝耐量內（膜電阻的 ns～µs 脈衝耐量遠高於穩態額定，以料號曲線為準）。坑：訊號頻寬（與線容形成 RC／低通）與 I²C 的上拉預算（練習 2）。</li>
+  <li><strong>電感／磁珠：</strong>低頻看是短路（不影響供電），暫態看是牆（V＝L·di/dt 自己長出來）。坑一：<strong>磁珠會飽和</strong>——電流超過其飽和電流後磁導率崩塌、阻抗歸零，牆在最能派上用場的瞬間變成平地；選型要看「額定／飽和電流」欄，不是只看 100 MHz 阻抗標稱值。坑二：與線容形成 LC 振鈴（Day 41 的老朋友），事件後振盪可能比鉅位電壓還難看。</li>
+  <li><strong>走線自己：</strong>入口到大顆之間刻意保留的幾 nH～十幾 nH 銅皮就是最便宜的牆——前提是它不造成訊號完整性問題（低速線專屬）。這正是 Day 39「去耦網絡裡走線雜感是設計變項不是缺陷」的同款思維。</li>
+</ul>
+
+<h3>2.2 與 Day 39 去耦網絡的同構（今天最重要的類比）</h3>
+<table>
+<tr><th></th><th>Day 39／40 去耦網絡</th><th>今天的兩段式鉅位</th></tr>
+<tr><td>大器件</td><td>大電容（bulk）：低頻能量池，靠近？不必最近，靠容量</td><td>入口大顆 TVS：吞能量，鉅位寬鬆</td></tr>
+<tr><td>小器件</td><td>小電容（0.1 µF／10 nF）：高頻速度，緊貼封裝</td><td>IC 端小顆低容 TVS：鉅得低、反應快、離腳近</td></tr>
+<tr><td>之間的牆</td><td>走線／via 雜感：阻擋高頻在地平面間串門</td><td>串聯 R／L／走線：分攤壓降、逼大顆多吞</td></tr>
+<tr><td>設計哲學</td><td>「誰的頻率段誰負責，路徑雜感是變項」</td><td>「誰的能量段誰負責，路徑阻抗是變項」</td></tr>
+</table>
+<p><strong>把這張表背下來</strong>——面試官問「你怎麼設計 ESD 保護」，你先畫去耦網絡再改成鉅位網絡，展示的是<strong>同一套系統直覺的遷移能力</strong>，這比背器件型號值钱得多。還有一個更深層的相似：去耦失敗的頭號原因是「安裝雜感」（via、擺位），鉅位失敗的頭號原因是「接地路徑」——<strong>兩者的失敗都發生在「銅皮層」，不是「器件層」。</strong>（PT2 Ch.8 對去耦的原話大意「元件本體之外，安裝才是勝負」——今天照抄給 TVS。）</p>
+
+<figure>
+<svg viewBox="0 0 920 400" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：兩段式鉅位的「水位瀑布」——壓降分配圖（教學假設數，非任何料號）</text>
+
+  <!-- circuit row -->
+  <line x1="60" y1="120" x2="860" y2="120" stroke="#374151" stroke-width="2.5"/>
+  <!-- entry -->
+  <rect x="40" y="95" width="36" height="50" rx="5" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="58" y="116" text-anchor="middle" font-size="9" fill="#1e40af">連接</text>
+  <text x="58" y="128" text-anchor="middle" font-size="9" fill="#1e40af">器</text>
+  <!-- big TVS -->
+  <circle cx="180" cy="120" r="15" fill="#fff" stroke="#dc2626" stroke-width="2.5"/>
+  <path d="M 172 112 L 180 128 L 188 112 M 180 128 L 180 138" stroke="#dc2626" stroke-width="2.5" fill="none"/>
+  <line x1="180" y1="135" x2="180" y2="160" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="180" y="180" text-anchor="middle" font-size="10.5" fill="#991b1b" font-weight="bold">入口大顆（吞量）</text>
+  <text x="180" y="194" text-anchor="middle" font-size="10" fill="#991b1b">V_C1＝25 V（假設）</text>
+  <!-- series R -->
+  <rect x="360" y="111" width="70" height="18" fill="#fff" stroke="#7c3aed" stroke-width="2.5"/>
+  <text x="395" y="98" text-anchor="middle" font-size="10.5" fill="#6d28d9" font-weight="bold">減壓牆 R＝47 Ω（假設）</text>
+  <!-- small TVS -->
+  <circle cx="600" cy="120" r="13" fill="#fff" stroke="#16a34a" stroke-width="2.5"/>
+  <path d="M 593 113 L 600 127 L 607 113 M 600 127 L 600 136" stroke="#16a34a" stroke-width="2.5" fill="none"/>
+  <line x1="600" y1="133" x2="600" y2="160" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="600" y="180" text-anchor="middle" font-size="10.5" fill="#166534" font-weight="bold">IC 端小顆（低鉅低容）</text>
+  <text x="600" y="194" text-anchor="middle" font-size="10" fill="#166534">V_C2＝12 V（假設）</text>
+  <!-- IC -->
+  <rect x="800" y="100" width="56" height="40" rx="5" fill="#f5f5f4" stroke="#57534e" stroke-width="2"/>
+  <text x="828" y="124" text-anchor="middle" font-size="10" fill="#57534e">IC</text>
+  <!-- current arrows -->
+  <path d="M 90 105 L 160 105" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arr)"/>
+  <text x="124" y="98" font-size="9.5" fill="#dc2626" text-anchor="middle">事件來流（例 10 A 量級）</text>
+  <path d="M 180 148 L 180 168" stroke="#dc2626" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="205" y="162" font-size="9" fill="#dc2626">大顆吞走大部分</text>
+  <path d="M 368 142 L 452 142" stroke="#7c3aed" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="410" y="156" font-size="9.5" fill="#6d28d9" text-anchor="middle">過牆電流 I＝(25−12)／47≈0.28 A</text>
+  <path d="M 600 148 L 600 168" stroke="#16a34a" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="640" y="162" font-size="9" fill="#166534">小顆只接余波</text>
+  <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" fill="#374151"/></marker></defs>
+
+  <!-- waterfall -->
+  <text x="460" y="242" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f4c5c">同一個事件，沿路「水位」的剖面（對數尺度示意）</text>
+  <polyline points="90,300 160,300 160,262 300,262 360,246 430,262 560,262 600,278 700,278 828,278" fill="none" stroke="#0e7490" stroke-width="4"/>
+  <text x="120" y="292" font-size="10" fill="#374151">槍口 8 000 V</text>
+  <text x="180" y="255" font-size="10" fill="#dc2626" text-anchor="middle">入口被鉅 25 V</text>
+  <text x="395" y="238" font-size="10" fill="#6d28d9" text-anchor="middle">牆上壓降 13 V</text>
+  <text x="640" y="296" font-size="10" fill="#166534" text-anchor="middle">IC 端 ≲12 V＋線路彈跳</text>
+  <text x="828" y="296" font-size="10" fill="#57534e" text-anchor="middle">耐受內 ✓</text>
+  <line x1="60" y1="312" x2="880" y2="312" stroke="#9ca3af" stroke-width="1"/>
+  <text x="460" y="332" font-size="10.5" fill="#6b7280" text-anchor="middle">注意：IC 看到的「12 V 級」還掛著小顆接地 via 的彈跳（今天 §1）與公共段稅——鉅位設計＝器件帳＋路徑帳兩本一起結。</text>
+  <text x="460" y="356" font-size="10.5" fill="#0f4c5c" text-anchor="middle" font-weight="bold">右樞紐問題（練習 2）：47 Ω 用在上拉式 I²C 上，什麼時候會害你？（提示：上拉電阻、線容、上升時間三者分帳）</text>
+  <text x="460" y="378" font-size="10.5" fill="#6b7280" text-anchor="middle">磁珠版牆的警告：飽和電流一到，阻抗塌成銅皮——選牆先看「飽和」欄，不是「100 MHz 標稱」欄。</text>
+</svg>
+<figcaption>圖 2：兩段式鉅位與水位瀑布。三道防線各守一段：結構限流（圖外）、大顆吞量、牆分壓、小顆補鉅（教學假設數）。</figcaption>
+</figure>
+
+<h2>3. 多板系統：先把「雨水主幹道」畫在機構圖上</h2>
+
+<h3>3.1 三問法——每一塊板、每一條排線都問一遍</h3>
+<ol>
+  <li><strong>外來客從哪裡進？</strong>所有導體進出機殼的邊界（Day 46 熱點清單）＋所有使用者可觸達的縫隙（轉軸、鏡筒孔、按鍵、揚聲器孔）。</li>
+  <li><strong>它要沿什麼主幹回機殼？</strong>理想答案：機殼金屬→螺柱→入口鉅位點，全程不經任何訊號排線。<strong>你的任務是把這條主幹的 nH 算出來，並確保它永遠比「走排線」低一個數量級以上</strong>——閃電永遠選最便宜的路，你要讓正確的路更便宜。</li>
+  <li><strong>有沒有哪條路會繞經別人的客廳？</strong>檢查每個板對板介面：兩塊板之間的<strong>金屬結構路徑</strong>（螺柱、彈片、編織帶、屏蔽殼互相搭接）存在嗎？阻抗多少？如果不存在，放電就會從你們板對板的<strong>訊號排線地線</strong>裡穿過去——那是全系統最貴的付費通道。</li>
+</ol>
+
+<h3>3.2 轉軸 FPC：Day 46 死路 3 的工程解</h3>
+<p>NB 最典型的悲劇：上蓋（螢幕＋鏡頭＋WiFi 天線）與底座之間只隔著一根鉸鏈，電氣連接只有 FPC。放電打在上蓋任何一點，電荷要回底座的地——如果沒有金屬旁路，它只能從 FPC 地線裡穿：<strong>一根 30 cm FPC 的放電迴路雜感百 nH 量級（Day 44 換算表），就算事件衰減後只剩 1～3 A/ns 到達，兩端電位差也是百 V 量級</strong>（練習 3 手算）。工程解按性價比排序：</p>
+<ul>
+  <li><strong>金屬旁路帶（ground strap）：</strong>跨鉸鏈加一條編織銅辮／導電銅箔／彈片金手指，與 FPC 並行——目標是把鉸鏈兩側的金屬搭接壓到<strong>個 nH 級（約）</strong>，讓閃電走旁路而不是走 FPC。注意：Day 44 說過 pigtail 是暫態炸彈——<strong>辮子線用對了地方就是解藥</strong>：單獨一條辮線（短、寬、專職）是低感旁路；掛在訊號屏蔽上拖出來的 pigtail 是引雷針。差別在「專職與否」與「長度」。</li>
+  <li><strong>FPC 地線本身升級：</strong>多條、加寬、對稱、每訊號配地（Day 45 作業升級為「逃生容量」規格——昨天已下訂，今天記帳）。</li>
+  <li><strong>鉸鏈區的屏蔽缝合（stitch）：</strong>上蓋屏蔽殼與底座機殼的金屬接觸點，間距依暫態有效頻率把關：1 ns 上升沿的等效上限頻率 f_max≈0.35／t_r≈350 MHz（10–90% 定義的拐點近似），再考慮事件邊沿真正的殺傷頻段延伸到 GHz 級——間距從「λ／20 於 350 MHz（約 4 cm）」一路加嚴到產品實測表態（量級思維，終究以測試數據定案）。這是 Day 44 的 λ／20 紀律換上暫態子彈。</li>
+</ul>
+
+<h3>3.3 其他板對板場景速查</h3>
+<table>
+<tr><th>介面</th><th>風險畫面</th><th>主幹道對策</th></tr>
+<tr><td>DC-in／USB-C 充電埠</td><td>適配器插入瞬間、或纜線帶電——事件沿 VBUS 進「所有板」</td><td>入口鉅位（VBUS 大顆）＋電池排線不被當作回流主幹；充電 IC 的功率地與訊號地分路各回主樞紐</td></tr>
+<tr><td>電池排線</td><td>電池是「能量來源」，也是系統地的分支節點；BQ 通訊線（時脈／資料）細長</td><td>BQ 訊號線在主機板入口鉅位；排線地只走訊號回流、不承擔放電主幹（主幹是機殼與功率地）</td></tr>
+<tr><td>鍵盤／觸控板 FPC</td><td>使用者手指直接壓在設備最大面積上——事件透過薄膜電容耦合進感測線</td><td>觸控控制器入口鉅位＋韌體看門狗（判準 B／C 的韌體側兜底）＋感測地與機殼的 RC 策略（依設計，以廠商參考設計為準）</td></tr>
+<tr><td>IO 子板（側邊埠集中板）</td><td>子板與主板之間只有一兩顆螺柱＋一排板對板連接器</td><td>子板機殼搭接至少兩點；連接器地 pin 多腳並連；埠的鉅位器件全在子板上、在連接器之前入地——<strong>絕不把鉅位電流送過板對板連接器</strong></td></tr>
+</table>
+
+<h2>4. 責任分界：IC 內建保護 vs 外加 TVS——讀懂規格書的兩種語言</h2>
+
+<h3>4.1 器件級語言 vs 系統級語言</h3>
+<p>IC 規格書裡關於 ESD 的段落，通常是兩種完全不同的承諾，混著讀必出事：</p>
+<table>
+<tr><th>規格語言（範例句式）</th><th>真正的承諾範圍</th><th>沒有承諾的事</th></tr>
+<tr><td>「ESD rating：2 kV HBM／500 V CDM（JS-001／JS-002）」</td><td>出廠測試：引腳在<strong>乾淨實驗室條件、引腳至晶圓</strong>的耐量——保護的是「組裝線上不被摸死」</td><td>你的板子上、走線 20 cm、經連接器打進來的系統級事件——<strong>半個字都沒承諾</strong></td></tr>
+<tr><td>「Internal clamp diodes to VDD／VSS」</td><td>每腳有寄生／刻意二極體可把電流導向電源軌——但<strong>電流上限通常不大（約百 mA～安培級，以 datasheet 為準）</strong>，且依賴電源軌「有人接住」：軌上沒去耦／沒鉅位時二極體把事件泵進電源軌，全軌器件陪葬</td><td>系統級路徑、電源軌上誰來吞——是<strong>板級設計師（你）</strong>的責任</td></tr>
+<tr><td>「System-level ESD：compliant to IEC 61000-4-2 Level 4（±8 kV contact）with recommended application circuit」</td><td>在<strong>它指定的應用電路與測試配置</strong>下通過——注意那句小小的「with recommended…」或測試設定章節（有些器件真的把保護做進矽上，DP／DM 等埠常見；有些要求外加器件或特定 PCB 條件）</td><td>你把它放進<strong>另一台機器、另一條走線長度、另一個機殼</strong>之後的行為——工程驗證責任在你</td></tr>
+</table>
+<p><strong>責任矩陣一句話版：IC 供應商承諾「腳到晶圓」，板級設計師承諾「機殼內到腳」，產品承諾「機殼外到判準」。</strong>三段的規格單位不同、測試機構不同（元件廠 QA／你的 DVT／EMC 實驗室），所以三份文件缺一不可。面試時把這張矩陣講清楚，比講任何器件型號都更「像 Apple 要的 system EE」。</p>
+
+<h3>4.2 那到底什麼時候可以不加外部 TVS？</h3>
+<ul>
+  <li><strong>可以考慮不加的條件（要全部成立）：</strong>①矽上保護明確承諾系統級規格（含測試配置照片／條件）；②事件<strong>實際上到不了這顆腳</strong>——路徑上有結構鉅位／屏蔽／空氣縫，你的逃生路線圖上這個腳不在閃電的候選路徑裡；③內部鉅位電流上限 ≥ 殘餘事件（用你的 nH 帳估算殘餘）。三條缺一，就加外部器件或改結構。</li>
+  <li><strong>必須加的典型場景：</strong>外露埠的直接訊號線（HPD、DDC、音訊）、FPC 裸露金手指旁的低速控制線、以及一切「事件先經過很長銅皮才到 IC」的路——內部二極體等不到那發子彈。</li>
+  <li><strong>板級規格書該寫什麼（你的交付物）：</strong>測試點清單（每個外露導體與縫隙）、等級（接觸／空氣、±kV）、操作狀態（開機充電／待機／休眠）、判準（目標 A，可接受 B，C 一律立案）、以及「哪些埠依賴矽上保護、引用哪份器件文件」——這段就是 Day 46 說的「規格書語言」的實作版，今天補上。</li>
+</ul>
+
+<h2>5. 完整個案：鏡頭模組的全線路 ESD 設計案（把本課全部工具排一遍）</h2>
+<p>場景沿用你熟悉的 NB 前鏡頭模組：感測器（MIPI 4-lane＋clock lane）、模組端 EEPROM（OTP／EEPROM 存校正資料，走 I²C）、復位與 standby 控制線、供電（AVDD 2.8／DVDD 1.2／DOVDD 1.8 級，以設計為準）、VCM 自動對焦（線圈對）、OIS（線圈對＋霍爾感測），全部經一根轉軸 FPC 回主機板。逐線配置：</p>
+<table>
+<tr><th>線路</th><th>事件暴露度</th><th>保護配置（本課語法）</th><th>代價帳（電容／頻寬／漏電）</th></tr>
+<tr><td>MIPI data＋clock lanes</td><td>低——FPC 內層＋屏蔽，事件實到機率小；但金手指段裸露</td><td><strong>結構優先：</strong>不掛器件（Day 46 原則：不給它打得到的機會）；金手指區被屏蔽罩／接地指包覆；必要時僅在主機板端入口處掛 matched &lt;0.5 pF 超低容陣列</td><td>掛了就是 GHz 通道的 stub＋失配→共模（Day 46 練習 4）；不掛則賭結構——DVT 用 ESD 槍驗證賭注</td></tr>
+<tr><td>I²C（EEPROM）＋復位／standby</td><td><strong>高</strong>——低速、高阻、拉在 FPC 邊緣，經典案發現場（昨天 4 kV 凍結案的嫌疑通道）</td><td>主機板端入口處 TVS（V_RWM 對 1.8／3.3 V 軌），接地 via 陣列；線路可容 10～47 Ω 串聯牆（兩段式）；復位線加 RC 滯後（RC 同時濾掉 ns 尖峯）</td><td>TVS 幾 pF 對百 kHz 的 I²C 無感；串聯牆吃上升時間：上拉 4.7 kΩ×（線容＋TVS 容）本已吃緊，400 kHz 預算要重算（練習 2）</td></tr>
+<tr><td>AVDD／DVDD／DOVDD 電源</td><td>中——事件經 FPC 地彈跳耦合進軌、或從供電入口直灌</td><td>各軌在其<strong>調節器輸出端／FPC 入口端</strong>掛電源級 TVS（V_RWM≥軌壓×1.1～1.2，鉅位低於軌器件耐壓×0.7——三連問照問）；軌上「被泵進來的電流」由大顆去耦電容＋調節器吞（回收 Day 39：電源軌也需要 ESD 版去耦思維）</td><td>電源軌 TVS 漏電帳（待機功耗，Day 42 帳本）；感測器 AVDD 上的鉅位彈跳會直接進影像（軌噪聲→豎條紋，量級依事件）</td></tr>
+<tr><td>VCM／OIS 線圈對</td><td>中——大環路面積（Day 42 天線翅膀）、且馬達對 ns 擾動＝畫面踢一脚</td><td>驅動端（通常在主機板側）就近入地；線圈對兩端可掛低容 TVS（對焦精度影響依設計驗證）；驅動 PWM 地與感測器模擬地分離（Day 44 混合拓撲）</td><td>TVS 容值並在線圈上不影響 DC 驅動、但可能改变驅動回路的邊沿輻射——EMC 回歸測試表態</td></tr>
+<tr><td>模組端「裸露導體」：金手指、FPC 補強板邊緣</td><td><strong>高（組裝 CDM＋系統 IEC 雙案場）</strong></td><td>製程側：接地吸嘴、離子風棒（CDM，Day 46）；設計側：金手指地 finger 前置（插拔先接地）、模組屏蔽罩接地指、轉軸金屬旁路帶（§3.2）</td><td>地 finger 前置吃佈局；屏蔽罩共振（Day 44 Ch.9 清單）要避開感測器敏感頻段</td></tr>
+</table>
+<p><strong>設計順序複誦（這才是本案的重點）：</strong>①先畫逃生路線圖（進入口、主幹道、不繞客廳）→②結構優先（屏蔽、旁路帶、金手指紀律）→③器件補刀（按表逐線三連問）→④四本帳結算（漏電、電容、nH、判準）。<strong>順序本身就是方法論，面試時要講順序多於講器件。</strong></p>
+
+<figure>
+<svg viewBox="0 0 920 460" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：鏡頭模組 ESD 設計案全景——結構（粗綠）優先，器件（綠點）補刀，紅箭頭是事件候選路徑</text>
+  <!-- base -->
+  <rect x="60" y="290" width="800" height="110" rx="14" fill="#f1f5f9" stroke="#334155" stroke-width="2.5"/>
+  <text x="460" y="315" text-anchor="middle" font-size="12" fill="#334155" font-weight="bold">底座：主機板（PCB GND）＋機殼（CHASSIS，本課的雨水主幹）</text>
+  <!-- lid -->
+  <path d="M 120 290 L 190 120 L 700 120 L 640 290" fill="#e2e8f0" stroke="#334155" stroke-width="2.5"/>
+  <text x="420" y="150" text-anchor="middle" font-size="11.5" fill="#334155">上蓋總成（螢幕＋屏蔽殼）</text>
+  <!-- camera -->
+  <rect x="395" y="130" width="80" height="36" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="435" y="146" text-anchor="middle" font-size="10" fill="#1e40af">鏡頭模組</text>
+  <text x="435" y="160" text-anchor="middle" font-size="9" fill="#1e40af">sensor＋EEPROM＋VCM</text>
+  <!-- barrel gap arrow -->
+  <path d="M 435 60 L 435 128" stroke="#dc2626" stroke-width="3.5" stroke-dasharray="7 4" marker-end="url(#arr2)"/>
+  <text x="443" y="70" font-size="10.5" fill="#dc2626">8 kV 空氣放電→鏡筒縫（進入口 ①）</text>
+  <!-- hinge strap (structure) -->
+  <path d="M 300 290 C 300 260, 310 240, 320 215" stroke="#16a34a" stroke-width="8" opacity=".55" fill="none"/>
+  <text x="235" y="248" font-size="10" fill="#166534" font-weight="bold">金屬旁路帶 strap（個 nH 級）＝主幹道（對策 ③）</text>
+  <!-- FPC -->
+  <path d="M 430 166 C 420 210, 430 250, 470 280 C 505 305, 560 318, 620 322" fill="none" stroke="#2563eb" stroke-width="5" opacity=".8"/>
+  <text x="405" y="238" font-size="9.5" fill="#1e40af" transform="rotate(62 405 238)">轉軸 FPC（地線多條＋屏蔽）</text>
+  <!-- red candidate path along FPC if no strap -->
+  <path d="M 440 170 C 432 214, 444 252, 480 282 C 512 306, 562 316, 616 320" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="4 4" opacity=".9"/>
+  <text x="530" y="270" font-size="10" fill="#dc2626" transform="rotate(20 530 270)">若無 strap：事件穿 FPC 地線＝百 V 電位差（死路 3）</text>
+  <!-- mainboard entry: TVS dots -->
+  <g>
+    <circle cx="640" cy="322" r="9" fill="#16a34a"/><text x="640" y="326" text-anchor="middle" font-size="8.5" fill="#fff">T</text>
+    <circle cx="664" cy="330" r="9" fill="#16a34a"/><text x="664" y="334" text-anchor="middle" font-size="8.5" fill="#fff">T</text>
+  </g>
+  <text x="660" y="356" font-size="10" fill="#166534" font-weight="bold">主機板入口：I²C／復位／電源 TVS＋via 陣列（器件補刀 ④）</text>
+  <!-- power rail TVS -->
+  <rect x="700" y="308" width="58" height="22" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="729" y="323" text-anchor="middle" font-size="9" fill="#166534">軌 TVS＋大容</text>
+  <!-- chassis stitching points -->
+  <g fill="#0f4c5c">
+    <rect x="250" y="286" width="10" height="10"/><rect x="560" y="286" width="10" height="10"/>
+  </g>
+  <text x="612" y="284" font-size="9.5" fill="#0f4c5c">鉸鏈兩側螺柱／ stitch（間距依測試表態）</text>
+  <!-- HDMI at side -->
+  <rect x="785" y="312" width="70" height="46" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="820" y="332" text-anchor="middle" font-size="9.5" fill="#166534">USB／HDMI</text>
+  <text x="820" y="346" text-anchor="middle" font-size="8.5" fill="#166534">360° 屏蔽＋入口 TVS</text>
+  <!-- annotation lines -->
+  <text x="120" y="60" font-size="11" fill="#374151">設計順序（本課方法論）：</text>
+  <text x="120" y="80" font-size="10.5" fill="#374151">① 進入口清單（鏡筒縫、外露埠、金手指）</text>
+  <text x="120" y="98" font-size="10.5" fill="#374151">② 主幹道（機殼→螺柱→strap→鉅位點）——閃電走這裡</text>
+  <text x="120" y="116" font-size="10.5" fill="#374151">③ 結構屏蔽／旁路優先 → ④ 器件補刀 → ⑤ 四本帳結算</text>
+  <text x="460" y="435" font-size="11" fill="#0f4c5c" text-anchor="middle" font-weight="bold">MIPI lanes 在圖上不掛任何器件——「不打得到的機會」就是最好的保護；賭注由 ±4 kV／8 kV 槍測驗證。</text>
+  <defs><marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M 0 0 L 9 4 L 0 8 z" fill="#dc2626"/></marker></defs>
+</svg>
+<figcaption>圖 3：鏡頭模組全案示意。粗綠線是你鋪的雨水主幹，紅虛線是閃電自己發明的（沒鋪主幹時）。T＝TVS 補刀點。</figcaption>
+</figure>
+
+<h2>6. IEC 61000-4-2 測試失敗的辦案 SOP：五步流程</h2>
+<p>Day 43 你學過用三夾法和近場探棒「找穩態共模的兇手」；今天把同一套偵訊技術接上暫態事件。五步：</p>
+<div class="card pitfall" style="border-color:#0e7490;background:#f0fdfa">
+  <span class="label" style="color:#0e7490">五步辦案法</span>
+  <ol>
+    <li><strong>固證（Fix the crime scene）：</strong>記錄測試點、極性、等級、操作狀態、判準、重現率（10＋10 發中幾次）。<strong>重現率本身就是證據</strong>：100% 重現→傳導路徑機率高；低機率、受濕度／走位影響→輻射／容性耦合機率高。可重現是一切對策能結案的前提——先想辦法把重現率做高（縮短地線、壓低阻抗差、換極性）。</li>
+    <li><strong>定位受害者（Who died）：</strong>log／暫存器 dump（MIPI link status、I²C ACK、感測器 ID 暫存器、MCU hard-fault 記錄）＋示波器掛關鍵軌與關鍵匯流排（觸發用 ESD 槍同步輸出或軌上瞬降）。判準 C 的三大嫌疑：latch-up、韌體 hard-fault、匯流排 lock——三者的 log 腳印不同。</li>
+    <li><strong>分傳導／輻射（Which door）：</strong>三招——①<b>打點對比</b>：打機殼絕緣處（輻射為主）vs 打導體裸露處（傳導為主），現象是否同形；②<b>夾具追蹤</b>：電流夾／三夾法夾 FPC 束與纜線（Day 43 手法），放電瞬間的共模尖峰＝傳導直證；③<b>近場探棒</b>：E／H 探棒掃機殼縫→鉸鏈→FPC→主機板入口，畫出「場的路徑」。能分離傳導／輻射，就贏了一半。</li>
+    <li><strong>歸因機制（Which weapon）：</strong>傳導三態（地彈跳掀翻參考／電源軌被泵／訊號線直接打入）＋輻射兩態（位翻轉 SEU、時脈誤觸發）——對應昨天的失靈三態與上週的天線清單。用「隔離分治」確認：拔掉嫌疑排線後打同一發——現象消失＝路徑坐實。</li>
+    <li><strong>對策階梯＋回歸矩陣：</strong>便宜的先上（加寬地線／加 stitch／調 strap）→ 入口器件補刀 → 結構修改（放電結構、屏蔽重設計）最後。每步對照原點 10＋10 發、正負極性、判準分布全記錄——<strong>判準分布（幾個 A／幾個 B）是數據，「這次沒出現」不是。</strong>結案定義：從 C 修到 B 是治標，A 且跨極性跨溫度穩定才是路線圖設計完成。</li>
+  </ol>
+</div>
+
+<h2>7. ESD-safe 佈局檢查清單（14 項，接上 Day 44 的天線清單）</h2>
+<p>把本週所學壓成一張可以貼在佈局軟體旁邊的 checklist——這就是你入職後第一個月交得出來的「流程資產」：</p>
+<table>
+<tr><th>#</th><th>檢查項</th><th>依據（課上座標）</th></tr>
+<tr><td>1</td><td>每個外露導體／縫隙有對應的逃生路線（結構優先於器件）</td><td>Day 46 §6、本課圖 3</td></tr>
+<tr><td>2</td><td>TVS 在入口連接器的「第一站」：訊號先過它、不在板深處舉手</td><td>保護三句話：看得見</td></tr>
+<tr><td>3</td><td>TVS 接地：焊盤 via 陣列 3～4 顆、銅皮寬短、直抵螺柱／屏蔽壓接點</td><td>本課 §1、PT2 Ch.6 教誨</td></tr>
+<tr><td>4</td><td>鉅位路徑不共用、不穿越模擬區——逐段 nH×di/dt 帳已簽名</td><td>§1.2、暫態匯率 1 nH＝30 V</td></tr>
+<tr><td>5</td><td>高速差分線上若有器件：低容＋matched＋stub 最小；或明確記錄「不掛、賭結構」＋槍測驗證</td><td>Day 46 §4.2</td></tr>
+<tr><td>6</td><td>高風險埠有兩段式配置（入口吞量＋牆＋本地低鉅），牆的材料避開飽和與頻寬坑</td><td>本課 §2</td></tr>
+<tr><td>7</td><td>每兩塊板之間有金屬主幹（螺柱／strap／彈片）；板對板連接器從不承擔鉅位電流</td><td>本課 §3.1</td></tr>
+<tr><td>8</td><td>鉸鏈／轉軸有旁路帶；屏蔽 stitch 間距依暫態有效頻率先粗算、後由槍測表態</td><td>§3.2、Day 44 λ／20</td></tr>
+<tr><td>9</td><td>電源軌（含感測器 AVDD）有軌級鉅位，且「泵電流」的去向（大容／調節器）想清楚了</td><td>§5、Day 39</td></tr>
+<tr><td>10</td><td>依賴矽上保護的埠：引用器件文件條款＋測試配置，三條件缺一不豁免</td><td>§4.2 責任矩陣</td></tr>
+<tr><td>11</td><td>所有新增保護器件進兩本帳：DC 漏電（待機）、電容（訊號）——Day 42 帳本續頁</td><td>Day 42／46 §6.3</td></tr>
+<tr><td>12</td><td>懸空導體清查（未接引腳、浮空屏蔽殼、長 stub）——它們是暫態版的接收天線</td><td>Day 44 Ch.9 清單之暫態篇</td></tr>
+<tr><td>13</td><td>FPC／排線：多地線對稱、金手指地 finger 前置、屏蔽 360° 無 pigtail</td><td>Day 44／45／本課</td></tr>
+<tr><td>14</td><td>測試計畫就緒：點位、等級、極性、狀態、判準、歸檔格式——「C 一律立案」寫進規格</td><td>§4.2、§6</td></tr>
+</table>
+
+<h2>8. 常見誤解（面試高頻送命區）</h2>
+<div class="card pitfall">
+  <span class="label">常見誤解</span>
+  <ul>
+    <li><strong>「鉅位電壓夠低就安全」</strong>——鉅位電壓是資料書的帳，被保護者看到的是「鉅位＋接地路徑彈跳＋公共段稅」。150 V 的接地跳線可以在 1 mm 佈局決定裡輸掉整場 ESD 測試。</li>
+    <li><strong>「磁珠串在保護路徑上很保險」</strong>——磁珠的阻抗是「電流相關業務」：飽和電流一到，它退化成一塊銅。保護器件的選型欄第一位是飽和／脈衝耐量，不是 100 MHz 標稱阻抗。</li>
+    <li><strong>「IC 寫了 system-level ESD Level 4，板子不用做」</strong>——那句承諾的全文包括「with recommended application circuit」與它自己的測試配置。你的機殼、你的走線、你的線纜不在它的答案裡；責任矩陣第三段永遠是你的。</li>
+    <li><strong>「鉅位器件接地打一顆 via 就好，書上說多於兩顆沒用」</strong>——那是 2002 年去耦穩態阻抗語境的邊際效益結論，且前提是「緊貼交會處」。暫態下 via 數、焊盤距離、銅皮寬度逐段都是 nH；「邊際遞減」不等於「隨意」。把書上句子當免死金牌而不看語境，是引用書最常見的翻車方式。</li>
+    <li><strong>「ESD 過不了就加 TVS」</strong>（昨天已糾正，今天補一刀）——先問路徑：多數失敗案的真兇是主幹道缺失或接地路徑帳，加器件只是把炸點轉移；「TVS 裝錯位置比不裝危險」在今天的佈局語言裡就是第 3、4 項檢查。</li>
+    <li><strong>「屏蔽接越多點越安全」</strong>——接錯位置的兩點接地會把屏蔽變成地環路的一部分（Day 44 單點／多點切換邏輯的暫態版）；接點品質（360° 壓接 vs pigtail）永遠比數量重要。</li>
+  </ul>
+</div>
+
+<h2>9. 動手練習（先筆算再展開——今天的帳要長在手上）</h2>
+
+<details>
+<summary><strong>練習 1（via 陣列的 nH 帳）：</strong>TVS 接地單 via≈0.7 nH。(a) 單 via 在 di/dt＝30 A/ns 下炸出多少伏特？(b) 3 顆遠距並聯（近似 L／3，忽略互感）與 6 顆並聯各是多少 nH、多少伏特？(c) 從 (b) 得出「繼續加 via」的邊界在哪裡？</summary>
+<div class="answer">
+<p>(a) 0.7 nH×30 A/ns＝<strong>≈21 V</strong>——疊在鉅位電壓上的免費附加。<br>
+(b) 3 顆：0.7／3≈0.23 nH→<strong>≈7 V</strong>；6 顆：0.7／6≈0.12 nH→<strong>≈3.5 V</strong>（L／n 為理想近似，實測因互感與平面擴散更佳或更差——「約」）。<br>
+(c) 對照封裝引線架本身就有 0.5～1 nH（約）：via 帳壓到 ≲0.2 nH 後，瓶頸已經搬到封裝與接觸電阻——這正是 PT2 Ch.6「超過兩顆邊際遞減」的現代暫態版翻譯：<strong>3～4 顆焊盤 via 是性價比甜區，繼續加要用佈局空間換最後幾伏特。</strong>設計動作順序：先殺掉跳線（5 nH 級）與平面共用段（十 V 級），再談 via 數——大錢省完才省零錢。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2（兩段式分壓・教學假設數）：</strong>入口大顆 V_C1＝25 V，IC 端小顆 V_C2＝12 V，牆 R＝47 Ω。事件到達入口的電流 10 A（經結構衰減後）。(a) 流過牆與小顆的電流？(b) 牆上瞬時功率？(c) 這條線其實是 400 kHz I²C（上拉 4.7 kΩ、總線容 90 pF）：47 Ω 加上去後上升時間多出多少？還能過 400 kHz 嗎？</summary>
+<div class="answer">
+<p>(a) I_R＝(V_C1−V_C2)／R＝(25−12)／47≈<strong>0.28 A</strong>——小顆只面對約 0.3 A 的余波（其餘 9.7 A 級被大顆吞掉；精確值需解兩顆鉅位曲線的並聯，0.28 A 為小顆鉅住後的近似）。<br>
+(b) P＝13 V×0.28 A≈<strong>3.6 W（ns～µs 脈衝）</strong>——脈衝寬僅百 ns 量級，能量≈µJ～十 µJ 級，0402／0603 膜電阻的脈衝耐量大致夠（以料號脈衝曲線為準）；穩態額定 1/16 W 在這裡不是判準。<br>
+(c) 原上升時間≈2.2×R_pu×C＝2.2×4 700×90p≈<strong>0.93 µs</strong>，400 kHz（要求上升 ≲300 ns 量級）本已勉強靠總線強拉；串 47 Ω 後上端等效源阻抗 4 747 Ω，上升增加約 1%——<strong>幾乎無感</strong>（47≪4.7 k）。這題的教訓：<strong>牆的阻值要相對於「線路的源阻抗／終端阻抗」選</strong>——上拉式慢線對 47 Ω 無感，但對 50 Ω 端接的高速線（DP／HDMI）就是 94% 反射的巨石（Day 20 端接課三週目）。同一個數字，兩個世界。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3（轉軸 FPC 與旁路帶）：</strong>上蓋對底座經 30 cm FPC 相隔，迴路雜感以 120 nH 量級計。某事件衰減後仍有 3 A/ns 流入 FPC 地路徑。(a) 兩板間地電位差？(b) 加一條 strap（2 nH）後，假設旁路帶與 FPC 按「雜感反比分流」分配同一 dV 驅動的電流——FPC 端電位差變成多少？(c) 這對感測器類比參考意味著什麼？</summary>
+<div class="answer">
+<p>(a) V＝120 nH×3 A/ns＝<strong>≈360 V（量級）</strong>——聽起來誇張，但這是「無旁路時假設全部電流走 FPC」的上界；真實值取決於事件能couple進多少電荷，上界算出來是要告訴你：<strong>這個電位差足以讓任何鉅位方案失效</strong>（感測器內部二極體、任何 FPC 上的 TVS 都在這 360 V 之下被無視）。<br>
+(b) 並聯結構中兩支路承受同一壓差，電流按導電度分配：FPC 支路電流降至 2／(120＋2)≈1.6%——反推 FPC 兩端壓差：V＝120 nH×(3 A/ns×0.016)≈<strong>5.8 V≈6 V 量級</strong>（等效地：壓差被 strap 鉗在它自己的 2 nH×3 A／ns≈6 V 上——旁路帶把自己兩端的電位差限制在「自己的 nH×總 di/dt」，這就是 strap 的設計規格：<strong>要的從來不是『導通』，是『nH 比所有人低一個數量級』</strong>）。<br>
+(c) 6 V 量級的瞬態地差仍然不可忽略：感測器 AVDD／參考的瞬移會變成畫面上的單幀亮度跳動／橫條（事件若發生在曝光讀出窗口內）。處方再疊一層：軌級鉅位（§5）＋韌體單幀丟棄策略——<strong>硬體把百 V 壓到十 V，韌體把十 V 藏進一幀——分層防禦的教科書順序。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4（全線路配置案）：</strong>用本課語法為鏡頭模組四組線各選保護方案並講一句理由：(1) MIPI clock lane；(2) 復位線（3.3 V、10 kΩ 上拉、µs 級時間常數）；(3) 感測器 DVDD 1.2 V；(4) VCM 驅動線圈對（驅動 IC 在主機板側，2 mH 級線圈，約）。</summary>
+<div class="answer">
+<p>(1) <strong>不掛器件，結構優先</strong>：FPC 內層＋屏蔽＋金手指接地指包覆；若槍測不過再考慮主機板端超低容（&lt;0.5 pF matched）掛點——理由：GHz 通道上每顆器件都是 stub＋模式轉換源，先讓事件到不了它。<br>
+(2) <strong>TVS（V_RWM≥3.3、低鉅）＋RC 滯後</strong>：復位線是高阻慢線，事件直打機率最高、器件最脆弱；TVS 掛主機板入口、via 陣列入地；串 1 kΩ＋10 nF 把 ns 尖峯濾成 µs 以下（復位時間常數本就 µs 級，頻寬無慮）——低速線是器件保護的甜蜜點。<br>
+(3) <strong>軌級 TVS：V_RWM 約 1.5～1.8 V 檔、鉅位低於軌器件耐壓×0.7</strong>，掛調節器輸出端，鉅位「泵電流」由本地大容＋調節器吸收——電源軌也要兩段式思維：調節器是大顆、軌上電容是小顆（Day 39 同構）。漏電帳進待機預算。<br>
+(4) <strong>驅動端就近入地＋（依驗證）線圈對低容鉅位</strong>：線圈是大環路天線（Day 42 翅膀）且事件＝畫面踢一脚；優先把驅動迴路面積壓小、驅動地独立回主樞紐，TVS 是否掛在馬達端要看對焦線性度影響——「保護不影響被保護物的本業」是本業工程師的紀律。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5（辦案情境）：</strong>測試室回報：±8 kV 接觸打 USB-C 埠殼體，Wi-Fi 吞吐瞬間掉 30% 後自行恢復（判準 B），重現率 10 發 6 中、濕度高時更頻繁。你的五步辦案排兵布陣？（提示：重現率與濕度的線索指向哪扇門？）</summary>
+<div class="answer">
+<p><strong>Step 1 固證：</strong>10 發 6 中、濕度相關——低重現率＋環境相關是<strong>輻射／容性耦合</strong>的腳印（傳導直打通常 100% 重現）。先把重現率做高：固定槍位角度、機殼下墊絕緣（模擬實地使用）、抓 20 發統計。<br>
+<strong>Step 2 定位受害者：</strong>掉吞吐的不是被打的 USB 而是 Wi-Fi——受害者很可能是 <strong>2.4 GHz／5 GHz 收發器的靈敏度暫時下降（desense）</strong>而非死機：抓 Wi-Fi 端的 RSSI／誤包率 log，對照放電時刻。<br>
+<strong>Step 3 分門：</strong>①打殼體絕緣處能否重現（輻射通道確認）；②夾 Wi-Fi FPC 地線（三夾法）看放電瞬間共模尖峰——注意：有共模尖峰不代表它是原因，Wi-Fi 卡自己重傳時的電流步進也可能造峰值，要用時間戳對齊；③近場探棒掃「USB 埠→機殼縫→天線淨空區→Wi-Fi FPC」。<br>
+<strong>Step 4 機制假設（按可能性）：</strong>放電事件→機殼電位階躍→(i) 天線淨空區近場擾動（直接 desense，最像）、(ii) 共模鉤進 Wi-Fi FPC→LNA 前端飽和、(iii) 地彈跳擾動電源。判別：(i) 與天線物理位置強相關、換機殼接地螺絲位置現象變；(ii) 拔 Wi-Fi 排線打同點——desense 消失但 LNA 可能更脆。<br>
+<strong>Step 5 對策階梯：</strong>機殼放電結構（讓弧閃在設計點、遠離天線淨空區）→ 鉸鏈 stitch 加密（λ／20@GHz 級）→ USB 殼體對地 RC（把 ns 階躍切成 µs）→ 最後才動板層/屏蔽重設計。回歸：原點 20 發＋兩極性＋desense 量測同步記錄，判準分布從 B→A 才算結案。<strong>本題心法：「被打的不是倒下的」——ESD 案發現場與死者的距離，就是你的近場探棒要掃的距離。</strong></p>
+</div>
+</details>
+
+<h2>10. 面試怎麼考（英文題＋參考答案）</h2>
+
+<details>
+<summary><strong>Q1（責任劃分）：</strong>"A component datasheet claims 'system-level ESD: IEC 61000-4-2 Level 4 compliant.' Your laptop has an HDMI port routed 18 cm from this chip through two connectors. Do you still add external protection? How do you argue it in a design review?"</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>Yes — I'd still protect, or explicitly justify why not with evidence. Three-part argument. First, the language: a "system-level compliant" claim means "passes under the test configuration in this datasheet" — its board, its harness, its discharge points. It says nothing about my 18 cm trace and two connector interfaces; those change both the delivered current and the coupling paths. Second, the physics: ESD protection is a race between the event arriving at the silicon and the clamp conducting — 18 cm of trace plus two connector transitions adds several nH, and at IEC-level di/dt every nanohenry bills about 30 V. The on-chip clamp is rated in the die's coordinate system, not mine. Third, the responsibility matrix: the vendor owns pin-to-die (HBM/CDM classes), I own chassis-to-pin (layout, ground paths, entry clamps), the product owns chassis-to-criteria (IEC levels, pass criteria). So in review I bring: the escape-route map showing where the event can couple in, the nH budget of the 18 cm path, and the specific datasheet clause with its test configuration — and either a matching external clamp at the port entry (via array, short wide ground) or a documented waiver backed by gun-test data at the worst point. Reviewers trust data, not adjectives.</p>
+<p><strong>加分句：</strong>\"'Level 4 compliant' is a sentence with a hidden footnote: 'with recommended application circuit.' My job is to read the footnote, not the headline.\"</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q2（辦案深挖）：</strong>"During IEC 61000-4-2 contact discharge at ±8 kV on a laptop's USB shell, the camera freezes once in ten shots — power-cycling recovers it (criterion C). Walk me through your debug, the measurements you'd make, and the countermeasure ladder."</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）：</strong>Step 0, treat C as a finding, not a pass: recovery by power-cycle points to latch-up, a hard-fault, or a bus/link lock — different culprits, different cures. Step 1, evidence: log point, polarity, humidity, and repeatability; raise repeatability deterministically before touching anything. Step 2, find the victim: dump the sensor's link-status registers and MCU fault logs; scope MIPI lane state and the three sensor rails with the gun's sync output as trigger. If the link drops, the victim is the PHY or its power; if the link lives but the frame freezes, look at sensor configuration registers (a corrupted write over I²C during the event). Step 3, split conduction vs radiation: fire at insulated spots vs conductive spots and compare signatures; current-clamp the hinge FPC (three-clip method) to catch common-mode spikes at the discharge instant; near-field E/H probe sweep from the port along the chassis seam to the camera flex — map the field's road. Step 4, mechanism: my top suspect is ground bounce across the hinge — if there's no low-inductance strap, the discharge pays a toll through the flex ground and the sensor reference moves tens of volts; second suspect: the I²C/reset lines acting as the entry point at the mainboard connector. Countermeasure ladder, cheap to expensive: widen/add flex grounds and ground stitches near the connector (free), add a hinge strap to put a chassis bypass under the event (design change, cheap), clamp I²C/reset at the mainboard entry with via arrays and short grounds (BOM change), structural discharge shaping at the barrel gap (tooling change — last). Verify at the original point, both polarities, 20 shots, and report the criterion distribution — moving from C to B is mitigation; A across polarity and temperature is design closure.</p>
+<p><strong>加分句：</strong>\"I debug ESD like an arson investigator: the point of discharge is rarely the body; my job is to reconstruct the energy's route, then make the correct route cheaper than the destructive one.\"</p>
+</div>
+</details>
+
+<h2>11. 今日整理（takeaway）</h2>
+<div class="card takeaway">
+  <span class="label">今日整理（takeaway）</span>
+  <ul>
+    <li><strong>鉅位是零件的事，路徑是你的事：</strong>TVS 接地四紀律——焊盤直連、via 陣列（3～4 顆甜區，PT2 Ch.6 的邊際遞減換了語境依然成立）、寬短銅皮、直抵螺柱；不共用、不穿模擬區。</li>
+    <li><strong>兩段式＝不可能三角的分工解：</strong>入口吞量＋牆（R／L／走線，注意磁珠飽和）＋本地低鉅；I＝(V_C1−V_C2)／R 算每道閘的帳。與 Day 39 去耦網絡同構——大應付能量、小應付速度、走線雜感是設計變項。</li>
+    <li><strong>多板系統三問法：</strong>從哪進？走什麼主幹回機殼？繞沒繞經別人的排線？轉軸 strap 的設計規格不是「導通」是「nH 比所有人低一個數量級」。</li>
+    <li><strong>責任矩陣：</strong>器件級（HBM/CDM，腳到晶圓）歸 IC 廠；板級（路徑與鉅位）歸你；系統級（IEC 點位與判準）歸產品。「System-level compliant」的承諾自帶小字（recommended circuit＋測試配置）。</li>
+    <li><strong>辦案五步：</strong>固證（重現率是線索）→定位受害者（log 與暫存器）→分傳導／輻射（打點對比、夾具、近場探棒）→歸因機制（地彈跳／泵軌／直打／SEU／latch-up）→對策階梯（結構→接地→器件）＋判準分布回歸。「被打的不是倒下的」。</li>
+  </ul>
+</div>
+
+<h2>今日 Anki 卡片（五張）</h2>
+
+<div class="anki">
+  <p class="q">卡 1｜Q：TVS 接地路徑的四條紀律與 via 陣列的甜區？</p>
+  <p class="a">①焊盤直連（訊號先過 TVS 再走）②接地腳 via 陣列 3～4 顆（單 via 約 0.5～1 nH；並聯後遞減，PT2 Ch.6「超過兩顆邊際遞減」在暫態語境同樣成立，且瓶頸隨後搬到封裝引線 0.5～1 nH）③寬短銅皮（2 mm vs 0.2 mm 差一個 nH 量級）④直抵螺柱／屏蔽壓接點，不共用、不穿模擬區（共阻抗耦合的暫態版）。帳：via 陣列後≈0.2 nH×30 A／ns≈6 V。</p>
+  <p class="q">卡 2｜Q：兩段式保護的電路、分攤公式、與牆的材料選擇？</p>
+  <p class="a">入口大顆（吞量、V_C 寬鬆）＋串聯牆（R／L／刻意走線）＋IC 端小顆（低鉅低容）。過牆電流 I＝(V_C1−V_C2)／R；牆的瞬時功率 V_R×I 看脈衝耐量（ns 級遠高於穩態額定）。坑：磁珠會飽和（選型看飽和電流欄）；牆值相對線路源／端接阻抗選（上拉慢線對 47 Ω 無感、50 Ω 端接線上是巨石）。與 Day 39 去耦網絡同構。</p>
+  <p class="q">卡 3｜Q：多板系統的放電路徑三問法？轉軸 strap 的設計規格是什麼？</p>
+  <p class="a">①外來客從哪進（外露導體＋縫隙清單）②沿什麼主幹回機殼（機殼→螺柱→入口鉅位，不經訊號排線）③有沒有路繞經別人的排線（板對板金屬搭接存在嗎）。strap 規格：不是「導通」是「nH 比所有並列路徑低一個數量級」——壓差被鉗在 strap 自己的 nH×總 di/dt 上（例 2 nH×3 A／ns≈6 V，對比 FPC 無旁路時百 V 量級）。</p>
+  <p class="q">卡 4｜Q：器件級 HBM/CDM、IC 的「system-level compliant」、與產品 IEC 規格三者的責任分界？</p>
+  <p class="a">器件級（JS-001/002）＝腳到晶圓、乾淨實驗室的耐量，歸 IC 廠；板級＝機殼內到腳（路徑 nH 帳、入口鉅位、主幹道）歸板級 EE；系統級＝機殼外到判準（IEC 點位/等級/A-D）歸產品。依賴「system-level compliant」豁免外部保護需三條件全立：承諾含測試配置且吻合、事件實際到不了、內部鉅位上限≥殘餘事件——否則加器件或改結構。</p>
+  <p class="q">卡 5｜Q：IEC 測試失敗的辦案五步？重現率與濕度線索指向什麼？</p>
+  <p class="a">固證（點/極性/等級/狀態/判準/重現率）→定位受害者（log、暫存器 dump、關鍵軌與匯流排）→分傳導／輻射（打點對比、三夾法夾排線、近場探棒掃路徑）→歸因機制（地彈跳／泵軌／直打／SEU／latch-up）→對策階梯（接地與結構→器件→屏蔽重設計）＋判準分布回歸。100% 重現偏傳導；低重現率＋濕度／走位相關偏輻射／容性耦合。口訣：被打的不是倒下的。</p>
+</div>
+
+<h2>明日預告</h2>
+<p><strong>Day 48（週三・ESD 防護 III）：</strong>「latch-up 深度解剖與產線 ESD 管理」。判準 C 的頭號嫌疑犯 today 只點了名——明天把它解剖到底：SCR 寄生矽控整流器的啟動與維持電流、為什麼「重開機就好」是閂鎖的簽名、設計端（-guard ring、tap 密度、電源鉗位）與系統端（鉅位電壓必須低於觸發電壓！）如何夾防；下半场走出電路板：ANSI/ESD S20.20 產線管理（腕帶／離子izer／包裝／接地稽核）——CDM 案發在產線，你的鏡頭模組良率一半在這些「看不見的電路」裡。<strong>本週五＝Day 49 實作日（平日進公司）：TVS 鉗位曲線量測＋ESD 事件捕捉上示波器——1 ns 邊沿要挑戰儀器頻寬（Day 33 課：0.35／t_r 法則），今天的四本帳就是那天的記錄表。</strong>另：第 12 週（約 Day 57）進入投履歷視窗，英文題從今天起請開口作答不只用看的。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

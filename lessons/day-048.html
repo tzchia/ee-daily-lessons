@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 48｜ESD 防護 III——latch-up 深度解剖與產線 ESD 管理：從「重開機就好」到 S20.20</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 10 週・第 48 天（週三新觀念課）</div>
+  <h1>Day 48：ESD 防護 III——latch-up 深度解剖與產線 ESD 管理：從「重開機就好」到 ANSI/ESD S20.20</h1>
+  <div class="meta">2026-09-09（三）｜預估學習時間：90～110 分鐘（純閱讀＋筆算，不需儀器）｜難度：★★★★☆｜昨天的辦案 SOP 裡，判準 C（需要重開機才能恢復）的頭號嫌疑犯只點了個名——今天把它解剖到底：<strong>latch-up（閂鎖）不是一種損壞，而是一種「電路被自己供電供著的下風狀態」——它會自己養活自己，直到你把電源切掉。</strong>上半场是矽內物理：四層 PNPN 結構、啟動與維持電流、snapback 曲線、以及為什麼「重開機就好」幾乎就是它的簽名；下半场走出電路板：ANSI/ESD S20.20 產線管理、組裝線上真實的 CDM 案發現場（吸嘴、自動鎖螺絲機）、包裝與來料稽核。<strong>本週五＝實作日：TVS 鉗位曲線與放電事件上示波器——今天的 snapback 曲線就是那天的主角。</strong></div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>讀完今天這一課，你要能回答五個問題，而且每題都能畫圖、報數：</p>
+  <ol>
+    <li><strong>latch-up 到底是什麼？</strong>——畫出 CMOS 的四層 PNPN 寄生結構與兩個寄生 BJT 的正反饋迴路，說明了「β₁×β₂＞1」這個起碼條件，以及substrate 電流為什麼要跨過約 0.5～0.7 V 這道門檻。</li>
+    <li><strong>啟動（trigger）和維持（hold）為什麼是兩個不一樣的數？</strong>——用 snapback I–V 曲線解釋「觸發容易、維持更容易」：脈衝只需存在一瞬，之後靠電源自己供養；也解釋為什麼「重開機就好」＝判準 C 的簽名、為什麼高溫讓事情變壞。</li>
+    <li><strong>IC 原廠在矽裡面做什麼，你在板子上做什麼？</strong>——guard ring、井（well）接觸密度、磊晶層、三井結構歸原廠；板端三支柱（觸發路徑限流、電源串阻斷糧、鉗位電壓低於觸發電壓＋sequencing 紀律）歸你，並會用 R＞(V_supply−V_H)／I_H 算斷糧電阻。</li>
+    <li><strong>產線上 ESD 真正的案發現場長什麼樣子？</strong>——摩擦起電（triboelectric）為什麼在鏡頭模組產線特別兇（絕緣件多、電容小、放電 sub-ns）、腕帶為什麼救不了絕緣體、離子風扇是唯一解的場合、吸嘴與自動鎖螺絲機各自怎麼犯案。</li>
+    <li><strong>ANSI/ESD S20.20 到底要求你做什麼？</strong>——EPA（ESD 防護區）的接地與等電位、腕帶／手環測試機、耗散墊、離子izer、包裝（shielding bag vs 導電泡棉 vs 粉紅泡棉的三張完全不同的帳）、標識、訓練與稽核；來料稽核查什麼、用什麼儀器（表面電阻計、CVM 電壓表）。</li>
+  </ol>
+  <p>今天的定位：Day 46 是武器學、Day 47 是戰役學、今天是「醫學＋公共衛生」——前者治單個病人的病（latch-up），後者管整座城市的自來水廠（產線管理）。你的鏡頭模組良率，一半長在電路板上，一半長在這些「看不見的電路」裡。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：多米諾骨牌與醫院手術室</span>
+  <p><strong>latch-up 是一排立起來的多米諾骨牌。</strong>ESD 脈衝像手指頭——它只需要「碰一下」（存在不到十億分之一秒），骨牌開始倒下（電流自己循環起來）。之後手指頭早就縮回去了，骨牌卻繼續倒——<strong>因為維持它倒下的能量不是手指頭給的，是地心引力（＝你的電源）給的。</strong>骨牌不會自己站起來，除非你把整張桌子翻過來——「關電源、數到三、再開」（power cycle）。這就是為什麼「重開機就好」是它的簽名：軟體重設（soft reset）只是對著骨牌喊話，沒有翻桌子。</p>
+  <p><strong>為什麼說「觸發容易、維持更容易」？</strong>推倒骨牌要花一根手指的力氣（trigger 電流較大）；但骨牌一旦全倒，只需要極小的力氣就能讓它保持倒著（hold 電流比較小）。所以設計上「撐過觸發瞬間」是不夠的——你還得保證<strong>「就算觸發了，我的電源供不出維持它的那口氣」</strong>。這是今天第二節的板端三支柱之一：斷糧。</p>
+  <p><strong>產線 ESD 管理則完全是另一個故事：醫院手術室。</strong>手術感染不是靠「病人免疫系統夠強」防住的，是靠刷手、無菌布、層流空調、器械滅菌、出入動線這些「看起來跟手術刀毫無關係的流程」防住的。ESD 的「病菌」是靜電荷：它無處不在（走動、撕膠膜、鎖螺絲都在「散播」），所以防它不能靠器件扛，只能靠一個把荷電體隔離在外的「無菌區」（EPA）。鏡頭模組就是一台躺在手術台上的病人——滿身都是絕緣膠膜與塑膠鏡筒（無法接地放電），只能靠「無菌空調」（離子風扇）中和。</p>
+  <p>公式全部可以先跳過——今天的結論只有兩句：<strong>latch-up 是靠你自己電源活著的寄生結構，防它＝餵不起來＋餓得下去；產線 ESD 是摩擦起電的公共衛生問題，防它＝把電荷擋在 EPA 外面、把絕緣體上的電荷用離子中和。</strong>接下來的物理與數字，是把這兩句話寫成面試官無法反駁的帳。</p>
+</div>
+
+<h2>0. 前情提要——本週交到你手上、今天還要用的帳本</h2>
+<ul>
+  <li><strong>三個模型三種兇器（Day 46）：</strong>HBM＝100 pF／1.5 kΩ（JS-001），能量大但上升慢（ns 級）；CDM＝帶電器件自己對地放電，電容小（pF～數十 pF 量級）、上升快（百 ps～sub-ns 量級）、峰值電流高；IEC 61000-4-2＝系統級槍擊（8 kV 接觸放電的短路峰值約 10.5 A，上升約 1 ns——以現代標準需上修的說法留給課堂討論，測試波形以標準版本為準）。</li>
+  <li><strong>暫態匯率（Day 46／47）：1 nH × 30 A/ns＝30 V。</strong>今天它換個用法：CDM 的 di/dt 比 HBM 更陡，同一條 via、同一段接地跳線，在 CDM 事件裡的稅金更高。</li>
+  <li><strong>判準 A～D（Day 46）：</strong>A＝正常；B＝暫時劣化、自行恢復；C＝<strong>需要操作員介入（重開機／重設）才能恢復</strong>；D＝不可恢復的損壞。今天的主角是判準 C 背後的物理機制之一——latch-up。</li>
+  <li><strong>辦案五步（Day 47）：</strong>固證→定位受害者→分傳導／輻射→歸因機制→對策階梯。今天的練習會把「歸因機制」這一格裡最難的偵訊——「它是 latch-up 還是當機？」——教到你會做。</li>
+  <li><strong>PT2 書目說明：</strong>《Perfect Timing II》（2002）是時脈設計書，<strong>無 ESD／閂鎖專章</strong>，依課程規例不硬引。今天沿用兩條既有教誨當鉤子：Ch.6「安裝雜感與接地品質先於器件本體決定成敗」——產線接地管計量正是它的公共衛生版；Ch.9「屏蔽的價值取決於最弱的一段」——shielding bag 沒封口就是這個道理的包裝版。</li>
+</ul>
+
+<h2>1. latch-up 解剖課：一塊 CMOS 裡藏著一個鉭閘（SCR）</h2>
+
+<h3>1.1 案發現場：四層結構從哪裡來</h3>
+<p>先把一顆最普通的 CMOS 反相器解剖開。NMOS 直接做在 <strong>p 型基板（substrate）</strong>上；PMOS 不能直接做在 p 基板上（它的源極是 p，做在 p 上就成了永遠導通的二極體），必須先「挖個池塘住進去」——在基板裡植入一塊 <strong>n 井（n-well）</strong>，PMOS 做在 n-well 裡。這個「p 裡有 n、n 裡又有 p」的洋蔥結構，剛好湊出<strong>四層交替的 PNPN</strong>：</p>
+<ul>
+  <li><strong>寄生 NPN：</strong>NMOS 的 n+ 源極（發射極）→ p 基板（基極）→ n-well（集極）。</li>
+  <li><strong>寄生 PNP：</strong>PMOS 的 p+ 源極（發射極）→ n-well（基極）→ p 基板（集極）。</li>
+</ul>
+<p>兩個電晶體互為對方的集極、基極咬死基極：<strong>這是一組交叉耦合的正反饋——正好是鉭閘 SCR（Silicon Controlled Rectifier，矽控整流器）的拓撲。</strong>平常兩個「電晶體」都處於截止區（基板電流≈0），大家相安無事；但只要有任何理由讓兩個基極電流同時不為零且環路增益夠大，regen（再生）就開始。</p>
+
+<div class="formula">
+  維持條件（起碼條件，教科書判準）：β_NPN × β_PNP ＞ 1<br>
+  開啟門檻（電流觸發路徑）：I_sub × R_sub ≳ V_BE(on) ≈ 0.5～0.7 V（矽接面開啟電壓量級）<br>
+  <span style="font-size:.9em;color:#6b7280">白話翻譯：兩個寄生電晶體互相幫對方開門，只要「你傳給我的電流放大後比我傳給你的還多」（β₁β₂＞1），門就永遠開著。而「開第一道門」的條件也很直白——基板這個「地面」有電阻，任何流過它的大電流都會讓地面抬起來；抬到約一顆二極體的開啟電壓（半伏多），住在上面的 NMOS 就被動了。ESD 事件最愛的，就是這種「幾 mA～幾十 mA 就夠掀地板」的門檻。</span>
+</div>
+
+<h3>1.2 三条觸發路徑：電流、dV/dt、與光</h3>
+<ul>
+  <li><strong>電流觸發（最常見，ESD 主路）：</strong>ESD 脈衝把幾 mA～幾十 mA（量級，取決於製程與幾何）注入基板——基板上電阻與雜散電阻（R_sub，現代深槽隔離製程已壓到個位數 Ω，舊製程可達百 Ω 量級，約）分壓，把「地面」抬高超過 0.5～0.7 V，寄生 NPN 導通，它的集極電流又餵給寄生 PNP 的基極（再经井電阻 R_well 抬 n-well 的「天花板」）——正反饋閉環。</li>
+  <li><strong>dV/dt 觸發：</strong>不靠注入電流，靠「位移電流」。結電容上的壓壓速度提供電流：I＝C_j·dV/dt。ESD 事件 dV/dt 是 V/ns 量級（Day 46：IEC 上升約 1 ns），就算 C_j 只有 0.1～0.2 pF，位移電流也有十 mA 量級——足夠流經基極電阻踩過門檻。<strong>這解釋了為什麼「沒打中那顆腳、只是把整條軌抬起來」也會閂鎖。</strong></li>
+  <li><strong>光觸發（了解即可）：</strong>強光打在 PN 結上產生光電流，同樣能踩門檻——這是舊式光耦合與某些功率器件要防的；現代理工實驗室甚至用雷射做「LVT（laser-triggered）」故障定位——光由外而內點火，幫你找到 latch-up 敏感點在哪。面試提到這詞是加分項，實務上你只會在看 FA 報告時遇到它。</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 940 520" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="470" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：一顆 CMOS 反相器裡藏著的 SCR——剖面（上）與等效電路（下）</text>
+
+  <!-- ===== cross-section ===== -->
+  <rect x="30" y="50" width="420" height="250" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="240" y="72" text-anchor="middle" font-size="13" font-weight="bold" fill="#334155">剖面：p 基板 → n 井 → p 井中井（PNPN 四層）</text>
+  <!-- substrate -->
+  <rect x="60" y="150" width="360" height="90" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="80" y="232" font-size="11" fill="#1e40af">p 型基板（substrate）</text>
+  <!-- n-well -->
+  <rect x="250" y="120" width="160" height="60" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="330" y="135" text-anchor="middle" font-size="11" fill="#92400e">n 井（n-well）</text>
+  <!-- PMOS gate in well -->
+  <rect x="288" y="108" width="14" height="30" fill="#374151"/>
+  <text x="295" y="102" text-anchor="middle" font-size="9" fill="#374151">PMOS 閘</text>
+  <rect x="262" y="128" width="18" height="16" fill="#fca5a5" stroke="#b91c1c"/>
+  <text x="271" y="140" text-anchor="middle" font-size="8.5" fill="#7f1d1d">p+</text>
+  <rect x="316" y="128" width="18" height="16" fill="#fca5a5" stroke="#b91c1c"/>
+  <text x="325" y="140" text-anchor="middle" font-size="8.5" fill="#7f1d1d">p+</text>
+  <text x="271" y="160" text-anchor="middle" font-size="8.5" fill="#7f1d1d">源極</text>
+  <!-- NMOS gate in substrate -->
+  <rect x="108" y="138" width="14" height="30" fill="#374151"/>
+  <text x="115" y="132" text-anchor="middle" font-size="9" fill="#374151">NMOS 閘</text>
+  <rect x="82" y="158" width="18" height="16" fill="#a7f3d0" stroke="#059669"/>
+  <text x="91" y="170" text-anchor="middle" font-size="8.5" fill="#065f46">n+</text>
+  <rect x="136" y="158" width="18" height="16" fill="#a7f3d0" stroke="#059669"/>
+  <text x="145" y="170" text-anchor="middle" font-size="8.5" fill="#065f46">n+</text>
+  <text x="91" y="188" text-anchor="middle" font-size="8.5" fill="#065f46">源極</text>
+  <!-- well contact -->
+  <rect x="372" y="128" width="18" height="16" fill="#fca5a5" stroke="#b91c1c"/>
+  <text x="381" y="140" text-anchor="middle" font-size="8.5" fill="#7f1d1d">p+</text>
+  <text x="381" y="118" text-anchor="middle" font-size="8.5" fill="#7f1d1d">井接觸（tap）</text>
+  <!-- substrate contact -->
+  <rect x="210" y="196" width="18" height="14" fill="#a7f3d0" stroke="#059669"/>
+  <text x="219" y="226" text-anchor="middle" font-size="8.5" fill="#065f46">基板接觸</text>
+  <!-- parasitic NPN path -->
+  <path d="M 91 174 C 91 210, 330 216, 330 150" stroke="#dc2626" stroke-width="2.5" fill="none" stroke-dasharray="7 4"/>
+  <text x="196" y="248" font-size="9.5" fill="#dc2626">寄生 NPN：n+ 源極 → p 基板 → n-well</text>
+  <!-- parasitic PNP path -->
+  <path d="M 271 144 C 240 176, 160 224, 120 196" stroke="#7c3aed" stroke-width="2.5" fill="none" stroke-dasharray="3 3"/>
+  <text x="310" y="268" font-size="9.5" fill="#7c3aed">寄生 PNP：p+ 源極 → n-well → p 基板</text>
+
+  <!-- ===== equivalent circuit ===== -->
+  <rect x="490" y="50" width="420" height="250" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="700" y="72" text-anchor="middle" font-size="13" font-weight="bold" fill="#334155">等效：兩個 BJT 交叉耦合＝SCR</text>
+  <!-- VDD rail -->
+  <line x1="560" y1="100" x2="850" y2="100" stroke="#dc2626" stroke-width="3"/>
+  <text x="556" y="104" text-anchor="end" font-size="11" fill="#dc2626" font-weight="bold">VDD</text>
+  <!-- GND rail -->
+  <line x1="560" y1="270" x2="850" y2="270" stroke="#0f4c5c" stroke-width="3"/>
+  <text x="556" y="274" text-anchor="end" font-size="11" fill="#0f4c5c" font-weight="bold">VSS</text>
+  <!-- PNP -->
+  <circle cx="660" cy="150" r="26" fill="none" stroke="#7c3aed" stroke-width="2"/>
+  <line x1="660" y1="124" x2="660" y2="100" stroke="#7c3aed" stroke-width="2"/>
+  <text x="668" y="118" font-size="9" fill="#7c3aed">發</text>
+  <line x1="648" y1="150" x2="612" y2="150" stroke="#7c3aed" stroke-width="2"/>
+  <path d="M 636 140 L 660 150 L 636 160 L 643 150 Z" fill="#7c3aed"/>
+  <line x1="660" y1="176" x2="660" y2="206" stroke="#7c3aed" stroke-width="2"/>
+  <text x="668" y="196" font-size="9" fill="#7c3aed">集</text>
+  <text x="700" y="152" font-size="11" fill="#7c3aed" font-weight="bold">PNP</text>
+  <!-- NPN -->
+  <circle cx="760" cy="222" r="26" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <line x1="760" y1="196" x2="760" y2="176" stroke="#dc2626" stroke-width="2"/>
+  <text x="768" y="190" font-size="9" fill="#dc2626">集</text>
+  <line x1="788" y1="222" x2="826" y2="222" stroke="#dc2626" stroke-width="2"/>
+  <path d="M 784 212 L 760 222 L 784 232 L 777 222 Z" fill="#dc2626"/>
+  <line x1="760" y1="248" x2="760" y2="270" stroke="#dc2626" stroke-width="2"/>
+  <text x="768" y="266" font-size="9" fill="#dc2626">發</text>
+  <text x="716" y="226" font-size="11" fill="#dc2626" font-weight="bold">NPN</text>
+  <!-- cross couple: PNP collector -> NPN base ; NPN collector -> PNP base -->
+  <path d="M 660 206 C 660 226, 700 240, 734 222" stroke="#7c3aed" stroke-width="2" fill="none"/>
+  <path d="M 760 176 C 760 156, 720 142, 690 150" stroke="#dc2626" stroke-width="2" fill="none"/>
+  <!-- base resistors -->
+  <rect x="596" y="144" width="18" height="12" fill="#fff" stroke="#374151"/>
+  <text x="605" y="140" text-anchor="middle" font-size="9" fill="#374151">R_sub</text>
+  <rect x="824" y="216" width="18" height="12" fill="#fff" stroke="#374151"/>
+  <text x="833" y="212" text-anchor="middle" font-size="9" fill="#374151">R_well</text>
+  <!-- ESD injection arrow -->
+  <path d="M 580 250 L 610 232" stroke="#ea580c" stroke-width="3" marker-end="url(#arrA)"/>
+  <text x="546" y="252" font-size="10" fill="#ea580c" font-weight="bold">ESD</text>
+  <text x="605" y="258" font-size="9" fill="#ea580c">脈衝注入基板</text>
+  <defs><marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M 0 0 L 9 4 L 0 8 z" fill="#ea580c"/></marker></defs>
+
+  <!-- bottom annotation -->
+  <rect x="30" y="320" width="880" height="176" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="470" y="345" text-anchor="middle" font-size="13" font-weight="bold" fill="#9a3412">讀圖三步（面試白板題：「畫出 latch-up 的等效電路」）</text>
+  <text x="56" y="372" font-size="11.5" fill="#374151">① 先畫 VDD／VSS 兩條軌與兩個 BJT：PNP 發射極接 VDD、NPN 發射極接 VSS——它們串成一條從 VDD 到 VSS 的通路。</text>
+  <text x="56" y="394" font-size="11.5" fill="#374151">② 交叉耦合：PNP 的集極餵 NPN 的基極、NPN 的集極餵 PNP 的基極——正反饋。環路增益 β₁×β₂＞1 時，電流自己養自己。</text>
+  <text x="56" y="416" font-size="11.5" fill="#374151">③ 兩顆電阻 R_sub／R_well 是「地板與天花板」：ESD 注入電流在地板上墊高 ≳0.5～0.7 V 就開門；R_sub 越小（磊晶、重摻 tap）越難觸發——這就是 IC 廠的防線。</text>
+  <text x="56" y="442" font-size="11.5" fill="#9a3412" font-weight="bold">關鍵一句：ESD 脈衝只點火（存在 &lt;10 ns），供養火的是電源——所以「切掉電源」是唯一物理上可靠的滅火法（power cycle）。</text>
+  <text x="56" y="466" font-size="11" fill="#9a3412">現代製程備註：深槽隔離（DTI）與磊晶基板把 R_sub 壓得很小、寄生增益壓得很低——先進製程「難觸發」，但觸發後的電流密度更高、燒傷更重，兩者都要防。</text>
+</svg>
+<figcaption>圖 1：latch-up 的地圖——上半是你每顆 IC 裡都有的剖面，下半是面試要你能三筆畫完的等效電路（電阻與增益數值皆為量級示意）。</figcaption>
+</figure>
+
+<h3>1.3 snapback：觸發容易、維持更容易——今天最重要的一條曲線</h3>
+<p>把「器件兩端電壓 vs 流過電流」畫成曲線（橫軸電壓、縱軸電流），latch-up 器件的長相叫 <strong>snapback（回snap）</strong>：</p>
+<ul>
+  <li><strong>觸發點 (V_T1, I_T1)：</strong>電壓爬升、電流還只是洩漏級；到達 V_T1 的瞬間寄生 SCR 點火，曲線像被 snap 住一樣——<strong>電壓崩到很低（維持電壓 V_H，常只有觸發點電壓的幾分之一），電流卻很大。</strong></li>
+  <li><strong>維持區：</strong>點火之後，維持導通需要的電流叫<strong>維持電流 I_H（holding current）</strong>。特徵：<strong>I_H 遠小於 I_T1</strong>（觸發需要的電流大、維持需要的電流小——多米諾骨牌效應）。只要電源供得出 I ＞ I_H，SCR 就一直開著。</li>
+  <li><strong>後果：</strong>器件本身沒「壞」——邏輯死了、電流從 µA／mA 級跳到幾十～幾百 mA（量級，依器件）、封裝摸起來溫溫的；把電源整個拿掉再上電，一切如常、暫存器歸零。<strong>「重開機就好」＝判準 C＝latch-up 的簽名。</strong>而 soft reset（只重置晶片內部邏輯、不切供電）通常救不了它——火燒在主供電迴路裡，reset 腳管不著。</li>
+</ul>
+<p><strong>為什麼溫度一高就更糟？</strong>三件事同向疊加：雙極電晶體的 β 隨溫度上升（正反饋更強）、維持電流 I_H 隨溫度下降（斷糧門檻更難做到）、基板電阻變化（舊製程）——這就是 IEC／latch-up 鑑別測試常挑 −40～125 ℃（約）全溫域做的原因，也是「實驗室常溫過了、夏天機殼內翻車」的物理根源。</p>
+<p><strong>有趣的反轉：SCR 是 latch-up 的元兇，卻也是防護器件的英雄。</strong>有一類 TVS 就叫 <strong>SCR-based TVS（snapback 型保護器件）</strong>：工程師<strong>故意</strong>把 SCR 做得觸發電壓精準、觸發後 snapback 到很低的維持電壓（鉗位漂亮、動態電阻小、寄生電容可以做小——高速口保護的常見選擇之一）。它「閂住」吞脈衝，靠的是<strong>事件結束後供電電流低於 I_H、器件自動斷流（commutation）</strong>。設計失誤時它也會「關不掉」——所以 SCR 型 TVS 的 datasheet 會嚴格規定工作電壓與 I_H／斷流條件的餘額（以料號規格為準）。同一個物理，在別人名下是事故，在你名下可以是武器——面試講出這段，是把「我懂 latch-up」升級成「我懂怎麼用 latch-up」。</p>
+
+<h2>2. 防線怎麼分工：原廠的四道矽內防線，與你的板端三支柱</h2>
+
+<h3>2.1 IC 原廠在矽裡面做什麼（你買到的防線）</h3>
+<table>
+<tr><th>防線</th><th>做法</th><th>打的帳</th></tr>
+<tr><td>guard ring（護環）</td><td>關鍵節點周圍用重摻雜 p+ 環緊貼包著、就近接到低阻抗地</td><td>攔截擴散進來的載子、把基板電流「就近倒垃圾」，不讓它在 R_sub 上墊高</td></tr>
+<tr><td>井／基板接觸密度（tap density）</td><td>把 R_sub、R_well 用密集接觸點並聯壓小</td><td>直接打觸發門檻：I×R＜0.5 V</td></tr>
+<tr><td>磊晶層（epitaxial layer）</td><td>低阻substrate 上長薄磊晶，器件住薄層</td><td>垂直方向的寄生電阻大幅降低</td></tr>
+<tr><td>三井（triple well）／深槽隔離</td><td>把 n-well 整團用 p 井包起來接地、器件間挖深溝</td><td>切斷「地板」共用——觸發電流根本找不到通往鄰居的路</td></tr>
+<tr><td>電源鉗位（on-chip power clamp）</td><td>VDD–VSS 間放 snapback 器件</td><td>軌對軌過壓時先於內部電路點火洩流</td></tr>
+</table>
+<p>IC 的抗閂鎖免疫規格（JEDEC <strong>JESD78</strong> 一類的器件級測試，約：對每個腳注入遠超正常工作的觸發電流、供電限在不會損壞的範圍，觀察是否閂鎖，全溫域；具體倍率與判準以現行版本與 datasheet 為準）買的是「乾淨腳對腳」世界的免疫力。<strong>它不担保你的機殼、你的排線、你的 IEC 8 kV——責任矩陣（Day 47）第三段永遠是你的。</strong></p>
+
+<h3>2.2 板端三支柱：餵不起來、餓得下去、順序不亂</h3>
+<div class="card pitfall" style="border-color:#0e7490;background:#f0fdfa">
+  <span class="label" style="color:#0e7490">板端三支柱（今天的主設計方法論）</span>
+  <ol>
+    <li><strong>支柱一：讓觸發電流到不了門檻（餵不起來）。</strong>訊號線串電阻（10～100 Ω 量級依線速選，低速線如 I²C／復位線最便宜有效——Day 47 練習 4 的 RC 滯後方案正是它）、TVS 入口鉗位把 dV/dt 砍小（C_j·dV/dt 這條觸發路徑直接降級）、佈局上讓保護器件先到、受害者後吃——和昨天「收费站」同一語法，只是今天的計價單位從「伏特」換成「基板電流」。</li>
+    <li><strong>支柱二：觸發了也餓得下去（斷糧）。核心算術——</strong></li>
+  </ol>
+  <div class="formula">
+    自我解鎖條件：供電迴路在鉗位狀態下能供出的最大電流 ＜ I_H<br>
+    設計式：R_series ＞ (V_supply − V_H)／I_H（V_H＝SCR 維持時器件端殘壓，依器件資料，量級常為 1～3 V 級）<br>
+    <span style="font-size:.9em;color:#6b7280">白話翻譯：就算骨牌倒了，我限制你最多只能喝到這麼小的奶——喝不夠維持的氣力（I_H），下一次你自然就停了。電源供應器測試模式下的「限流保護」就是這個原理的工業版：電流一超限就切／折返（foldback／hiccup），latch-up 撐不過一個電源週期。</span>
+  </div>
+  <ol start="3">
+    <li><strong>支柱三：鉗位電壓低於觸發門檻＋sequencing 紀律。</strong>保護方案的終極驗收標準從昨天的「低於受害者絕對最大耐壓」加一條：<strong>低於系統任何一顆器件的 latch-up 觸發電壓</strong>（V_T1 是器件級參數，datasheet 常不給——拿不到時用「鉗得越低越好＋JESD78 免疫條款＋槍測驗證」兜底，不要假裝知道）。sequencing 紀律：latch-up 事件期間器件被鉗在低壓大電流，會把共用調節器的其他軌拖垮（電流踩爆→電壓塌陷→別的器件經歷一次 dV/dt 事件）——<strong>一次閂鎖引發連環閂鎖的路徑就在電源樹裡</strong>。對策：敏感器件分軌、關鍵軌加 current-limit switch／ideal diode、開機順序讓「先接地後供電」的舊紀律延伸成「先讓保護在線上」。</li>
+  </ol>
+</div>
+
+<h3>2.3 判別：latch-up 與它的四個偽裝者（鑑別診斷表）</h3>
+<table>
+<tr><th>嫌疑犯</th><th>電流簽名（串電流感測觀察）</th><th>恢復方式</th><th>其他線索</th></tr>
+<tr><td><strong>latch-up</strong></td><td>事件後穩態電流明顯台階上升（mA～百 mA 量級）、持續不退</td><td><strong>必須完全斷電再上電</strong>；soft reset 無效</td><td>封裝微溫；高溫更常發、更容易維持</td></tr>
+<tr><td>韌體 hard-fault（當機）</td><td>電流正常，甚至因外設關閉而略降</td><td>watchdog reset 即可救回</td><td>log／呼叫棧有腳印；與時序強相關</td></tr>
+<tr><td>SEU（位翻轉，Day 47）</td><td>電流正常</td><td>重新初始化／覆寫暫存器</td><td>低重現率、與濕度走位相關；記憶體／邏輯暫存器受害</td></tr>
+<tr><td>匯流排 lock（I²C／MIPI 卡死）</td><td>電流正常或微升（總線被拉低時上拉電阻多吃一點）</td><td>總線復位序列（9 個 clock＋STOP）或重開</td><td>SCL／SDA 波形卡低電位是鐵證；I²C 設備被打到中途的經典傷</td></tr>
+<tr><td>永久損壞（判準 D）</td><td>電流異常<strong>且斷電重上後仍在</strong>（漏電上升）</td><td>救不回來，進 FA</td><td>X-EMMI／OBIRCH 找热点（實驗室層級）</td></tr>
+</table>
+<p><strong>辦案動作（只要一個電流感測電阻）：</strong>把嫌疑軌的供電串進示波器電流夾（或 1～10 Ω 感測電阻）→ 打 ESD 槍、同步觸發 → <strong>看事件後的電流尾：</strong>回到基線＝不是 latch-up（找韌體／總線／SEU）；穩穩抬高一個台階、斷電才掉回＝latch-up 坐實。<strong>這是本課代價最低、身分辨識率最高的一招——Day 49 實作日你就會親手抓一次這個「台階」。</strong></p>
+
+<h2>3. 產線：CDM 真正的案發現場</h2>
+
+<h3>3.1 為什麼鏡頭模組產線是 CDM 的天堂</h3>
+<p>把 Day 46 的 CDM 定義撿回來：<strong>器件（或整塊模組、治具、人）本身先帶上電荷，然後遇到一個低阻抗放電點。</strong>產線每天在製造電荷的動作，比 ESD 槍的發數多幾個量級：</p>
+<ul>
+  <li><strong>摩擦起電（triboelectric）：</strong>兩種材料分離就帶電——撕 coverlay 保護膜、模組在塑料料盤裡震動、吸嘴摩擦 FPC、鎖螺絲機的高速旋轉摩擦、氣槍吹塵、甚至人走過絕緣地板。材料在摩擦電序列（triboelectric series，一個把材料按「搶電子能力」排隊的經驗表）中隔得越遠，帶電越兇。</li>
+  <li><strong>V＝Q／C 的殘酷算術：</strong>鏡頭模組＋治具的等效電容只有 pF～數十 pF 量級——<strong>幾十 nC 的摩擦電荷就能把它抬到幾百 V～kV 級。</strong>而它一遇到 grounded 吸盤、未接地鎖嘴、或作業員手指，就在 sub-ns 級時間內把電荷吐出去——比 HBM 快一個量級以上、峰值電流更兇（JS-002 機台的峰值約在每 kV 一安培的量級，確值以機台校準為準）。</li>
+  <li><strong>能量小≠傷害小：</strong>30 pF 充到 1.5 kV 只有約 34 µJ（比 HBM 2 kV 的 0.2 mJ 小一個量級），<strong>但它集中在 sub-ns</strong>——功率密度極高、路徑極窄，專殺薄氧化層與天線效應敏感的感測器輸入端。HBM 像大槌，CDM 像針。</li>
+</ul>
+<p><strong>鏡頭模組的風險檔案（全部命中）：</strong>絕緣件多（鏡筒、coverlay、膠——腕帶救不了任何絕緣體上的電荷）、電容小（電位抬得高）、暴露導體多（金手指、FPC 墊片）、組裝動作全是摩擦（鎖螺絲、壓合、貼膜）。<strong>所以這個產業的 ESD 良率問題，主角幾乎從不是 HBM（人摸到腳——腕帶能防），而是 CDM 與「絕緣體上的電荷」（腕帶無能為力）。</strong></p>
+
+<h3>3.2 兩個經典案發現場</h3>
+<div class="card pitfall">
+  <span class="label">產線案例（業界常見情境，非規範數據）</span>
+  <ul>
+    <li><strong>自動鎖螺絲機：</strong>起子嘴（絕緣塗層或陶瓷夾頭）高速旋轉摩擦螺絲與結構件自帶電荷，瞬間對著模組金手指放電——單點、極快、電流密度高。傷是累計性的：這站不測、下游客戶端三個月後失靈。對策：起子嘴／夾頭改用導電材料並接地、螺絲供料軌接地、工站上方加離子風扇、必要時工站前加「預放電」接觸棒（經大電阻慢放）。<strong>注意「經大電阻」：把 kV 級電荷用 1 MΩ 放掉要毫秒級、安全；直接鉤到地上就是一次自製 CDM。</strong></li>
+    <li><strong>pick-and-place 吸嘴：</strong>陶瓷吸嘴摩擦 FPC coverlay 起電＋吸附瞬間低阻接觸 → 放電路徑直接穿過 MIPI 金手指進感測器。對策：導電吸嘴／真空吸盤接地、搬運前離子化、tray 與載具用低摩擦帶電材料（不是「隨便防靜電粉紅袋」——§5 會算那筆帳）。觀察線索：final test 不良率與「換了吸嘴批次／換了 tray 供應商」的日期對齊——這就是來料稽核的證據鏈。</li>
+  </ul>
+</div>
+
+<figure>
+<svg viewBox="0 0 940 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="470" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：一條鏡頭模組產線的 ESD 防區地圖（EPA 平面示意＋CDM  hotspot 標記）</text>
+
+  <!-- EPA room -->
+  <rect x="30" y="44" width="880" height="420" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="2.5"/>
+  <text x="60" y="70" font-size="12.5" font-weight="bold" fill="#166534">EPA｜ESD 保護區（入口：換鞋／腕帶測試機／標識；所有導體等電位接地）</text>
+
+  <!-- entry -->
+  <rect x="52" y="86" width="120" height="88" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="112" y="106" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#166534">入口站</text>
+  <text x="112" y="122" text-anchor="middle" font-size="9" fill="#374151">腕帶測試機（每日）</text>
+  <text x="112" y="136" text-anchor="middle" font-size="9" fill="#374151">防靜電鞋／手環</text>
+  <text x="112" y="150" text-anchor="middle" font-size="9" fill="#374151">進出紀錄＝稽核資料</text>
+
+  <!-- manual workbench -->
+  <rect x="200" y="86" width="220" height="120" rx="8" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="310" y="106" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0e7490">手工作業桌（Class 1 工作位）</text>
+  <text x="310" y="124" text-anchor="middle" font-size="9" fill="#374151">耗散墊（10⁶～10⁹ Ω／□ 量級）單點接地</text>
+  <text x="310" y="138" text-anchor="middle" font-size="9" fill="#374151">腕帶 1 MΩ 限流 → 同一點接地（等電位！）</text>
+  <text x="310" y="152" text-anchor="middle" font-size="9" fill="#374151">焊鐵接地＋漏電定期稽核</text>
+  <text x="310" y="166" text-anchor="middle" font-size="9" fill="#374151">離子風扇（吹向作業區，中和絕緣件）</text>
+  <text x="310" y="182" text-anchor="middle" font-size="9" fill="#b45309">桌上禁：普通膠帶／保麗龍／普通塑膠袋</text>
+
+  <!-- ionizer above bench -->
+  <rect x="256" y="58" width="110" height="18" rx="4" fill="#cffafe" stroke="#0e7490" stroke-width="1.5"/>
+  <text x="311" y="71" text-anchor="middle" font-size="9" fill="#0e7490">離子化器＋平衡度校驗</text>
+  <path d="M 280 76 L 268 92 M 310 76 L 310 92 M 340 76 L 352 92" stroke="#0e7490" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+  <!-- automation -->
+  <rect x="450" y="86" width="240" height="120" rx="8" fill="#fff" stroke="#dc2626" stroke-width="2"/>
+  <text x="570" y="106" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#991b1b">自動化工站（CDM hotspot 區）</text>
+  <text x="570" y="124" text-anchor="middle" font-size="9" fill="#374151">吸嘴：陶瓷（絕緣）→ 改導電＋接地</text>
+  <text x="570" y="138" text-anchor="middle" font-size="9" fill="#374151">鎖螺絲機：旋轉摩擦起電 → 導電嘴＋接地</text>
+  <text x="570" y="152" text-anchor="middle" font-size="9" fill="#374151">輸送帶：滾輪接地＋離子棒預放電</text>
+  <text x="570" y="166" text-anchor="middle" font-size="9" fill="#374151">氣槍→離子風槍（普通氣吹＝充氣式起電）</text>
+  <circle cx="516" cy="150" r="7" fill="#dc2626"/><text x="516" y="176" text-anchor="middle" font-size="8.5" fill="#991b1b">hotspot</text>
+  <circle cx="640" cy="118" r="7" fill="#dc2626"/><text x="652" y="134" font-size="8.5" fill="#991b1b">hotspot</text>
+
+  <!-- metrology -->
+  <rect x="720" y="86" width="166" height="120" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+  <text x="803" y="106" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#854d0e">量測與稽核站</text>
+  <text x="803" y="124" text-anchor="middle" font-size="9" fill="#374151">CVM 靜電壓表（帶電板）：量載具／膜面</text>
+  <text x="803" y="138" text-anchor="middle" font-size="9" fill="#374151">表面電阻計：墊／盒／包材抽測</text>
+  <text x="803" y="152" text-anchor="middle" font-size="9" fill="#374151">腕帶測試 log（連續監控資料）</text>
+  <text x="803" y="166" text-anchor="middle" font-size="9" fill="#374151">離子器平衡度／衰减時間週校</text>
+
+  <!-- packaging -->
+  <rect x="52" y="230" width="368" height="100" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="236" y="250" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#5b21b6">包裝／出貨區</text>
+  <text x="236" y="268" text-anchor="middle" font-size="9" fill="#374151">shielding bag（屏蔽袋）：金屬層法拉第籠＋防靜電外層，封口才有意義</text>
+  <text x="236" y="282" text-anchor="middle" font-size="9" fill="#374151">導電泡棉：短路全部引腳（防 pad 間放電）但磨損／污染風險</text>
+  <text x="236" y="296" text-anchor="middle" font-size="9" fill="#374151">粉紅泡棉＝絕緣體！只防碰撞、不防 ESD（§5 對照表）</text>
+  <text x="236" y="312" text-anchor="middle" font-size="9" fill="#b45309">同一袋裡還住著濕度帳（MSL）——兩本帳一起管</text>
+
+  <!-- personnel ground -->
+  <rect x="450" y="230" width="240" height="100" rx="8" fill="#fff" stroke="#16a34a" stroke-width="2"/>
+  <text x="570" y="250" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#166534">人員接地系統</text>
+  <text x="570" y="268" text-anchor="middle" font-size="9" fill="#374151">坐姿：腕帶（1 MΩ 限流）→ EPA 共地點</text>
+  <text x="570" y="282" text-anchor="middle" font-size="9" fill="#374151">站姿：導電鞋＋導電地板（走動電壓稽核）</text>
+  <text x="570" y="296" text-anchor="middle" font-size="9" fill="#374151">關鍵詞：不是「各自接地」，是「同一節點等電位」</text>
+  <text x="570" y="312" text-anchor="middle" font-size="9" fill="#b45309">PT2 Ch.6 譯註：接地品質決定成敗——這裡量的是流程</text>
+
+  <!-- humidity -->
+  <rect x="720" y="230" width="166" height="100" rx="8" fill="#fff" stroke="#0e7490" stroke-width="2"/>
+  <text x="803" y="250" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#0e7490">環境</text>
+  <text x="803" y="268" text-anchor="middle" font-size="9" fill="#374151">濕度：偏乾易起電，常見實務</text>
+  <text x="803" y="282" text-anchor="middle" font-size="9" fill="#374151">維持中等濕度為輔助手段（非主防線）</text>
+  <text x="803" y="296" text-anchor="middle" font-size="9" fill="#374151">絕緣件清查：每年重新體檢</text>
+  <text x="803" y="312" text-anchor="middle" font-size="9" fill="#374151">警示標識（黃色手形）</text>
+
+  <!-- bottom flow -->
+  <rect x="52" y="352" width="834" height="96" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="470" y="374" text-anchor="middle" font-size="12" font-weight="bold" fill="#0f4c5c">一條 FPC 的一天：料盤→輸送帶→貼 coverlay→鎖螺絲→打金手指測試→入袋出貨</text>
+  <text x="70" y="396" font-size="10.5" fill="#374151">每一步都在製造或釋放電荷；腕帶只能救「導體摸導體」的 HBM，救不了「絕緣體帶電」與「機器帶電」的 CDM。</text>
+  <text x="70" y="416" font-size="10.5" fill="#166534" font-weight="bold">EPA 的邏輯：導體全部等電位接地＋絕緣體上的電荷用離子中和＋把起電動作逐站清查——三招疊加，良率才有統計意義。</text>
+  <text x="70" y="436" font-size="10" fill="#6b7280">hotspot 的判別法則：不良在 final test 才爆、與站位／材料批次／天氣強相關、且打不開 ESD 槍重現——先查產線，不要先查電路板。</text>
+</svg>
+<figcaption>圖 2：你的鏡頭模組每天路過的「無菌區」——紅點是 CDM hotspot，綠線哲學是「等電位」，藍灰是稽核儀器。（站位配置為業界常見安排示意，細節以各廠 ESD 計畫書為準。）</figcaption>
+</figure>
+
+<h2>4. ANSI/ESD S20.20：把「小心靜電」寫成可稽核的標準</h2>
+<p>S20.20 不教你焊接，它是一套<strong>管理系統標準</strong>——這正是它和 JS-001／JS-002（器件耐量測試）的根本不同：前者管「環境與流程」，後者管「器件本體」。它的骨架是三道防線＋一本帳：</p>
+<table>
+<tr><th>防線／要求</th><th>內容</th><th>常見實作與量測（約，以現行版本為準）</th></tr>
+<tr><td>① 導體等電位接地</td><td>所有導體（人、工具、治具、桌墊）接到同一節點</td><td>腕帶串 1 MΩ 限流（防觸電設計，不是防 ESD——它把人體放電速度從 sub-ns 拉到百 µs 級）；墊 10⁶～10⁹ Ω／□ 量級；共地點阻抗依規範與廠內內標</td></tr>
+<tr><td>② 絕緣體：移除／隔離／中和</td><td>絕緣體無法接地，只能三选一：移出 EPA、與器件保持距離、或離子中和</td><td>離子風扇／離子棒，驗收用 CVM 量「衰減時間」（±1 kV→±100 V 級，時限依版本與距離）與<strong>平衡電壓（殘餘電位，常見規範 ±50 V 以內量級）</strong>——平衡失調的離子器會把器件充上相反電荷</td></tr>
+<tr><td>③ 包裝分層</td><td>組裝段用耗散容器；出庫段用屏蔽包裝</td><td>Shielding bag（ASTM D4833 類測試的防靜電外層＋金屬層法拉第籠）、ESD 成型托盤／回收箱；見 §5 對照表</td></tr>
+<tr><td>訓練與稽核</td><td>進 EPA 的人要訓練、計畫要定期稽核、不合格要矯正</td><td>腕帶測試 log、表面電阻抽測紀錄、CVM 巡檢紀錄——<strong>你的 final test 良率報告背後，應該查得到這幾本帳的當期狀態</strong></td></tr>
+</table>
+<p><strong>標準家族的族譜（面試可能被問「S20.20 和 IEC 61340-5-1 差在哪」）：</strong>ANSI/ESD S20.20（北美計畫標準）與 IEC 61340-5-1（國際對等標準）是雙胞胎；底下掛著測試方法 ANSI/ESD STM 家族（STM3.1 離子器、STM11.11 表面電阻）、人員接地 S4.1、包裝 S541、工作位設計 EIA-625；器件級耐量則是另一條線：JS-001（HBM）、JS-002（CDM）、JESD78（latch-up 免疫）。「你負責整條線」的答案是 S20.20 計畫＋STM 方法量測；「你負責買芯片」的答案是 JS-001/002。<strong>分得清「計畫標準 vs 方法標準 vs 器件標準」，就是 ESD 管理問題上的專業語言。</strong></p>
+
+<h2>5. 包裝四張帳與來料稽核</h2>
+<table>
+<tr><th>包材</th><th>它防什麼</th><th>它不防什麼／風險</th><th>適用</th></tr>
+<tr><td>粉紅泡棉</td><td><strong>只防碰撞。</strong>它是染色的絕緣泡棉，本身會摩擦帶電</td><td>不防 ESD，貼著器件摩擦反而是電源</td><td>非電子結構件；被當成 ESD 包材是最常見的產線笑話與事故源</td></tr>
+<tr><td>黑色／碳載導電泡棉</td><td>把引腳全部短路在一起——防「pad 對 pad 的 CDM」與外部場直穿</td><td>磨損金手指、碳污染、會刮伤 sensitive pad／鏡片；插入力大</td><td>粗放段暫存；鏡頭模組的光學面與金手指要慎用</td></tr>
+<tr><td>屏蔽袋 shielding bag</td><td>金屬層＝法拉第籠（外部場與外部放電繞著袋子走）＋防靜電外層（袋身自己不易起高電位）</td><td><strong>不等位化：</strong>袋內模組若已帶電，封進去就永遠帶電——開袋作業前仍需離子化／慢放電；不封口＝法拉第籠破洞（Ch.9「屏蔽價值取決於最弱一段」的包裝版）</td><td>出貨、倉儲、板對板運輸的標準答案</td></tr>
+<tr><td>ESD 成型托盤／回收箱</td><td>低摩擦起電材料＋固定模組不晃動（減少「运输＝攪拌起電」）</td><td>材料老化後表面電阻漂移——需週期性抽測；回收箱沾污即失效</td><td>模組廠內循環與供應商到廠的運輸段</td></tr>
+</table>
+<p><strong>來料稽核怎麼做（板級 EE 視角，儀器都是工廠常見貨）：</strong>①查供應商 S20.20／61340-5-1 證書與<strong>稽核報告、矯正措施記錄</strong>（只有證書沒有紀錄≈沒做）；②抽測來料托盤／載帶（tape）表面電阻——表面電阻計兩電極一壓，數值對照材料規格與耗散範圍（10⁶～10⁹ Ω／□ 量級為耗散設計目標，超出範圍即立案，版本以規範為準）；③CVM 靜電壓表沿輸送帶／開箱瞬間掃模組與載帶表面——<strong>量到百 V 級穩態表面電位就是有人在產線上「製造帶電體」的直接證據</strong>；④對照良率：把 final test 不良日譜和「材料換批、天氣乾燥、輸送帶換段」的日譜疊在一起看。CDM 傷常常不是單一事故而是統計漂移——<strong>你要的不是抓兇手，是讓兇手無路可走。</strong></p>
+
+<h2>6. 常見誤解（面試高頻送命區）</h2>
+<div class="card pitfall">
+  <span class="label">常見誤解</span>
+  <ul>
+    <li><strong>「重開機就好了，不是問題」</strong>——判準 C 必須立案：latch-up 每一次都是器件被大電流烤一遍，業界共識是反覆閂鎖有可靠性風險，而且這次是 C、下次可能就是 D（燒穿的氧化層不會跟你重開機）。面試把「C 一律立案」說出來，是立場問題也是經驗問題。</li>
+    <li><strong>「soft reset 跟 power cycle 一樣」</strong>——latch-up 的火在主供電迴路裡，晶片內部邏輯 reset 管不著；判別現場「reset 救不回、拔電才活」幾乎就是閂鎖的指紋。</li>
+    <li><strong>「IC 過了 JESD78，系統就不會 latch-up」</strong>——器件級測試是在「腳、源阻抗、乾淨電源」的理想世界踩門檻；你的機殼路徑、電源樹、8 kV 事件世界裡，觸發電流由你的佈局供給。責任矩陣又繞回來了（Day 47 §4）。</li>
+    <li><strong>「有腕帶就有 ESD 防護」</strong>——腕帶只處理「人體→導體」一條路徑。鏡頭模組產線的主要荷電體是絕緣體（鏡筒、膜、料盤）與機器（吸嘴、鎖嘴、輸送帶）——腕帶全部管不著，那是離子化與材料接地的工作。</li>
+    <li><strong>「屏蔽袋＝安全，開袋直接上手」</strong>——屏蔽袋防外部，不給內部放電；袋內帶電模組開袋後第一件事應該是離子化或經大電阻慢放，而不是摸它或插它。</li>
+    <li><strong>「離子風扇裝了就中和」</strong>——離子器要驗三件事：衰減時間、<strong>平衡電壓</strong>（失調反而充電）、覆蓋範圍與氣流；過髖的發射針（emitter tips）會讓平衡惡化——它是有耗材的儀器，不是裝飾。</li>
+    <li><strong>「CDM 能量小，比 HBM 溫柔」</strong>——能量小一個量級、時間快一個量級以上：功率密度專殺薄氧化層，而且你連槍都打不出它（IEC 槍波形與 CDM 機台波形上升時間差一個量級）。防 CDM 靠產線管理，不靠板端鉗位。</li>
+  </ul>
+</div>
+
+<h2>7. 動手練習（先筆算再展開——今天的帳要長在手上）</h2>
+
+<details>
+<summary><strong>練習 1（觸發門檻算術）：</strong>某舊製程器件的等效基板電阻 R_sub≈250 Ω，寄生 NPN 開啟門檻取 0.6 V。(a) 需要多少基板電流才觸發？(b) 若 TVS 鉗位後仍有 25 V 暫態經一條洩漏路徑 25 kΩ 耦合進基板，會觸發嗎？(c) 若 dV/dt 路徑：0.15 pF 結電容吃 40 V/ns 的邊沿，位移電流多大？</summary>
+<div class="answer">
+<p>(a) I＝0.6 V／250 Ω＝<strong>2.4 mA</strong>——注意這個數量級：ESD 事件動輒幾十 mA 穿基板（Day 47：8 kV 級事件短路峰值約 10.5 A），門檻低到幾乎是「來者不拒」。所以防護重心從來不是「別讓電流進基板」而是「讓基板墊不高（R_sub 小）＋讓電流別進基板（鉗位與串阻）」。
+(b) I＝25 V／25 kΩ＝1 mA＜2.4 mA——<strong>不觸發</strong>，但只剩 2.4 倍餘量；若鉗位點選錯、耦合路徑阻抗變成 10 kΩ（40V→4 mA）就翻車。這題的教訓：<strong>「洩漏路徑的阻抗」是 latch-up 視角下第一等設計變項</strong>——板端串 10～100 Ω（支柱一）就是在把 1 mA 這條路變成 0.1 mA。</p>
+<p>(c) I＝C·dV/dt＝0.15 p×40 V/ns＝<strong>6 mA</strong>——比 (a) 的門檻還大，而且<strong>根本不需要任何直流路徑</strong>。這就是 dV/dt 觸發的兇猛處：TVS 鉗位的價值不只是降電壓，是把「到達速度」也砍掉（IEC 槍的 1 ns 上升在鉗位電容與串阻 RC 面前被拉平）。三小題合起來就是「三條觸發路徑各有獨立帳，都要算」。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2（斷糧電阻設計）：</strong>一顆 5 V 供電的驅動 IC（資料假設，非料號數據）latch-up 維持參數：V_H≈2 V、I_H≈60 mA。正常電流 20 mA。板端想在電源路徑加串聯電阻做「觸發自解鎖」。(a) 自我解鎖需要 R_series 多大？(b) 正常運轉時這顆電阻的壓降與損耗？(c) 這個方案什麼時候能用、什麼時候不能用？</summary>
+<div class="answer">
+<p>(a) 供電能送的電流要小於 I_H：R＞(V_supply−V_H)／I_H＝(5−2)／0.06＝<strong>50 Ω</strong>——取 56 Ω（E24）以上。</p>
+<p>(b) 正常電流下壓降 0.02×56≈1.1 V、損耗 0.02²×56≈<strong>22 mW</strong>：壓掉 22% 供電！這颗器件的電壓預算大概直接不能工作——先把「5 V 器件被 56 Ω 供電」本身當警訊。</p>
+<p>(c) 適用判準：<strong>低電流＋高容忍電路</strong>（如本例的慢速控制線緩衝、上拉電阻級）或<strong>故障保護模式</strong>（正常由低阻供電，偵測到過流才切換進大電阻／hiccup 的電子保險絲 eFuse——現成器件就有這個行為）；大電流或電壓餘量緊的主軌（DDR、感測器模擬軌）絕對不能硬串。<strong>更現代的等價解：用帶 foldback／hiccup 限流的調節器或 eFuse 供電</strong>——把「斷糧」做成被動保護邏輯，不靠常駐壓降。<strong>面試加分句：series resistance is a latch-up cure for signals, a power-supply compromise——它屬於訊號路徑和保護路徑，不屬於功率路徑。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3（CDM 功率密度帳）：</strong>鏡頭模組等效電容約 30 pF（量級假設），經摩擦充電到 1.5 kV。(a) 帶電量 Q 與儲能 E？(b) 若 sub-ns（取 0.5 ns）放完，事件期間平均功率多大？對比 HBM（100 pF 充 2 kV，能量在 ~100 ns 量級释放）的平均功率，誰的「針」更尖？(c) 為什麼腕帶防不了這個事件？</summary>
+<div class="answer">
+<p>(a) Q＝CV＝30 p×1500＝<strong>45 nC</strong>；E＝½CV²＝0.5×30 p×1500²＝<strong>33.75 µJ≈34 µJ</strong>。</p>
+<p>(b) P̄≈34 µJ／0.5 ns＝<strong>≈68 kW（量級）</strong>；HBM：E＝0.5×100 p×2000²＝0.2 mJ，除以 ~100 ns→<strong>≈2 kW</strong>。能量只有 HBM 的六分之一，尖峰功率卻高一個量級以上——<strong>這就是「CDM 是針、HBM 是槌」的定量版</strong>，也是薄氧化層在 CDM 下先死的原因：功率密度把能量擠進極小的矽體積裡。</p>
+<p>(c) 電荷不在人身上——在模組自己的絕緣件（鏡筒、coverlay）與它自己的導體上。腕帶只能把「人體」這個導體拉回地電位；模組帶的 kV 依然要在裝配接觸瞬間自己吐出去。<strong>能拉平它電位的只有兩類工具：離子風扇（中和表面電荷）與「經大電阻的預放電」（慢放，把 sub-ns 事件拉成 µs～ms 級）。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4（EPA 稽核判讀）：</strong>你巡產線，拿到四個讀數：(1) 腕帶測試機讀 1.1 MΩ；(2) 工作墊表面電阻讀 5×10¹¹ Ω；(3) 離子器平衡電壓讀 −180 V；(4) 屏蔽袋封閉、表面 CVM 讀 +30 V，袋內模組表面讀 −900 V。逐項判定與處置。</summary>
+<div class="answer">
+<p>(1) <strong>合格邊緣偏上</strong>——腕帶典型驗收帶在 0.8～1.2 MΩ 量級（以現行 S4.1 版本與測試機門檻為準），1.1 MΩ 通過但要觀察漂移趨勢（腕帶老化的典型路徑是電阻上升→保護變慢）。</p>
+<p>(2) <strong>不合格</strong>——10¹¹ Ω 已是絕緣體（耗散墊設計目標 10⁶～10⁹ Ω／□ 量級，版本為準）：墊子失効或被塗汙，整個工作位的「等電位」假設破產，今日在該位作業的產品追收。</p>
+<p>(3) <strong>不合格</strong>——平衡電壓 −180 V 遠超常見 ±50 V 量級規範：這台離子器不是中和器，是<strong>充電器</strong>——它會把經過的器件統統充上負電。立即停用、清潔發射針、重新校驗；追溯今日「被它吹過」的批次。</p>
+<p>(4) <strong>袋合規、內含炸彈</strong>——袋面 +30 V 正常（防靜電外層量級）；<strong>袋內模組表面 −900 V：屏蔽袋防外不防內（法拉第籠效應），模組帶著一身的電在睡覺。</strong>處置：開袋後先過離子化／經大電阻慢放再上線；並向包裝站追溯——模組入袋前哪來的 900 V？（大概率是輸送段摩擦起電＋無預放電站。）</p>
+<p>本題心法：<strong>四個讀數背後的哲學不同——(1)(2) 是「導體等電位」的帳，(3)(4) 是「絕緣體電荷」的帳。</strong>S20.20 的三道防線各管各的，沒有哪一台儀器能替你全看。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5（情境辦案・CDM 統計漂移）：</strong>鏡頭模組 final test 黑屏失效率從 0.05% 升到 0.3%，全在冬天發生；不良品復測全部通過（常溫），X-EMMI 顯示感測器側薄氧化層热点；ESD 槍 IEC 測試主板無異常。三條線索（季節、復測通過、氧化層热点）各指向什麼？你的查案順序？</summary>
+<div class="answer">
+<p><strong>線索解讀：</strong>①冬天＝濕度低→摩擦起電更容易累積、絕緣件表面電阻上升→放電事件更頻更猛：<strong>指向產線荷電事件而非電路設計</strong>；②復測通過但 EMMI 有氧化層热点＝已受傷但未完全死透（弱失效邊界）——CDM/HBM 氧化層傷的典型形態；③IEC 槍打不出問題＝事件根本不來自機殼放電路徑，板端鉗位設計不在嫌疑線上。<strong>結論假設：產線 CDM 統計事件。</strong></p>
+<p><strong>查案順序：</strong>Step 1 疊日譜：不良日譜 vs「換吸嘴批次／換 tray／換膜供應商／冷氣除濕改設定」日譜——找台階變化的那一站。Step 2 CVM 巡線：各站位用帶電板掃模組與治具表面電位（練習 4 的手法），冬天產線常測到 kV 級載具。Step 3 對策走「移除→隔離→中和」階梯：吸嘴／治具改導電接地（移除荷電體）、靜電敏感動作加離子化（中和）、預放電棒慢放（降級事件）。Step 4 驗收：對策後追三批良率回沒回基線——CDM 管理是統計學，單顆復測不能結案。<strong>面試講這題的口訣：「板子無罪，先查流水線；單顆無罪，先看日譜。」</strong></p>
+</div>
+</details>
+
+<h2>10. 面試怎麼考（英文題＋參考答案）</h2>
+
+<details>
+<summary><strong>Q1（鑑別診斷）：</strong>\"During an IEC 61000-4-2 discharge test, the camera rail's supply current steps up by about 40 mA after the strike and stays there; the sensor is dead to I²C. A soft reset does nothing; a full power removal restores normal operation and the current returns to baseline. Diagnose, explain the physics in two minutes, and give me board-level prevention.\"</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）:</strong>The diagnosis is latch-up, and the evidence is a closed case: (1) the supply current stays elevated after the event — the parasitic PNPN (two cross-coupled BJTs formed by a CMOS structure) has fired and is being held on by the supply; (2) soft reset does nothing because the regenerative loop lives in the main power path, not in reset-able logic; (3) only removing power starves it — removal of the sustaining current below the holding current is the only physical cure. Physics in two minutes: the strike injects substrate current; if the voltage across the substrate resistance exceeds roughly a diode drop (~0.6 V), the parasitic NPN turns on; its collector current drives the parasitic PNP's base, whose collector feeds back to the first base — loop gain β1×β2 exceeds 1 and the pair latches. The I–V curve snaps back: the trigger current is larger than the holding current, so once it's on, a much smaller current keeps it on. Board-level prevention, three pillars: one, keep substrate current from arriving — series resistance on susceptible low-speed lines (I²C, reset), TVS clamp at the entry to cut both amplitude and dV/dt, which also kills the displacement-current trigger path (C·dV/dt). Two, starve the latch: current-limited rails, eFuse with foldback/hiccup, or a series resistance designed so that V_supply minus the holding voltage over the total loop resistance stays below the holding current. Three, discipline: clamp below the device's trigger voltage (or verify with gun data at the worst point since V_T1 rarely appears in datasheets), and design the power tree so one latched rail can't drag others into a dV/dt event. Final governance point: a criterion-C finding is a bug, not a pass — repeated latch-up is a reliability exposure, and my job is to make it impossible, then make it visible with a series sense resistor and a trigger-on-gun capture.</p>
+<p><strong>加分句：</strong>\"I diagnose latch-up by its signature: the event is the fuse, the supply is the fire. If a soft reset can't put it out but removing power can, the fire is in my power path.\"</p>
+</div>
+</details>
+
+<details>
+<summary><strong>Q2（產線管理）：</strong>\"Your camera-module final-test failure rate for thin-oxide damage rises from 0.05% to 0.3% in winter, while IEC gun tests on the same boards pass. Walk me through your hypothesis, the measurements you'd make, and the program-level controls from ANSI/ESD S20.20 you'd audit — and explain why a wrist strap alone never solves this.\"</summary>
+<div class="answer">
+<p><strong>Key points（滿分版）:</strong>Hypothesis: field CDM, not system-level ESD. The clues triangulate: winter means dry air, which raises insulation surface resistance and lets triboelectric charge accumulate; the gun passing means the chassis discharge path isn't the culprit; thin-oxide signatures point to a sub-nanosecond, high-power-density strike — the CDM fingerprint, with energy in the tens-of-microjoules range delivered so fast its instantaneous power exceeds HBM by an order of magnitude. Measurements: first, overlay the defect-dated yield chart with process changes — nozzle lot, tray supplier, film liner, humidity settings; CDM is a statistics crime scene, not a single shot. Second, walk the line with a charged-plate voltmeter and measure surface potential on carriers, films, and modules at each station — kV on a fixture is a smoking gun. Third, metrology on the EPA itself: surface-resistance spot checks on mats, trays and packaging (dissipative targets in the 10⁶–10⁹ ohms-per-square range per the applicable revision); ionizer decay time AND balance voltage; wrist-strap tester logs. Controls to audit: equipotential grounding of every conductor (nozzles, screwdriver bits, conveyors grounded — insulating tooling is a charge generator, replace with conductive-then-grounded), remove/isolate/neutralize for insulators — the ionizer is the only tool that reaches a lens barrel, and it must be balanced and maintained or it becomes a charger. And wrist straps alone never solve this because a strap drains only people; the charged bodies here are machine parts and insulators, and a strap on a technician does nothing for a module sitting at a kilovolt on a charged conveyor. Program answer: IEC 61340-5-1 / S20.20 is an EPA program — grounding, ionization, packaging tiers, training, audits — and CDM yield is managed there, not in the clamp selection on my PCB.</p>
+<p><strong>加分句：</strong>\"For CDM, the gun is not my enemy — my assembly line is. I don't defend against events; I prevent the charge from ever existing, and where it must exist, I slow it down.\"</p>
+</div>
+</details>
+
+<h2>11. 今日整理（takeaway）</h2>
+<div class="card takeaway">
+  <span class="label">今日整理（takeaway）</span>
+  <ul>
+    <li><strong>latch-up＝自養活的寄生 SCR：</strong>四層 PNPN（兩個交叉耦合 BJT）；觸發門檻 I_sub×R_sub≳0.6 V 或 C·dV/dt 位移電流；維持條件 β₁β₂＞1 且供電電流＞I_H；<strong>脈衝是火柴、電源是柴堆</strong>——只有 power cycle 能滅火，「重開機就好」就是它的簽名（判準 C 立案）。</li>
+    <li><strong>snapback 曲線是今天的單一最重要資產：</strong>觸發電流＞維持電流（多米諾骨牌）；板端三支柱＝餵不起來（串阻＋鉗位降 dV/dt）、餓得下去（R＞(V_supply−V_H)／I_H，或 eFuse 折返限流）、順序不亂（分軌、保護先行）。SCR 型 TVS 是同一物理的武器化。</li>
+    <li><strong>鑑別診斷表＝辦案新兵器：</strong>事件後電流台階不退＋斷電才回＝latch-up；電流正常看韌體／SEU／總線 lock。一招抓指紋：供電串感測電阻＋槍同步觸發，看事件後的電流尾。</li>
+    <li><strong>產線 CDM 三行帳：</strong>摩擦起電（V＝Q／C，小電容＝高電位）、sub-ns 放電（能量小、功率密度兇——針不是槌）、腕帶管不到絕緣體與機器。鏡頭模組＝CDM 天堂：絕緣件多、電容小、動作全是摩擦。</li>
+    <li><strong>S20.20 三道防線＋一本帳：</strong>導體等電位接地（腕帶 1 MΩ、耗散墊 10⁶～10⁹ Ω／□）、絕緣體移除／隔離／中和（離子器驗衰減時間＋平衡電壓 ±50 V 量級）、包裝分層（屏蔽袋防外不防內、粉紅泡棉只防撞）、訓練稽核紀錄可追——<strong>良率報告查得到的那本帳，才是真的防護。</strong></li>
+  </ul>
+</div>
+
+<h2>今日 Anki 卡片（五張）</h2>
+
+<div class="anki">
+  <p class="q">卡 1｜Q：latch-up 的等效電路與兩個維持條件？</p>
+  <p class="a">四層 PNPN＝交叉耦合的寄生 NPN＋PNP（CMOS 裡 n+/p-sub/n-well 各充發射/基/集極），從 VDD 串到 VSS。條件：①環路增益 β_NPN×β_PNP＞1（自己養自己）②基極節點被墊高 over 矽接面開啟電壓約 0.5～0.7 V（I_sub×R_sub＞門檻）。觸發路徑三條：基極電流注入、C·dV/dt 位移電流、光。ESD 脈衝只是火柴，電源才是柴堆——只有 power cycle 滅火。</p>
+  <p class="q">卡 2｜Q：snapback 曲線講了什麼？為什麼「觸發容易、維持更容易」在設計上重要？</p>
+  <p class="a">I–V 曲線到達觸發點 (V_T1, I_T1) 後電壓崩到維持電壓 V_H、電流維持在高位；維持電流 I_H＜I_T1（多米諾骨牌效應）。設計含義：撐過觸發瞬間不夠，必須保證「觸發後供電送不出維持電流」：R_series＞(V_supply−V_H)／I_H 或用 foldback／hiccup 限流電源。SCR 型 TVS 是同一物理的武器：故意 snapback 鉅位、事件後靠電流低於 I_H 自動斷流。</p>
+  <p class="q">卡 3｜Q：判準 C 的鑑別診斷——latch-up 與當機／SEU／總線 lock／永久損壞怎麼分？</p>
+  <p class="a">看「事件後的電流尾」（供電串感測電阻＋槍同步觸發）：latch-up＝穩態電流台階上升不退、soft reset 無效、完全斷電才回；當機＝電流正常、watchdog 救回；SEU＝電流正常、重初始化就好、低重現率；總線 lock＝I²C 卡低（上拉多吃一點點）；判準 D＝斷電重上仍在。口訣：reset 救不回、拔電才活＝閂鎖指紋。C 一律立案——反覆閂鎖是可靠性風險。</p>
+  <p class="q">卡 4｜Q：為什麼鏡頭模組產線是 CDM 天堂？腕帶為什麼救不了？</p>
+  <p class="a">①摩擦起電密集（撕膜、吸嘴、鎖螺絲、震動料盤）；②模組電容小（pF～數十 pF）→Q=CV→小電荷=kV；③sub-ns 放電：能量小（µJ 級）但功率密度比 HBM 高一個量級，專殺薄氧化層。腕帶只拉平「人體導體」；荷電主力是絕緣體（鏡筒／coverlay）與機器（吸嘴／鎖嘴／輸送帶）——解只有離子中和＋導電工具接地＋經大電阻慢放。</p>
+  <p class="q">卡 5｜Q：S20.20 的三道防線與「計畫標準 vs 方法標準 vs 器件標準」族譜？</p>
+  <p class="a">三防線：①導體等電位接地（腕帶 1 MΩ 限流、墊 10⁶～10⁹ Ω／□ 量級、共地點）②絕緣體：移除／隔離／中和（離子器驗衰減時間＋平衡電壓約 ±50 V 級）③包裝分層（組裝段耗散容器、出貨段屏蔽袋——防外不防內）。族譜：計畫標準＝S20.20／IEC 61340-5-1；方法標準＝STM 家族（STM3.1、STM11.11）、S4.1、S541、EIA-625；器件標準＝JS-001（HBM）／JS-002（CDM）／JESD78（latch-up）。</p>
+</div>
+
+<h2>明日預告</h2>
+<p><strong>Day 49（週五・實作日——平日進公司操作儀器）：</strong>「把今天和昨天的曲線抓到示波器上：TVS 鉗位曲線量測＋放電事件捕捉」。帶本課與 Day 47 的帳本進實驗室：①用訊號產生器高壓脈衝＋分壓器／高壓探棒描一顆 TVS 的 V–I「準 snapback」曲線（儀器帶寬與探棒接地線如何歪曲波形——Day 33 的 0.35／t_r 法則實戰）；②用 ESD 槍（若有）或快速充電-放電模組重現放電事件，供電串感測電阻抓「latch-up 電流台階」的指紋；③離子風扇開與不開、屏蔽袋封與不封的 CVM 對照（公司若有靜電壓表）。<strong>記得把課程指引列印或存進手機，週五帶到公司。</strong>週六 Day 50 照常上新課；週日＝第 10 週大結算 20 題測驗（ESD 全週＋PI/EMI 回鍋）。另外提醒：第 12 週（約 Day 57）進入投履歷視窗，今天的兩道英文面試題請開口唸出來，不只是用看的。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 50｜ESD 單頁決策書——七站決策動線：從風險掃描到產線 EPA（週 10 收官）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 10 週・第 50 天（週五新觀念課・週 10 收官）</div>
+  <h1>Day 50：ESD 單頁決策書——把一週的模型帳、選型帳、路徑帳、判準帳、產線帳，壓成一條「接到案子照走」的七站決策動線（週 10 收官）</h1>
+  <div class="meta">2026-09-11（五）｜預估學習時間：90 分鐘（純閱讀＋整理產出，不需儀器——本週實作日已提前至週四執行，今天同時是 Day 49 實驗的補做窗口，兩不衝突）｜難度：★★★☆☆（今天不學新物理——學的是「工程師的出口」：把 Day 46～49 四天提貨清單收斂成一頁帶得走的決策書。第 41 週的 PDN 決策書是同一種鍛鍊：知識只有被壓成「動線」，才算真的屬於你。Perfect Timing II Ch.11 的量測鏈帳今天收進決策書的「驗證箱」，Ch.16 的紀律口號「先量參考、再談違例」作為全書收官致敬）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>今天不新增任何物理觀念，只做一件事：<strong>把一週所學煉成「決策動線」</strong>。寫完今天這頁，你要能面對任何一顆新案子（新 NB 平台、新鏡頭模組、新 USB 子板），從容地從第一格填到最後一格，填不出來的欄位就是你要補的功課／量測／委託測試。具體驗收標準——合上課檔，你能憑記憶講出：</p>
+  <ol>
+    <li><strong>七站動線：</strong>①風險掃描（輸入欄五問）→ ②模型帳（誰在打我）→ ③器件選型（三連問＋兩段式）→ ④路徑與佈局（nH 帳＋主幹紀律）→ ⑤驗收與判準（點位/等級/A～D＋責任矩陣）→ ⑥診斷與辦案（五步法＋時間指紋＋量測紀律箱）→ ⑦產線 EPA 與合規地圖（S20.20 三防線＋標準族譜）。每站一句話、每個數字有出處。</li>
+    <li><strong>站與站之間的「依賴方向」：</strong>為什麼①不定②無從談起、③不算完④就不能發 layout、⑥的指紋表必須在開案前就存在（而不是出事後才上網爬文）——動線不是清單，是有方向感的依賴順序。</li>
+    <li><strong>三個「跨站公式」：</strong>V<sub>C</sub>＝V<sub>BR(max)</sub>＋I<sub>PP</sub>×R<sub>dyn</sub>（選型）、V<sub>節點</sub>＝V<sub>clamp</sub>＋L<sub>迴路</sub>×di/dt（路徑）、t<sub>DISPLAY</sub>＝√(Σt²)（驗證）——三個式子分別住在三站，但任何一站偷工，最後都匯到第六站爆沖。</li>
+    <li><strong>數據回填紀律：</strong>決策書上每個數字要嘛標 datasheet、要嘛標「實測（附圖檔名）」、要嘛標「模擬（附工具與假設）」、要嘛標「約/量級」——<strong>沒有出處的數字視為未填</strong>。今天的壓軸練習：把 Day 49 你自己量到的四個數字，回填到決策書的對應欄位。</li>
+  </ol>
+  <p>今天的定位：Day 46 是武器學、Day 47 是戰役學、Day 48 是醫學＋公共衛生、Day 49 是鑑識實戰——今天是「執照考」：把全部東西變成你可以對面試官、對客戶、對主管拍胸脯的工作產出物。一頁決策書，就是資深與初級的分水嶺。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：急救室牆上那張流程圖</span>
+  <p>為什麼急診室要把「中風評估流程」「休克的六個階段」印成一張紙貼在牆上？不是醫生不懂生理學——是因為<strong>出事的時候，沒人来得及翻教科書</strong>。決策的品質取決於兩件事：知識的品質，以及「知識在需要的瞬間是否在手上」。你花了一週把 ESD 學通了，但三個月後某天下班前，客戶突然說「±8 kV 一打，預覽視窗就凍住」——你腦中那一週的內容會不會還在？會，但會是糊的：V<sub>C</sub> 的 0.7 倍裕度？還是 0.8 倍？判準 C 到底要不要改？via 陣列幾顆是甜區？<strong>一張決策書的價值，就是讓你永遠不必在壓力下靠記憶</strong>。</p>
+  <p>決策書和「摘要」的差別在哪？摘要是平面的——十個重點排排站；決策書是<strong>有方向的</strong>——像急診分診台：從「病人從哪進來」（風險掃描）一路推到「出院稽核」（產線 EPA），每一站的輸出是下一站的輸入，走錯一站後面全部作廢。所以今天整份文件的骨架不是「一週重點回顧」，而是<strong>七個站、六個交接</strong>：你填的每一格，都是在替下一站的自己（或同事）省下三天的冤枉路。</p>
+  <p>第二個比喻：這頁紙同時是你的<strong>法庭證物袋清單</strong>。Day 49 妳在實驗室學會「儀器和板子的帳要分開算」；決策書把它變成制度——驗證箱裡那張量測鏈 RSS 帳、單次觸發五紀律、五種壞法的時間指紋表，就是未來某天在實驗室替你的設計作證、或在客訴會議上擋子彈的正式證物。<strong>先有動線，再有證據；先有判準，再有判決</strong>——這就是「做過的人」和「讀過的人」的區別。</p>
+  <p>所有表格都可以先掃結論，今天只要先記住一句話：<strong>「七站：掃進來（風險）、認兇手（模型）、選武器（TVS）、修水路（路徑）、定及格（判準）、備辦案（診斷）、守產線（EPA）」</strong>。接下來的每一節，是把這七個動詞展開成你明天就能用在案子上的一頁紙。</p>
+</div>
+
+<h2>0. 前情提要——四天提貨清單，今天全部入庫</h2>
+<ul>
+  <li><strong>Day 46（武器學）：</strong>ESD＝充好動的電容＋一根電阻，殺傷力＝功率密度；三模型帳（HBM 100 pF/1.5 kΩ 慢刀約 1 A 級、CDM 數 pF/幾十 Ω 的針 sub-ns 安培級、IEC 61000-4-2 150 pF/330 Ω 的標準槍：接觸 8 kV≈30 A/1 ns、約 4.8 mJ）；TVS 三連問（V<sub>RWM</sub>≥V<sub>op</sub> → V<sub>C</sub>＜耐受×0.7 → I<sub>PP</sub> 吞量）；三句話「鉗得低、吞得下、看得見」；1 nH×30 A/ns＝30 V 的暫態匯率。</li>
+  <li><strong>Day 47（戰役學）：</strong>TVS 接地四紀律（焊盤直連、via 陣列 3～4 顆甜區——PT2 Ch.6 邊際遞減換境成立、寬短銅皮、直抵螺柱不共用）；兩段式＝入口大顆＋牆＋本地低鉅，I＝(V<sub>C1</sub>−V<sub>C2</sub>)／R；多板三問法與轉軸 strap「nH 低一個數量級」；責任矩陣（器件級歸 IC 廠、板級歸你、系統級歸產品）；辦案五步。</li>
+  <li><strong>Day 48（醫學＋公共衛生）：</strong>latch-up 的 PNPN/SCR 寄生結構與 snapback（觸發＞維持＝多米諾）；板端三支柱「餵不起來、餓得下去（R＞(V<sub>supply</sub>−V<sub>H</sub>)／I<sub>H</sub>）、順序不亂」；產線摩擦起電與 CDM；ANSI/ESD S20.20 三防線與包裝四張帳。</li>
+  <li><strong>Day 49（鑑識實戰）：</strong>限流電源描 TVS 準靜態曲線（三段記帳）；量測鏈 RSS 與「1 ns 被 3 吋地線看成 3.3 ns」（PT2 Ch.11）；單次觸發五紀律；閂鎖台階＝三張身分證＋五種壞法時間指紋表；CVM 查 EPA（衰減＋平衡）；系統鉗位＝V<sub>clamp</sub>＋L×di/dt 親手上色。</li>
+  <li><strong>今天的任務：</strong>以上每課結尾的「提貨清單」，全部收進同一頁——但<strong>不是堆在一起，是排成動線</strong>。組織原則是「決策依賴順序」，不是「學習日期順序」。</li>
+</ul>
+
+<h2>1. 全貌：七站決策動線（先看地圖，再進車站）</h2>
+
+<svg viewBox="0 0 940 430" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="470" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：ESD 單頁決策書——七站動線（箭頭＝依賴方向，只有後站不能救前站）</text>
+
+  <!-- Row 1: stations 1-4 -->
+  <rect x="20" y="60" width="200" height="86" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="120" y="82" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e40af">① 風險掃描（輸入欄）</text>
+  <text x="120" y="100" text-anchor="middle" font-size="10.5" fill="#374151">外露導體與縫隙清單</text>
+  <text x="120" y="115" text-anchor="middle" font-size="10.5" fill="#374151">各埠威脅＝哪個模型？</text>
+  <text x="120" y="130" text-anchor="middle" font-size="10.5" fill="#374151">受害者能承受什麼？</text>
+
+  <line x1="220" y1="103" x2="252" y2="103" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <rect x="255" y="60" width="200" height="86" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="355" y="82" text-anchor="middle" font-size="13" font-weight="bold" fill="#854d0e">② 模型帳</text>
+  <text x="355" y="100" text-anchor="middle" font-size="10.5" fill="#374151">HBM／CDM／IEC 三張帳</text>
+  <text x="355" y="115" text-anchor="middle" font-size="10.5" fill="#374151">「波形宇宙」不可互比</text>
+  <text x="355" y="130" text-anchor="middle" font-size="10.5" fill="#374151">產線 CDM 另開一欄</text>
+
+  <line x1="455" y1="103" x2="487" y2="103" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <rect x="490" y="60" width="200" height="86" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="590" y="82" text-anchor="middle" font-size="13" font-weight="bold" fill="#166534">③ 器件選型</text>
+  <text x="590" y="100" text-anchor="middle" font-size="10.5" fill="#374151">三連問：V_RWM→V_C→I_PP</text>
+  <text x="590" y="115" text-anchor="middle" font-size="10.5" fill="#374151">兩段式＋牆的帳</text>
+  <text x="590" y="130" text-anchor="middle" font-size="10.5" fill="#374151">高速線：低容・對稱・stub</text>
+
+  <line x1="690" y1="103" x2="722" y2="103" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <rect x="725" y="60" width="200" height="86" rx="10" fill="#fdf2f8" stroke="#db2777" stroke-width="2"/>
+  <text x="825" y="82" text-anchor="middle" font-size="13" font-weight="bold" fill="#9d174d">④ 路徑與佈局</text>
+  <text x="825" y="100" text-anchor="middle" font-size="10.5" fill="#374151">nH 帳：1 nH×di/dt＝V</text>
+  <text x="825" y="115" text-anchor="middle" font-size="10.5" fill="#374151">接地四紀律・主幹三紀律</text>
+  <text x="825" y="130" text-anchor="middle" font-size="10.5" fill="#374151">strap＝nH 低一個數量級</text>
+
+  <!-- wrap arrow row1->row2 -->
+  <path d="M 825 146 L 825 176 L 120 176 L 120 202" fill="none" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <!-- Row 2: stations 5-7 -->
+  <rect x="20" y="205" width="200" height="86" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="120" y="227" text-anchor="middle" font-size="13" font-weight="bold" fill="#3730a3">⑤ 驗收與判準</text>
+  <text x="120" y="245" text-anchor="middle" font-size="10.5" fill="#374151">IEC 點位表＋等級＋極性</text>
+  <text x="120" y="260" text-anchor="middle" font-size="10.5" fill="#374151">A／B／C／D 定義「過」</text>
+  <text x="120" y="275" text-anchor="middle" font-size="10.5" fill="#374151">責任矩陣簽名歸屬</text>
+
+  <line x1="220" y1="248" x2="252" y2="248" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <rect x="255" y="205" width="200" height="86" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="355" y="227" text-anchor="middle" font-size="13" font-weight="bold" fill="#9a3412">⑥ 診斷與辦案</text>
+  <text x="355" y="245" text-anchor="middle" font-size="10.5" fill="#374151">五步法＋時間指紋表</text>
+  <text x="355" y="260" text-anchor="middle" font-size="10.5" fill="#374151">量測紀律箱（Ch.11 RSS）</text>
+  <text x="355" y="275" text-anchor="middle" font-size="10.5" fill="#374151">「被打的≠倒下的」</text>
+
+  <line x1="455" y1="248" x2="487" y2="248" stroke="#64748b" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <rect x="490" y="205" width="200" height="86" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="590" y="227" text-anchor="middle" font-size="13" font-weight="bold" fill="#115e59">⑦ 產線 EPA 合規</text>
+  <text x="590" y="245" text-anchor="middle" font-size="10.5" fill="#374151">S20.20 三防線＋包裝帳</text>
+  <text x="590" y="260" text-anchor="middle" font-size="10.5" fill="#374151">標準族譜（JS/STM/IEC）</text>
+  <text x="590" y="275" text-anchor="middle" font-size="10.5" fill="#374151">來料稽核＋訓練紀錄</text>
+
+  <!-- feedback arrow 6 -> 3/4 -->
+  <path d="M 455 275 L 700 330 L 640 340" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#arrR)"/>
+  <text x="620" y="322" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="bold">辦案產出回填③④：對策階梯＝新的選型與佈局變更</text>
+
+  <!-- data backfill arrow -->
+  <rect x="725" y="205" width="200" height="86" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="825" y="227" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">數據回填區（活的）</text>
+  <text x="825" y="245" text-anchor="middle" font-size="10.5" fill="#475569">Day 49 四格報告數字</text>
+  <text x="825" y="260" text-anchor="middle" font-size="10.5" fill="#475569">Rdyn 實測・鉗位差值</text>
+  <text x="825" y="275" text-anchor="middle" font-size="10.5" fill="#475569">地線帳・台階指紋照</text>
+  <path d="M 825 291 L 825 310 L 460 355" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrG)"/>
+
+  <!-- bottom caption -->
+  <text x="470" y="398" text-anchor="middle" font-size="11.5" fill="#475569">使用紀律：①→⑦ 只能順走；任何一欄沒出處＝未填；⑥的指紋表與量測箱要在開案（不是出事）之前就存在。</text>
+
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#64748b"/></marker>
+    <marker id="arrR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+    <marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#475569"/></marker>
+  </defs>
+</svg>
+
+<p><strong>動線的三條使用紀律（跟表格本體一樣重要）：</strong></p>
+<ol>
+  <li><strong>只能順走，不能跳站：</strong>風險掃描沒做完就挑 TVS＝拿別人案子的料號表交差；選型沒結帳就發 layout，④站的 nH 帳全部由佈線工程師「憑感覺」替你簽名——這是最常見的敗法。</li>
+  <li><strong>後站救不了前站：</strong>⑤站測不過，想用⑥站辦案技巧「解釋過去」，只會把專案變成週期性的偵查劇。辦案五步的出口（紅箭頭）是<strong>回填到③④改設計</strong>，不是改判準。</li>
+  <li><strong>決策書是活的：</strong>右下的「數據回填區」（灰虛線框）代表這份文件必須被你的實測數據染色——Day 49 拍的四格報告今天就要填進去（§6）。一張永遠不回填的決策書，三個月後會退化成網路上抓的 check-list。</li>
+</ol>
+
+<h2>2. 第一站＋第二站：輸入欄五問與模型帳（「誰、從哪、用什麼打我」）</h2>
+
+<h3>2.1 白話版：先把門窗清單和歹徒名冊寫下來</h3>
+<p>防盜之前得先有兩份名單：<strong>門窗清單</strong>（小偷可能從哪進：大門口、窗、通風口、給貓留下的洞）和<strong>歹徒名冊</strong>（每種門對應哪種入侵手法：撬棍、技術開鎖、還是直接撞）。電路板一模一樣：外露的金手指、按鈕縫隙、充電孔、天線尾、鏡頭 FPC 邊緣——每一個都是「可能被打的點」；而不同點位挨的「打法和力道」完全不同（人摸？插纜？產線機械手臂碰？），對應的模型與等級也不同。這一站的產出，就是一張<strong>點位×模型的對帳表</strong>——它決定後面六站的所有數字。</p>
+
+<h3>2.2 輸入欄五問（每問都必須有名字、有檔案）</h3>
+<table>
+<tr><th style="width:5%">#</th><th style="width:34%">問題</th><th style="width:33%">填什麼（產出物）</th><th style="width:28%">常見偷懶與下場</th></tr>
+<tr><td><strong>Q1</strong></td><td><strong>使用者摸得到什麼？</strong>——外露導體、可插拔接口、機殼縫隙（空氣放電靶）逐項列冊</td><td>點位清單（含極性、間距、到受害網路的距離）；對照 IEC 61000-4-2 接觸/空氣點火規則</td><td>只列「USB、HDMI」漏掉「機殼縫隙→內部 FPC 3 mm」——空氣放電教做人</td></tr>
+<tr><td><strong>Q2</strong></td><td><strong>每個點位會挨哪種模型、多大等級？</strong>——系統級（IEC）、組裝級（CDM/產線）、器件級（HBM）分流</td><td>點位→模型→等級對照（例：USB 8 kV 接觸；機殼縫隙 4 kV 空氣；產線 CDM 依器件 JS-002 分檔）</td><td>拿「IC 過 2 kV HBM」回應「成品要過 IEC 8 kV」——跨波形宇宙送分題</td></tr>
+<tr><td><strong>Q3</strong></td><td><strong>受害者能承受什麼？</strong>——受害節點的脈衝耐受（datasheet 絕對最大值、時序窗、IC 內建保護的 test condition）</td><td>耐受表＋「波形宇宙」備註（surge vs HBM vs DC 各標來源）；×0.7 裕度寫進欄位</td><td>把 DC 絕對最大值當暫態耐受——TVS 鉗位疊上去瞬間就陣亡</td></tr>
+<tr><td><strong>Q4</strong></td><td><strong>現在的地路徑多少 nH？</strong>——從每個點位到「乾淨大地」的現況路徑（走線長度、via、螺柱、跨板搭接）</td><td>nH 估帳（0.3～1 nH/cm 走線、0.3～1 nH/via 量級，標「約」）；這是④站的輸入</td><td>「有接地啊」——用導通表看 ESD 路徑，等於用尺量體重</td></tr>
+<tr><td><strong>Q5</strong></td><td><strong>有沒有路繞經別人的排線？</strong>——放電主幹若借道訊號排線/轉軸 strap，誰付帳？</td><td>多板三問法結果圖（從哪進→走什麼主幹→繞沒繞別人的排線）；strap 的 nH 目標值</td><td>轉軸只驗「導通」不驗 nH——每次開合都在幫 FPC 上的 CSI-2 加雞尾酒</td></tr>
+</table>
+
+<h3>2.3 模型帳（第二站：三張帳＋一張產線帳，並排貼在決策書頭部）</h3>
+<table>
+<tr><th style="width:13%">模型</th><th style="width:20%">等效電路／波形</th><th style="width:20%">子彈特征</th><th style="width:22%">害怕對象</th><th style="width:25%">決策書欄位（你該填什麼）</th></tr>
+<tr><td><strong>HBM</strong>（JS-001）</td><td>100 pF＋1 500 Ω；τ＝150 ns</td><td>I<sub>pk</sub>＝V/R（2 kV→約 1.33 A），慢刀</td><td>組裝人手碰引脚（受控後仍有殘餘）；IC 出貨規格</td><td>選料表填「器件級門檻」（如 ≥2 kV）；<strong>禁止與 V<sub>C</sub> 直接排大小</strong></td></tr>
+<tr><td><strong>CDM</strong>（JS-002）</td><td>晶片自帶數 pF＋幾十 Ω；上升 sub-ns</td><td>峰值數十 A 量級、能量小但極集中</td><td>先進製程閘氧針孔；<strong>產線輸送帶/吸嘴/振盤</strong></td><td>產線帳（⑦站）＋高速類比節點（sensor pixel 端）單獨立欄</td></tr>
+<tr><td><strong>IEC 61000-4-2</strong></td><td>150 pF＋330 Ω 標準槍；接觸上升約 1 ns</td><td>約 3.75 A/kV（8 kV→約 30 A）；8 kV≈4.8 mJ；空氣版另是超寬頻輻射源</td><td><strong>成品驗收</strong>：你的機殼、接地、屏蔽設計</td><td>⑤站點位表×等級×判準；TVS 選型的 I<sub>PP</sub> 依據</td></tr>
+<tr><td><strong>產線摩擦起電</strong>（非標準模型）</td><td>絕緣件（膠膜、鏡筒、吸塑盒）＋動作（撕、吹、鎖）</td><td>sub-ns 針＋無法接地放電的荷電體</td><td>鏡頭模組（滿身絕緣件）；離子器管不到的角落</td><td>⑦站 EPA 稽核單：製程清單逐行問「誰在摩擦、中和在哪」</td></tr>
+</table>
+
+<div class="card pitfall">
+  <span class="label">踩雷區——動線第一、二站的三大死法</span>
+  <ul>
+    <li><strong>拿 IC 的 HBM class 當系統防盾：</strong>「這顆 sensor 有 ±2 kV HBM 保護，不用外加 TVS」——器件級的乾淨實驗室耐量，撐不住機殼縫隙空氣放電的超寬頻場攻擊，更撐不住板級路徑 nH 炸出的附加電壓。免用外部保護的前提是三條件全立（Day 47 責任矩陣），缺一条都要補器件或補結構。</li>
+    <li><strong>點位清單只列連接器：</strong>IEC 的點火規則是「操作者能碰到的導體與縫隙」——按鍵、麥克孔、鏡頭環縫、天線罩接縫都算。鏡頭模組的「金屬裝飾環→鏡筒內 FPC」路徑，是 NB 專案 IEC 失敗熱點榜的常客（業界經驗，非規範數據）。</li>
+    <li><strong>把 Q3 的耐受填成 DC 絕對最大值：</strong>絕對最大值是「長時間碰都不能碰」的 DC 帳；TVS 帳要的是「ns 級脈衝疊加下」的耐受。查不到脈衝耐受時，用 datasheet 的 surge/abs-max 曲線（若有）或請 IC 廠給 transient 曲線——查不到就標「未確認」並把裕度收緊（0.7 倍是地板，不是天花板）。</li>
+  </ul>
+</div>
+
+<h2>3. 第三站：器件選型——三連問、兩段式、與「牆」的帳</h2>
+
+<div class="formula">
+<strong>選型三連問（順序不可顛倒，Day 46）：</strong><br>
+① V<sub>RWM</sub> ≥ V<sub>op(max)</sub>（日常不打擾——漏電與線路正常）<br>
+② V<sub>C</sub> ＝ V<sub>BR(max)</sub> ＋ I<sub>PP</sub>×R<sub>dyn</sub> ＜ 受害節點脈衝耐受 × 0.7（救命有效性）<br>
+③ I<sub>PP</sub> ≥ 事件到達電流 × 系統衰減後（吞量——TVS 自己的 survivability）<br>
+<strong>兩段式分壓（Day 47）：</strong>過牆電流 I<sub>牆</sub> ＝ (V<sub>C1入口</sub> − V<sub>C2本地</sub>) ／ R<sub>牆</sub>；牆的瞬時功率 P<sub>牆</sub>＝(V<sub>C1</sub>−V<sub>C2</sub>)×I<sub>牆</sub>，看<strong>脈衝耐量曲線</strong>（ns 級遠高於穩態額定， datasheet 為準）。<br>
+<em>白話翻譯：①防洪閘設定值別低到平常就漏水；②洪水來時村莊看到的最高水位要低於堤防的七成；③閘門自己要撐得住洪峰。兩段式就是「外門粗、內門精」，中間那堵牆把壓差吃掉——吃多少，用歐姆定律算，用脈衝耐量曲線驗。</em>
+</div>
+
+<h3>3.1 一站到底的選型決策樹（填表前先在腦中走一遍）</h3>
+<ol>
+  <li><strong>訊號速率判別：</strong>DC/低速（按鍵、電源埠）→ 容值不拘、選吞量大的；≥百 MHz 級（USB 差分、MIPI CSI-2、DP aux）→ 低容（線路 load 預算：差分對約 0.5～1 pF 等級起跳看規範，依各高速協定與通道 budget 查證）＋對稱度＋<strong>TVS 引線/封裝 stub 最小化</strong>（DFN/array 優先）。這一步決定料號家族。</li>
+  <li><strong>電壓帳：</strong>V<sub>RWM</sub> 按 V<sub>op(max)</sub>（含電源上偏與ripple）往上取第一檔；V<sub>C</sub> 帳用②式收 0.7。查不到受害者脈衝耐受→回②站 Q3 補課，不準猜。</li>
+  <li><strong>能量帳：</strong>I<sub>PP</sub> 依事件到達電流（IEC 等級×衰減估計）比 survivability 曲線；單顆吞不下或體積不允許→<strong>兩段式</strong>（入口大顆＋牆＋本地小顆）。牆的材料：電阻（低容、有損、看脈衝曲線）／磁珠（<strong>看飽和電流欄</strong>——大脈衝下磁珠飽和＝牆變空氣）／刻意走線（最便宜但吃 board space、輻射要複核）。</li>
+  <li><strong>牆值「相對論」：</strong>牆的價值取決於它所在線路的源阻抗/端接阻抗——上拉慢速訊號對 47 Ω 無感；50 Ω 端接傳輸線上 47 Ω 是巨石（直接殺訊號完整性）。同一顆 R，兩條線上兩種人生。</li>
+  <li><strong>latch-up 連動檢查（⑥站預告）：</strong>鉗位電壓必須低於受害 IC 的 latch-up 觸發電壓（JESD78 測試條件對照）；電源埠保護要連同 sequencing 一併看（順序不亂）。選型不查這一條＝把 ESD 問題升級成閂鎖問題。</li>
+</ol>
+
+<h3>3.2 站內交接物（交給④站的東西）</h3>
+<p>料號＋V<sub>C</sub>@I<sub>PP</sub>（含 0.7 裕度判定）＋封裝（引線 nH 預算起點）＋每條線的「一段式 or 兩段式」決定＋牆的元件值與脈衝耐量證據。——④站的 nH 帳，從你選的封裝開始算。</p>
+
+<h2>4. 第四站：路徑與佈局——nH 帳本與主幹三紀律</h2>
+
+<div class="formula">
+<strong>暫態匯率（Day 46/49）：</strong>V<sub>節點</sub> ＝ V<sub>clamp</sub> ＋ L<sub>迴路</sub> × di/dt；IEC 8 kV 接觸 di/dt≈30 A/ns（量級）→ <strong>每 1 nH＝約 30 V</strong>。<br>
+常用單價（量級、佈局前估帳用）：via 約 0.3～1 nH；走線約 0.3～1 nH/cm；TVS 引線約 0.3～0.7 nH；地孔迴路約 0.3～1 nH。<br>
+<em>白話翻譯：水錘效應——再短的水管，洪水剎車時都能炸出驚天水鎚。ESD 設計不是「有接地」就結案，是「整條路的 nH 加起来、乘上剎車率，還低於堤防裕度」才結案。</em>
+</div>
+
+<h3>4.1 TVS 接地四紀律（零件是你的，路徑才是你的——Day 47）</h3>
+<ol>
+  <li><strong>焊盤直連：</strong>訊號先過 TVS 再進 IC——「先撞閘門、再進村」。TVS 掛在分岔尾上＝旁觀者。</li>
+  <li><strong>via 陣列 3～4 顆甜區：</strong>單 via 約 0.5～1 nH，並聯遞減、超過甜區後邊際效應迅速縮小（PT2 Ch.6「超過兩顆邊際遞減」的教訓換到暫態語境依然成立），瓶頸隨後搬到封裝引線（約 0.5～1 nH）——所以要連封裝一起選，不無腦堆 via。</li>
+  <li><strong>寬短銅皮：</strong>2 mm 寬對 0.2 mm 寬差約一個 nH 量級——ESD 路徑用「河」不用「溝」。</li>
+  <li><strong>直抵螺柱/屏蔽壓接點，不共用、不穿模擬區：</strong>借道別人的地＝共阻抗耦合的暫態版；TVS 入地流經模擬地＝幫整板共模泵（i＝C·dV/dt 位移電流帳）。</li>
+</ol>
+
+<h3>4.2 系統主幹三紀律（從 Day 46 逃生路線圖＋Day 47 三問法濃縮）</h3>
+<ol>
+  <li><strong>由外而內、順序不可逆：</strong>結構縫隙管控→屏蔽 360° 搭接→入口鉗位→就近入地。能量要走的路線，每一段都比「入侵路徑」更低阻抗——保護＝替能量規劃路線，不是消滅能量。</li>
+  <li><strong>主幹不借別人的排線：</strong>機殼→螺柱→入口鉗位是雨水主幹道；板對板搭接若不存在，放電會自己找路——通常找到你最不想它去的地方（鏡頭 FPC、鍵盤排線）。三問法結果要畫在機構圖上，不是只畫在電路圖上。</li>
+  <li><strong>strap 的規格是「nH 低一個數量級」不是「導通」：</strong>轉軸/鉸鏈區的金屬帶，被鉗的電壓＝它自己的 nH×總 di/dt（例 2 nH×3 A/ns≈6 V，對比 FPC 無旁路時百 V 量級）；導通表驗不出這個差別，⑥站的電流靶可以。</li>
+</ol>
+
+<div class="card pitfall">
+  <span class="label">踩雷區——④站的兩個經典「以為」</span>
+  <ul>
+    <li><strong>「TVS 離連接器很近就對了」：</strong>近，但訊號先繞進 IC 再折回 TVS（掛尾巴）＝白裝；或者 TVS 的接地 via 打了，但 via 落點離入口鉗位點半公分、中間穿過一層 split ground——路徑帳要從「槍口」一路結算到「大地」，不是結算到「最近的銅」。</li>
+    <li><strong>「數位地很髒，TVS 打數位地；機殼地很乾淨，TVS 打機殼地——所以挑機殼地」：</strong>TVS 該打的是「與被保護電路共用的、最低阻抗的參考」，且單點回連的拓撲要在①站就想好。選錯地＝保護電流從別人的_signals 回流——Day 46「TVS 接錯地＝共模泵」的佈局版。</li>
+  </ul>
+</div>
+
+<h2>5. 第五～七站：判準、辦案、產線（「定及格、備法庭、守後方」）</h2>
+
+<h3>5.1 第五站：驗收與判準——開打之前先講好什麼叫「過」</h3>
+<table>
+<tr><th style="width:16%">判準（IEC 61000-4-2）</th><th style="width:36%">定義</th><th style="width:48%">決策書怎麼用</th></tr>
+<tr><td><strong>A</strong></td><td>測試中與測試後全程正常</td><td>消費電子產品規格常見目標值（各客戶不同，以專案規格書為準）</td></tr>
+<tr><td><strong>B</strong></td><td>暫時失能/性能劣化，<strong>自行</strong>恢復</td><td>可協商區——但「自行恢復」的機制要講得清（重連？重訓練？），否則藏著 SEU/間歇失效</td></tr>
+<tr><td><strong>C</strong></td><td>需<strong>人工介入</strong>（重開機/重設）恢復</td><td><strong>工程問題不是「測試結果」</strong>：判準 C 頭號嫌疑＝latch-up；其次韌體掛死、匯流排 lock。必開案辦</td></tr>
+<tr><td><strong>D</strong></td><td>不可恢復損壞</td><td>硬件事故——進失效分析流程（換件、X-ray、熱像——週 17 的主菜）</td></tr>
+</table>
+<p><strong>責任矩陣（開案簽名欄）：</strong>器件級（HBM/CDM，腳到晶圓）歸 IC 廠——驗的是「test condition 與你的應用是否吻合」；板級（機殼內、腳以外：路徑 nH、入口鉗位、主幹道）歸板級 EE（你）；系統級（機殼外到判準）歸產品。三格各有名字，出事才不會變成跨部門考古。</p>
+
+<h3>5.2 第六站：診斷與辦案——五步法＋時間指紋＋量測紀律箱</h3>
+<p><strong>辦案五步（Day 47，口訣：被打的不是倒下的）：</strong>固證（點位/極性/等級/狀態/判準/<strong>重現率</strong>）→定位受害者（log、暫存器 dump、關鍵軌與匯流排狀態）→分傳導/輻射（打點對比、三夾法夾排線、近場探棒）→歸因機制（地彈跳/泵軌/直打/SEU/latch-up）→對策階梯（結構→接地→器件）＋判準分布回歸。</p>
+
+<svg viewBox="0 0 940 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="470" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：症狀優先鑑別樹——從「客戶看到的」走到「指紋確認的」再走到「對策站」</text>
+
+  <!-- Symptom column -->
+  <text x="90" y="58" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">症狀（症狀欄）</text>
+  <rect x="16" y="70" width="150" height="60" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="91" y="92" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">S1 事件後電流跳高</text>
+  <text x="91" y="108" text-anchor="middle" font-size="10.5" fill="#374151">soft reset 不退</text>
+  <text x="91" y="122" text-anchor="middle" font-size="10.5" fill="#374151">power cycle 才退</text>
+
+  <rect x="16" y="142" width="150" height="60" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="91" y="164" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">S2 畫面凍/當機</text>
+  <text x="91" y="180" text-anchor="middle" font-size="10.5" fill="#374151">重開機恢復</text>
+  <text x="91" y="194" text-anchor="middle" font-size="10.5" fill="#374151">電流無台階</text>
+
+  <rect x="16" y="214" width="150" height="60" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="91" y="236" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">S3 間歇黑畫面</text>
+  <text x="91" y="252" text-anchor="middle" font-size="10.5" fill="#374151">低重現率</text>
+  <text x="91" y="266" text-anchor="middle" font-size="10.5" fill="#374151">與濕度/位置相關</text>
+
+  <rect x="16" y="286" width="150" height="60" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="91" y="308" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">S4 打畢即壞</text>
+  <text x="91" y="324" text-anchor="middle" font-size="10.5" fill="#374151">power cycle 不救</text>
+  <text x="91" y="338" text-anchor="middle" font-size="10.5" fill="#374151">漏電/功能缺</text>
+
+  <!-- Fingerprint column -->
+  <text x="400" y="58" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">時間指紋（Day 49 五種壞法）</text>
+  <rect x="290" y="76" width="220" height="48" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+  <text x="400" y="96" text-anchor="middle" font-size="10.8" fill="#991b1b" font-weight="bold">事件後垂直跳上＋完全平坦台階</text>
+  <text x="400" y="112" text-anchor="middle" font-size="10.5" fill="#7f1d1d">＋重打再現＝閂鎖完整身分證</text>
+
+  <rect x="290" y="148" width="220" height="48" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="400" y="168" text-anchor="middle" font-size="10.8" fill="#9a3412" font-weight="bold">讀數漂移亂跳、reset 可退</text>
+  <text x="400" y="184" text-anchor="middle" font-size="10.5" fill="#9a3412">→當機/SEU 類（韌體可見暫存器異態）</text>
+
+  <rect x="290" y="220" width="220" height="48" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+  <text x="400" y="240" text-anchor="middle" font-size="10.8" fill="#854d0e" font-weight="bold">100% 重現偏傳導；低重現率＋</text>
+  <text x="400" y="256" text-anchor="middle" font-size="10.5" fill="#854d0e">濕度/走位相關偏輻射/容性耦合</text>
+
+  <rect x="290" y="292" width="220" height="48" rx="8" fill="#fdf2f8" stroke="#db2777" stroke-width="2"/>
+  <text x="400" y="312" text-anchor="middle" font-size="10.8" fill="#9d174d" font-weight="bold">事件瞬間即台階/漏電，其後尾端漂移</text>
+  <text x="400" y="328" text-anchor="middle" font-size="10.5" fill="#9d174d">＝元件損傷（熱漂移加分）</text>
+
+  <!-- Mechanism & fix column -->
+  <text x="740" y="58" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">機制與對策階梯（回填③④站）</text>
+  <rect x="630" y="76" width="294" height="48" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="777" y="96" text-anchor="middle" font-size="10.8" fill="#166534" font-weight="bold">PNPN SCR 閂鎖：鉗位壓低於觸發電壓＋</text>
+  <text x="777" y="112" text-anchor="middle" font-size="10.5" fill="#166534">斷糧（eFuse/串阻）＋電源 sequencing</text>
+
+  <rect x="630" y="148" width="294" height="48" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="777" y="168" text-anchor="middle" font-size="10.8" fill="#166534" font-weight="bold">能量進入邏輯/時鐘域：查共模路徑與電源泵軌</text>
+  <text x="777" y="184" text-anchor="middle" font-size="10.5" fill="#166534">→入口鉗位＋屏蔽搭接＋（韌體端 watchdog 只算緩衝）</text>
+
+  <rect x="630" y="220" width="294" height="48" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="777" y="240" text-anchor="middle" font-size="10.8" fill="#166534" font-weight="bold">辐射/容性耦合：三夾法定位＋近場探棒掃路徑</text>
+  <text x="777" y="256" text-anchor="middle" font-size="10.5" fill="#166534">→結構（縫隙/搭接）→接地→器件（階梯順序不可反）</text>
+
+  <rect x="630" y="292" width="294" height="48" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="777" y="312" text-anchor="middle" font-size="10.8" fill="#166534" font-weight="bold">能量到達閘氧/接面：V_C 帳與 nH 帳誰超標？</text>
+  <text x="777" y="328" text-anchor="middle" font-size="10.5" fill="#166534">→升級兩段式/換低鉅 TVS/改路徑（再失效率結案）</text>
+
+  <!-- Arrows -->
+  <line x1="166" y1="100" x2="286" y2="100" stroke="#dc2626" stroke-width="2.5" marker-end="url(#a2r)"/>
+  <line x1="166" y1="172" x2="286" y2="172" stroke="#ea580c" stroke-width="2.5" marker-end="url(#a2o)"/>
+  <line x1="166" y1="244" x2="286" y2="244" stroke="#ca8a04" stroke-width="2.5" marker-end="url(#a2y)"/>
+  <line x1="166" y1="316" x2="286" y2="316" stroke="#db2777" stroke-width="2.5" marker-end="url(#a2p)"/>
+  <line x1="510" y1="100" x2="626" y2="100" stroke="#16a34a" stroke-width="2.5" marker-end="url(#a2g)"/>
+  <line x1="510" y1="172" x2="626" y2="172" stroke="#16a34a" stroke-width="2.5" marker-end="url(#a2g)"/>
+  <line x1="510" y1="244" x2="626" y2="244" stroke="#16a34a" stroke-width="2.5" marker-end="url(#a2g)"/>
+  <line x1="510" y1="316" x2="626" y2="316" stroke="#16a34a" stroke-width="2.5" marker-end="url(#a2g)"/>
+
+  <!-- bottom reminder box -->
+  <rect x="290" y="366" width="634" height="72" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="607" y="388" text-anchor="middle" font-size="11" font-weight="bold" fill="#334155">鑑別前置動作（量測紀律箱）：先量參考談違例（PT2 Ch.16）→ 單次觸發五紀律 →</text>
+  <text x="607" y="406" text-anchor="middle" font-size="11" fill="#475569">感測電阻 5 ns 短版看頭＋50～100 µs 長版看尾 → 探棒地線先上 RSS 帳（Ch.11）</text>
+  <text x="607" y="424" text-anchor="middle" font-size="11" fill="#475569">「只在一支探棒上出現的台階」＝地迴路假信：交換通道交叉驗證後才能上法庭</text>
+
+  <defs>
+    <marker id="a2r" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+    <marker id="a2o" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#ea580c"/></marker>
+    <marker id="a2y" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#ca8a04"/></marker>
+    <marker id="a2p" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#db2777"/></marker>
+    <marker id="a2g" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#16a34a"/></marker>
+  </defs>
+</svg>
+
+<h3>5.3 量測紀律箱（⑥站的工具箱——PT2 Ch.11／Ch.16 的最後收錄）</h3>
+<table>
+<tr><th style="width:26%">紀律</th><th style="width:44%">內容（出處）</th><th style="width:30%">決策書欄位</th></tr>
+<tr><td><strong>鏈帶寬 RSS 帳</strong></td><td>t<sub>DISPLAY</sub>＝√(t<sub>sig</sub>²＋t<sub>probe</sub>²＋t<sub>scope</sub>²＋t<sub>ground</sub>²)；各環節＝0.338/頻寬（PT2 Ch.11；<strong>2002 年常數 0.338，現代示波器規格多以 0.35～0.45 區間定義，需上修</strong>）；t<sub>ground</sub>＝3.4√(L<sub>[nH]</sub>×C<sub>[nF]</sub>)。書例：1 ns 訊號過 400 MHz 鏈→1.5 ns；3 吋地線（約 150 nH）＋5 pF→t<sub>ground</sub> 2.9 ns→總帳 3.3 ns，<strong>地線佔方差約八成</strong></td><td>每個 ns 級量測附「鏈帳」：儀器規格＋地線長度＋换算後可解析極限</td></tr>
+<tr><td><strong>單次觸發五紀律</strong></td><td>Single Sequence／觸發源＝事件自己（槍 sync/電流靶）／乾槍三次證環境／頭部長窗兩段曝光／Save before re-arm＋圖必標設定（Day 49）</td><td>事件檔案命名規則＋資料夾結構（法庭證據管理）</td></tr>
+<tr><td><strong>記憶深度帳</strong></td><td>真實取樣率＝記憶深度÷時間窗；Ch.16 帳法：20 GSa/s→50 ps/點→1 µs＝50K 點（Ch.11 取樣比 4:1 起——<strong>現代高速事件建議 8～16:1 以上，需上修</strong>）</td><td>擷取設定表（每張圖對應一列）</td></tr>
+<tr><td><strong>先量參考談違例</strong></td><td>PT2 Ch.16 精神：任何「過/不過」的判決之前，先用同設定量「已知正常的參考」——儀器的帳和板子的帳分開結（Ch.16 非 ESD 專章，借的是驗證紀律）</td><td>每組數據附參考波形對照（空白組）</td></tr>
+<tr><td><strong>指紋採集標準程序</strong></td><td>感測電阻（低感/厚膜＋短同軸）電壓模式看電流；5 ns/div 看頭、50～100 µs 看尾；t≈0 爆表處標「不可信」；power cycle 復歸＋重打再現＝完整身分證；命中率 0/N 也是合格報告</td><td>五種壞法時間指紋表（貼箱蓋，出事照表抓）</td></tr>
+</table>
+
+<h3>5.4 第七站：產線 EPA 三防線與合規地圖（守後方）</h3>
+<p><strong>三防線一句通：</strong>①導體等電位接地（腕帶 1 MΩ 限流、墊 10⁶～10⁹ Ω/□ 量級、共地點單一）②絕緣體移除/隔離/中和（離子器：驗衰減時間＋平衡電壓，CVM 量，平衡約 ±50 V 量級判髒髒——Day 49 實測法）③包裝分層（組裝段耗散容器、出貨段屏蔽袋——防外不防內；粉紅泡棉只防塵不防靜電）。鏡頭模組滿身絕緣件（膠膜、鏡筒）＝第二防線主戰場，離子器是唯一解的場合最多。</p>
+<p><strong>合規地圖（標準族譜，面試被問「ESD 標準有哪些」的組織圖答法）：</strong>計畫標準＝ANSI/ESD S20.20、IEC 61340-5-1（管「管理制度」：EPA 設立、訓練、稽核）；方法標準＝STM 家族（STM3.1 地板墊、STM11.11 離子器）、S4.1（腕帶系統）、S541、EIA-625（屏蔽袋）——管「怎麼量」；器件標準＝JS-001（HBM）、JS-002（CDM）、JESD78（latch-up）——管「元件耐多少」；系統標準＝IEC 61000-4-2——管「成品驗收」。四層各司其職，<strong>拿錯層的標準答錯層的問題</strong>（用 JS-001 回答成品驗收）是面試高頻送命點。</p>
+
+<h2>6. 數據回填區——把 Day 49 的四格報告搬進決策書（今天必做的整理動作）</h2>
+
+<table>
+<tr><th style="width:30%">決策書欄位</th><th style="width:36%">回填什麼（Day 49 產出）</th><th style="width:34%">判讀提醒</th></tr>
+<tr><td>③站：TVS 選型帳</td><td>你描的 V-I 曲線：洩漏區電流（µA 級？）、膝點電壓 vs datasheet V<sub>BR</sub>、導通段 Rdyn＝ΔV/ΔI 實算值（附曲線圖檔名）</td><td>準靜態 Rdyn 與 datasheet（8/20 µs 脈衝條件）不同宇宙——記錄差值方向，不是誰對誰錯；膝點差「幾伏以內」屬合理（約）</td></tr>
+<tr><td>④站：nH 帳</td><td>有 TVS vs 無 TVS 的受保護節點鉗位實測差；系統鉗位−datasheet V<sub>C</sub> 的差值÷當時 di/dt ≈ 你板上的迴路 nH</td><td>Day 49 練習曾反推 1.5 nH＝via＋短引線級——你的數字落在哪個「嫌疑銅」級距？</td></tr>
+<tr><td>⑥站：量測紀律箱</td><td>你的鏈帳：機器頻寬×探棒地線長度→RSS 後可解析極限；彈簧地 vs 長地線的實測邊沿差</td><td>任何「看到的 ns 級細節」先過鏈帳，過不了就降標為「事件存在性證據」</td></tr>
+<tr><td>⑥站：指紋表</td><td>你抓到的台階照片（或「0/N 未閂鎖」的合格報告）＋power cycle 復歸紀錄</td><td>照片檔名＝日期＋槍壓＋點位＋極性——三個月後你認不出自己的圖就是沒拍</td></tr>
+</table>
+
+<div class="card takeaway">
+  <span class="label">決策書使用紀律（與 Day 41 PDN 決策書同款）</span>
+  <ul>
+    <li><strong>①→⑦ 順走、只順走；</strong>後站救不了前站；辦案的出口是回填③④改設計，不是改判準。</li>
+    <li><strong>沒有出處的數字視為未填；</strong>出處只有三種：datasheet、實測（附圖）、模擬（附工具假設）——其餘一律標「約/量級」或留白補課。</li>
+    <li><strong>一頁為上限：</strong>填不下一頁代表你還沒抓到主次；抓主次本身就是決策能力的鍛鍊。面試被問「walk me through your ESD design」，就拿這頁講——這正是「做過的人」的答法。</li>
+  </ul>
+</div>
+
+<h2>7. 實務案例連結</h2>
+
+<h3>7.1 NB 主機板（你的本行）</h3>
+<ul>
+  <li><strong>把決策書用在你手上那塊板：</strong>今晚就對現有 NB 主機板走一遍七站：①把 IO 口的點位清單列出來（有幾個點你答得出 IEC 等級、幾個答不出？）→④挑一條你最熟的線（USB 或 DP）畫出「槍口到大地」的 nH 路徑→量測紀律箱先不用開，光列「答不出的欄位」就會給你一張待辦清單。這份清單就是下週履歷「ESD 改善專案」的題目來源。</li>
+  <li><strong>DC-in 與電池埠（電源埠保護）：</strong>系統級 ESD/突波走「入口鉗位＋主幹入地」的①站紀律，但電壓等級、吞量比訊號埠大一個量級——決策書在此分叉出「電源埠」副頁（TVS/gas discharge 選型屬另一張三連問）。識別分界：訊號埠的帳本質是「V<sub>C</sub> 帳」，電源埠多一層「安全安規帳」。</li>
+  <li><strong>「重開機就好」的客訴單：</strong>判準 C 辦案五步的固證欄，先問重現率——客訴端資料（多久一次、觸發動作）就是①站的風險掃描線索庫。100% 重現往傳導查、濕度相關往輻射查的口訣，來自 Day 47。</li>
+</ul>
+
+<h3>7.2 鏡頭模組（camera 語言——面試主場）</h3>
+<ul>
+  <li><strong>鏡頭模組全線決策書（Day 47 個案的濃縮版）：</strong>①點位：模組外形金屬環縫隙、FPC 外露金手指、AF/OC 製程站；②模型：組裝線 CDM 主導＋成品 IEC 縫隙空氣放電；③選型：CSI-2 四對 lane 用低容對稱 TVS array、CCI（I2C）可用較高容 economical 料、VCM 電源線兩段式；④路徑：FPC 地線寬度與 via 陣列、模組端入地單點回機殼；⑤判準：客戶成品規格書為準；⑥診斷：模組端黑畫面指紋採「長版看尾」——間歇性問題先查台階再查軟體；⑦產線：撕膠膜站與鎖螺絲站的離子器佈防＋吸塑盒表面電阻抽測。</li>
+  <li><strong>pixel 端的 CDM 敏感度：</strong>sensor 是先進製程＋高阻抗節點（pixel 模擬電路）的雙重受害者——JS-002 分級在模組選料階段就要看，不是模組出事後才補。決策書②站的「產線帳」欄位，鏡頭模組案要加粗。</li>
+  <li><strong>OIS 的 VCM 驅動與 ESD：</strong>驅動 IC 的電源腳 latch-up 敏感度（JESD78）＋音圈線圈的磁路（鐵芯）對近場耦合的拾取——③站選型時「鉗位低於觸發電壓」和⑦站產線磁化/金屬碎屑是同一條防線上的兩站。</li>
+</ul>
+
+<h2>8. 動手練習（先自己做再展開——今天的練習就是「填表」，答案就是「方法論」）</h2>
+
+<details>
+<summary><strong>練習 1（全流程填表）：</strong>新案：一款折疊 NB 的外接 camera 子板（板對板 connector＋25 cm FPC 經轉軸），客戶要求成品過 IEC 61000-4-2 接觸 ±4 kV／空氣 ±8 kV、判準 A。請為「FPC 外露金手指」這個點位填寫決策書①②站的輸出（各站至少三個具體條目），並指出本設計案最大的兩個結構風險。</summary>
+<p><strong>參考解：</strong></p>
+<p><strong>①站輸出：</strong>(a) 點位清單：金手指各 pin（含 GND pin 與訊號 pin 的差異化處理）、板對板 connector 縫隙、轉軸區（strap 現況：導通？nH？）；(b) 每 pin 對應網路與耐受（CSI-2 lane 對 sensor 端耐受、CCI 對 SoC GPIO 耐受——Q3 帳，查不到脈衝耐受標未確認）；(c) 現況地路徑 nH 估帳：金手指→模組地→FPC 地線（25 cm！即使寬銅皮也是 nH 級大帳）→轉軸→機殼（Q4/Q5 帳）。</p>
+<p><strong>②站輸出：</strong>(a) 接觸 ±4 kV：第一峰名目約 15 A、rise ~1 ns→di/dt≈10～20 A/ns，每 nH 加價 10～20 V；(b) 空氣 ±8 kV：額外當超寬頻輻射源看——縫隙旁 3 mm 內的 FPC 走線要按容性耦合掃描（傳導/輻射雙帳）；(c) 產線 CDM 另帳：子板與 FPC 在組裝線的摩擦/吸塑站分佈（判準 A 代表 SEU 類「自行恢復」也必須歸零，B/C 容錯空間為零——⑥站指紋表要在開案就建立）。</p>
+<p><strong>兩大結構風險：</strong>(1) <strong>25 cm FPC 地線＋轉軸搭接不確定</strong>——主幹「借道別人排線」的經典型態：放電若無法就近入地，FPC 地彈跳＝CSI-2 共模事件（1 nH×di/dt 帳在此放大一個量級）；對策：轉軸 strap 規格化為「nH 低一個數量級」＋入口 TVS 就近穿牆入地，必要時金手指 GND pin 拓寬加密。(2) <strong>判準 A 對「暫時失能」零容忍</strong>——連 B 級自復事件都要辦（SEU/重訓練都算案底），⑤站就要和客戶釘死「恢復機制清單」與觀測手段（log/暫存器），否則⑥站辦案無證據。</p>
+</details>
+
+<details>
+<summary><strong>練習 2（鑑別診斷）：</strong>IEC ±8 kV 接觸打在 NB 邊框縫隙，四個測試日誌片段，各判一種機制並給下一步：(a)「預覽黑畫面，電流由 380 mA 跳上 690 mA 平坦不動，重開相機 app 無效，重新開機恢復，隔天同點同壓再打重現」；(b)「畫面閃一下花紋，2 秒後自動正常，重現率約 1/12，雨天測試日重現率明顯上升」；(c)「打完後觸摸板邊某 IC 外殼微溫，該路功能永久失效，電源電流較同型號良品高 8 mA」；(d)「觸發瞬間感測電阻電壓爆表，其後讀數回到基準，功能全程正常，但換一支探棒重測，爆表消失」。</summary>
+<p><strong>參考解：</strong></p>
+<p>(a) <strong>latch-up（判準 C 典型）</strong>——三張身分證齊全：垂直跳上＋完全平坦台階、soft 復原無效、power cycle 解、重打再現。下一步：查誰的電源軌（690−380＝310 mA 的台階歸屬）、JESD78 觸發條件對照你的鉗位電壓（大概率 V<sub>clamp</sub> 高於觸發電壓）、啟動板端三支柱（鉗位下修＋斷糧/eFuse 評估＋sequencing 檢查）。注意：這是設計問題，不是「測試通過與否」的問題。</p>
+<p>(b) <strong>輻射/容性耦合＋SEU/暫時失能（判準 B）</strong>——低重現率＋濕度相關＝偏輻射路徑的指紋（Day 47 口訣）。下一步：三夾法夾排線對比、近場探棒掃耦合路徑、查縫隙到顯示排線的 3 mm 法則；判準若是 A 級客戶，此案照辦——「自復」不自復是軟體運氣，不是設計。</p>
+<p>(c) <strong>元件損傷（判準 D）</strong>——上機即台階＋微溫（漏電熱）＋永久失能＝能量到達接面。下一步：失效件進 FA（X-ray/熱像定位——週 17 見）；設計端回查 V<sub>C</sub> 帳與 nH 帳哪個超標，升級兩段式或改路徑。</p>
+<p>(d) <strong>量測假信，不是事件</strong>——「只在一支探棒上出現」＝地迴路/探棒帳，Day 49 假台階排除法的教科書案例。下一步：交換通道交叉驗證、探棒地線縮短重測、該數據註記「不可信」不入證物袋。<strong>能辨假信，是辦案人員的執照考。</strong></p>
+</details>
+
+<details>
+<summary><strong>練習 3（量測鏈 RSS 帳）：</strong>你要抓一颗 TVS 的鉗位細節：信號真實上升 1 ns；設備：1 GHz 頻寬示波器＋1 GHz 被動探棒，但你只有 2 吋長的地線可用（約 100 nH，量級），探棒輸入電容約 5 pF。(1) 算 t<sub>DISPLAY</sub>（用 PT2 Ch.11 的 0.338 常數計算，再用現代 0.35～0.45 常數看敏感度）。(2) 地線佔方差的百分比？(3) 你能「解析」多快的邊沿細節？決策書該怎麼寫？</summary>
+<p><strong>參考解：</strong></p>
+<p>(1) t<sub>scope</sub>＝t<sub>probe</sub>＝0.338/1000 MHz＝338 ps；t<sub>ground</sub>＝3.4√(100 nH×0.005 nF)＝3.4×0.707≈2.4 ns。t<sub>DISPLAY</sub>＝√(1²＋0.338²＋0.338²＋2.4²)＝√(1＋0.114＋0.114＋5.76)＝√6.99≈<strong>2.6 ns</strong>。現代常數 0.45：儀器項各 450 ps，總帳√(1＋0.20×2＋5.76)≈√7.16≈2.7 ns——常數差對總帳影響不到 4%，因為<strong>地線項完全主導</strong>。</p>
+<p>(2) 地線佔方差＝5.76/6.99≈<strong>82%</strong>——和 PT2 Ch.11 書例（150 nH 地線佔方差八成）同一結論：殺手永遠是地線，不是儀器規格。</p>
+<p>(3) 量測鏈本身的 2.6 ns 就比你要看線的 1 ns 細節慢 2.6 倍：波形「看得到事件存在與大小級」，但「上升沿細節、鉗位平台形状」<strong>不可解析</strong>。決策書寫法：此數據只作「存在性＋幅度級」證據，上升細節標「超出鏈極限，彈簧短地（μ clip）重測後補」——換一個接地彈簧片（地線 nH 降一個量級，t_ground 掉到 ~0.8 ns、總帳回到 ~1.4 ns 級）比升級示波器划算一個價格帶——Ch.11 的教訓，數據版。</p>
+</details>
+
+<details>
+<summary><strong>練習 4（兩段式帳＋回填練習）：</strong>某 3.3 V CCI 匯流排採兩段式：入口 TVS V<sub>C1</sub>≈30 V（@10 A）、本地小顆 V<sub>C2</sub>≈14 V，中間牆 R＝22 Ω。(1) 事件瞬間過牆電流與牆的瞬時功率？(2) 本地節點實際看到的是 14 V 嗎？還要加什麼帳？(3) 假設你 Day 49 實測「有/無 TVS 鉗位差＝24 V、di/dt 由電流靶估 12 A/ns」，反推迴路 nH 並指認嫌疑銅。</summary>
+<p><strong>參考解：</strong></p>
+<p>(1) I<sub>牆</sub>＝(30−14)/22≈<strong>0.73 A</strong>；P<sub>牆</sub>＝(30−14)×0.73≈<strong>11.7 W（瞬時，ns～百 ns 級）</strong>。這個級數對 ns 級脈衝通常可接受，但「通常」不算答案——決策書這裡必須貼牆電阻的<strong>脈衝耐量曲線截圖</strong>（datasheet 出處）；磁珠替代方案要先查飽和電流（10 A 脈衝下飽和＝牆變空氣）。</p>
+<p>(2) 不完全：本地節點實見≈V<sub>C2</sub>＋（牆到本地節點的迴路 nH）×本地殘留 di/dt——兩段之間的路徑照樣收 nH 過路費（Day 46 口訣：凡看到 ESD，先把 nH 乘上 di/dt）；另外本地 TVS 的鉗位帳要對受害腳耐受×0.7 收斂，且與 JESD78 觸發電壓比較（⑥站連動）。牆到 IC 之間不另加保護的條件：殘餘＜耐受×0.7，寫成算式入檔。</p>
+<p>(3) 附加電壓 24 V ÷ 12 A/ns＝<strong>2 nH</strong>——落在「一條 via（0.3～1 nH）＋幾 mm 銅＋TVS 引線（0.3～0.7 nH）＋地孔迴路（0.3～1 nH）」的組合級距（量級）。對策依 Day 49 排序：TVS 移到侵入點與走線之間＋就近穿牆入地＞加寬縮短接地＋多 via＞無引線封裝。這個 2 nH 就是決策書④站「實測」出處欄的合法數字——比你引用任何「網友說 via 是 0.x nH」都硬。</p>
+</details>
+
+<h2>9. 面試怎麼考（英文題＋參考答案——第 12 週在即，請開口作答）</h2>
+
+<div class="card pitfall" style="border-left-color:#0e7490">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Q1: "Walk me through how you would approach the ESD design for a new camera module on a laptop. Where do you start?"</strong>（預期考法：看你答的是「料號清單」還是「決策流程」——資深與初級的分水嶺）</p>
+  <p><em>Reference answer (90-second version):</em> "I'd start with a one-page decision sheet, not with component selection. Step one is risk scanning: list every conductor and aperture a user — or an assembly line — can hit, and map each point to the right model and level: IEC 61000-4-2 for the finished product, CDM for production handling, since the module is covered in insulating films that generate triboelectric charge. Step two: the clamp math — V_RWM above operating max, clamping voltage V_BR plus I_PP times dynamic resistance under 70 percent of the victim's pulse tolerance, and enough surge capability. For CSI-2 lanes I'd use low-capacitance symmetric TVS arrays; for the VCM power rail a two-stage design with an entry clamp, a wall, and a local low-clamp device. Step three is what I consider the real engineering: the path. Every nanohenry costs about 30 volts at 30 amps per nanosecond, so the ground path — via arrays, short wide copper, direct stitch to the chassis stud — gets the same review as the datasheet. And I'd pre-define the acceptance criteria and the failure fingerprint table before any test, because criterion C — 'a reboot fixes it' — is a design problem, usually a sign of latch-up, and I'd want current-waveform evidence to prove which mechanism it is."（動線七站全走到＋兩個暫態數字＋判準 C 觀點，一分半收工）</p>
+  <p><strong>Q2: "During a ±8 kV contact discharge test on the chassis seam, the camera preview freezes once and only recovers after a reboot. The tester wants to log it as 'passed after recovery'. How do you respond, and what do you do next?"</strong>（預期考法：判準觀＋辦案方法論＋溝通——這題答「同意 pass」直接出局）</p>
+  <p><em>Reference answer:</em> "First, I'd reframe it: a fault that requires human intervention is criterion C by IEC definition — and even if the product spec allows it, I treat C as an engineering issue, not a pass. A reboot-cures-it signature points to either latch-up or a firmware/bus lock, and those have different fixes. Then a five-step investigation: capture evidence — exact point, polarity, level, unit state, and reproducibility; identify the victim through logs and register dumps; separate conducted from radiative coupling — re-hitting with cables clamped, near-field probing; attribute a mechanism — ground bounce on the FPC, rail pumping, direct injection, SEU, or latch-up. The decisive measurement: put a low-inductance sense resistor in the module supply rail, single-sequence trigger on the event itself, short window for the head, long window for the tail — if the current steps up, stays perfectly flat, survives a soft reset and disappears only on a power cycle, and reproduces on a re-hit, that's the full latch-up identity card. The fix ladder goes structure and grounding first, then devices: bring the clamp voltage below the latch-up trigger voltage per JESD78, and give the rail a means to starve the SCR — current limiting or an eFuse. And I'd make sure the fingerprint data from our own lab, not a datasheet quote, closes the case — measure the reference first, then talk about violations."（「先重定義再辦案」＋五步法＋台階身分證＋對策階梯＋Ch.16 紀律收尾——這段講完面試官會點頭）</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <ul>
+    <li>"A one-page decision flow with every number traceable — datasheet, measured, or simulated — beats a long checklist with orphan numbers."（出處紀律）</li>
+    <li>"A strap spec isn't 'continuity' — it's 'an order of magnitude lower inductance than every parallel path'."（④站精神）</li>
+    <li>"Criterion C is not a test result; it's a design defect wearing a disguise."（判準觀）</li>
+  </ul>
+</div>
+
+<h2>10. 今日 Anki 卡片（五張）</h2>
+
+<div class="anki">
+  <p class="q">卡 1｜Q：ESD 單頁決策書的七站動線是什麼？三條使用紀律？</p>
+  <p class="a">七站：①風險掃描（輸入欄五問：摸得到什麼/哪種模型等級/受害者耐受/現況地路徑 nH/有沒繞經別人排線）→②模型帳（HBM/CDM/IEC/產線摩擦，波形宇宙不互比）→③選型（三連問＋兩段式＋牆帳）→④路徑（nH 帳＋接地四紀律＋主幹三紀律）→⑤驗收判準（點位/等級/A～D＋責任矩陣）→⑥診斷辦案（五步＋指紋表＋量測紀律箱）→⑦產線 EPA（S20.20 三防線＋標準族譜）。紀律：只能順走；後站救不了前站（辦案出口＝回填③④改設計不是改判準）；沒有出處的數字視為未填，文件必須被實測回填（活的）。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 2｜Q：三個跨站公式各自住在哪一站、各管什麼death mode？</p>
+  <p class="a">V_C＝V_BR(max)＋I_PP×R_dyn（③站——選錯：鉗太高 IC 先走）；V_節點＝V_clamp＋L×di/dt（④站——路徑超標：datasheet 過了我板過不了，IEC 8 kV 每 nH≈30 V）；t_DISPLAY＝√(Σt²)（⑥站——鏈不足：把 1 ns 看成 3.3 ns，錯把假波形當證據）。三帳任一站偷工，最後全匯到⑥站爆沖——面試講得出「三帳匯流」就是系統觀。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 3｜Q：判準 A～D 一句話定義＋「重開機就好」的鑑別第一步？</p>
+  <p class="a">A 全程正常／B 暫時失能自復／C 需人工介入恢復／D 永久損壞。「重開機就好」＝判準 C，頭號嫌疑 latch-up：第一步在供電迴路串低感測電阻、單次觸發盯事件後電流——垂直跳上＋完全平坦台階＋soft reset 不退＋power cycle 才退＋重打再現＝閂鎖完整身分證；無台階則轉查 SEU/匯流排 lock/泵軌。C 是工程問題不是測試結果。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 4｜Q：五種壞法的時間指紋表（Day 49）＋兩種假信？</p>
+  <p class="a">指紋：①事件後回基準＝正常；②垂直跳上平坦台階＝閂鎖；③漂移亂跳、reset 退＝當機/SEU；④指數尾＝漏電熱漂移；⑤打畢即台階＝元件損傷。假信：只在一支探棒出現的台階＝地迴路假信（換通道交叉驗證）；感測電阻 t≈0 爆表＝R_sense 寄生電感帳（標「不可信」，台階級直流數據仍可用）。鑑別前前置：先量參考談違例（Ch.16）、地線先上 RSS 帳（Ch.11）。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 5｜Q：ESD 標準族譜四層各舉一例＋拿錯層的經典送命答法？</p>
+  <p class="a">計畫層：ANSI/ESD S20.20、IEC 61340-5-1（管理制度：EPA/訓練/稽核）；方法層：STM3.1、STM11.11、S4.1、EIA-625（怎麼量）；器件層：JS-001 HBM、JS-002 CDM、JESD78 latch-up（元件耐多少）；系統層：IEC 61000-4-2（成品驗收）。送命答法：用 JS-001 的 2 kV 回答成品 IEC 8 kV 驗收（跨層＋跨波形宇宙雙重錯）；或說「S20.20 是元件耐壓標準」（它不管耐壓，管制度）。</p>
+</div>
+
+<h2>11. 明日預告</h2>
+<p><strong>Day 51（週六・新觀念課）：第 11 週開週——Phase 3「相機子系統」正式揭幕：相機信號鏈與上電架構總覽。</strong>從這週起，你的 NB 主機板經驗要和鏡頭模組經驗接成完整的「光子到像素」全鏈路：sensor→CSI-2/CCI→SoC/ISP 的數據流地圖＋上電順序 DAG（哪軌先、哪軌後、sequence 違反的下場）——週 10 的 ESD/PI 武器會在這裡全部換上 camera 彈頭。<strong>今天必做的收尾三件事：</strong>①把 Day 49 實驗數據填進決策書回填區（§6 表格）——沒補做完的實驗，今天是最後的平日窗口；②把「你的 NB 主機板七站掃描」的待辦清單存進履歷素材夾；③週日（Day 52）＝第 10 週 20 題自我測驗（範圍 Day 46～50，含你自己量過的數字判讀題），今晚睡前 Anki 重點：五張決策書新卡＋前四天未清卡的總清算。</p>
+<p><em>給半年後的妳：今天你完成了 Phase 2 最後一塊拼圖。面試那天，「Walk me through your ESD design」這題，你會從容地拿出一頁紙——那是 Day 46 到 Day 50 的你，一張一張填出來的。</em></p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

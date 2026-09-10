@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 49｜實作指引：把 TVS 鉗位與 ESD 事件抓到示波器上——準靜態曲線、單次觸發與 latch-up 台階指紋（週 10 實驗日）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 2：電源完整性 PI＋EMI/EMC｜第 10 週・第 49 天（實作日・ESD 鑑識實戰日）</div>
+  <h1>Day 49：實作實驗指引——把 TVS 鉗位與 ESD 事件抓到示波器上：用限流電源描曲線、用單次觸發抓事件、用感測電阻逮 latch-up 台階</h1>
+  <div class="meta">2026-09-10（四）｜預估操作時間：120～150 分鐘（含校正、五組實驗與紀錄）｜難度：★★★★☆（前三天的理論課給了妳一副鑑識的眼睛——TVS 四本帳、latch-up 的 SCR 物理、CDM 的針。今天到實驗室開辦案現場：親手描出一顆 TVS 的伏安曲線、親眼看一次 IEC 事件在示波器上炸開的亞奈秒波形、親手讓一台報廢板閂鎖再用 power cycle 救回。本週實作日因排程提前於週四發放——週四、週五都是平日、都有儀器，沒做完的一切週五補做。Perfect Timing II Ch.11「你的 1 ns 訊號會被 4 吋接地線看成 3.3 ns」今天由你親手重演。⚠️ 本課含 ESD 槍與充電實驗，安全紅線見 §0，先讀完再進實驗室。）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日實驗目標</span>
+  <p>今天的產出不是「量到數字」，而是<strong>妳自己拍下的 ESD 鑑識證據鏈</strong>：一張 TVS 曲線圖、一段事件波形截圖、一張閂鎖台階照片、一份 EPA 稽核單。目標清單：</p>
+  <ol>
+    <li><strong>描出一顆 TVS 的準靜態 V-I 曲線：</strong>用「限流 DC 電源＋串聯電阻＋高壓探棒」把 Day 46 規格表上的洩漏區、崩潰膝點、動態電阻 Rdyn 逐點描出來，並算清楚這條曲線「不是」datasheet 8/20 µs 曲線的哪些部分（脈衝 vs 直流的陷阱）。</li>
+    <li><strong>量測鏈自我校準（本日最重要的紀律課）：</strong>重演 Perfect Timing II Ch.11 的經典算帳——1 ns 的訊號經過 400 MHz 示波器＋探棒顯示成 1.5 ns，再加一條 3 吋接地線變成 3.3 ns。用「快速邊沿測試源」實測自己的探棒接地線把邊沿拖慢多少，然後換彈簧短地再量一次。</li>
+    <li><strong>抓一次真的 ESD 事件：</strong>（若有 ESD 模擬槍）單次觸發（Single Sequence）捕捉 IEC 61000-4-2 接觸放電的電流/電壓波形：上升時間、第一峰值、振鈴頻率；對照「有 TVS vs 無 TVS」下受保護節點的鉗位電壓，並用 V＝L·di/dt 解開「系統鉗位比 datasheet 高出十幾伏特」的謎。</li>
+    <li><strong>逮 latch-up 的台階指紋：</strong>報廢板的供電迴路串入感測電阻，單次觸發盯住供電電流；對板邊連接器打一槍（或以充電小電容模擬），觀察「事件後電流跳上一個台階、_soft reset 不退、power cycle 才消失」——Day 48 判準 C 的簽名，由妳親手取證。</li>
+    <li><strong>EPA 稽核實測（若有儀器）：</strong>離子風扇的衰減時間與平衡電壓（CVM 量）、屏蔽袋的法拉第籠效應（袋外打電、袋內量殘留）——把 Day 48 的「包裝四張帳」變成兩張實測單。</li>
+    <li><strong>（進階選做）小電容充放電＝自家版 CDM：</strong>看振鈴頻率算迴路電感，體會「CDM 是針、HBM 是槌」的頻譜後果。</li>
+  </ol>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：今天是鑑識課——四件工具，四個問題</span>
+  <p>前三天妳學了 TVS 是「門鈴變保險絲的魔術」、latch-up 是「四層樓裡的兩條晶體管互相遞手槍」、CDM 是「針」。今天要把這些故事<strong>變成可以拍下來給面試官看的照片</strong>。手邊四件鑑識工具，每件只回答一個問題：</p>
+  <p><strong>限流電源回答「這顆 TVS 的真實個性是什麼」</strong>——把電源電流限制壓到 100 mA，TVS 就燒不掉：妳可以從 0 V 慢慢轉上去，每格記一個電壓電流，把它的「洩漏→膝點→導通」畫成一條曲線。這就像不用雷擊、而用慢慢加壓的水壓機去測安全閥——量到的閥值跟雷擊（8/20 µs 脈衝）當時的開啟點會差一點點，但骨架一模一樣，而且安全。</p>
+  <p><strong>示波器的「單次觸發」回答「剛剛那一瞬間發生了什麼」</strong>——ESD 事件是一次性的、微觀尺度的：要在 100 µs 的記錄窗口裡抓到 2 ns 的尖峰。所以不能按「Auto」看熱鬧，要設定好準星（觸發）、屏息（Single Sequence）、開槍、取證（Save），一次一張。抓不到就永遠抓不到——因為重來的是槍，不是波形。</p>
+  <p><strong>感測電阻回答「板子事後有沒有在偷吃電」</strong>——latch-up 不是一種「故障瞬間」，是一種「回不去的狀態」：事件結束後電流停在新高點不走。供電線上串一顆小電阻，把「電流」變成示波器看得見的「電壓」，事件前後一比，台階無所遁形。</p>
+  <p><strong>CVM（非接觸靜電電壓表）回答「這個工作區是不是表面功夫」</strong>——離子風扇有沒有真的中和？屏蔽袋是不是法拉第籠？隔空一量，10 秒出真相。這是最便宜的「查勤工具」。</p>
+  <p>還有一件事今天會反覆出現：<strong>「示波器上看到的」不等於「板上發生的」</strong>。ESD 事件是奈秒級的，而妳的探棒、接地線、引線，每一個都在拖它的後腿——書上用一條 3 吋的接地線把 1 ns 的真相拖成 3.3 ns 的假象（Perfect Timing II Ch.11）。今天的每一張圖，都要先問「我的量測鏈撐得起這個速度嗎」，再說它是證據。</p>
+</div>
+
+<h2>0. 行前檢查：安全紅線與裝備清單</h2>
+
+<div class="card pitfall">
+  <span class="label">安全紅線（本課有槍、有高壓，先讀完再進實驗室）</span>
+  <ul>
+    <li><strong>ESD 模擬槍是受訓管制儀器：</strong>需完成儀器教育訓練、經授權後才操作；只對<strong>報廢板/測試治具</strong>放電，絕不對運作中的公司產品、對人或對他人設備開槍。開槍前確認自己的手、手錶、項鍊、門禁卡不在放電路徑上（妳自己就是那個 150 pF）。測試中旁人後退一步。</li>
+    <li><strong>充電實驗一律「小電容＋低電壓」為預設：</strong>只用標稱 ≤1 nF、額定電壓 ≥ 充電電壓兩倍的陶瓷/高壓電容，預設充電 ≤40 V（能量 0.5×C×V²＝nJ～µJ 級，是真正的「針」）。<strong>禁止用大電容器、電源電容、適配器輸出、市電倍壓器做任何放電實驗</strong>——那是另一門可以致命的課。若經主管同意開放 kV 級進階版：必經 1～10 MΩ 限流充電、放電後以 1 MΩ 洩放、三用電表確認歸零後才可觸碰，兩人在場。</li>
+    <li><strong>準靜態曲線實驗的功率紀律：</strong>電源限流 ≤100 mA、電壓 ≤40 V。TVS 在大電流區會發熱——每讀一個點就回零或間隔數秒，別讓它在「導通區」長時間燒自己（功率帳見 §1 與練習 2）。</li>
+    <li><strong>示波器地＝保護接地（大地）：</strong>所有量測採「單點接地、同一參考」拓撲——TVS 的 GND 端、探棒接地、電源負端連在同一參考點。不要測量「浮動」電源（隔離供電的熱點對地懸空）——那是浮動接地事故的最常見來源。需要浮動量測時用差動探棒，沒有就不做該項。</li>
+    <li><strong>所有「會打傷板子」的項目只能用報廢板/測試板：</strong>閂鎖實驗、無 TVS 直打、CDM 模擬——預設打完那塊板子就退役。在產版動烙鐵、拿公司的板打槍，一律駁回。</li>
+    <li><strong>EPA 紀律本身就是今天的考試科目之一：</strong>進工作台先戴腕帶觸地、元件放耗散墊、拿板子拿邊緣。稽核別人的前先查自己。</li>
+  </ul>
+</div>
+
+<table>
+<tr><th>項目</th><th>最低要求</th><th>理想規格</th><th>備註／替代品</th></tr>
+<tr><td><strong>示波器</strong></td><td>頻寬 ≥500 MHz、單次取樣 ≥2 GSa/s、單次序列（Single Sequence）擷取可存檔</td><td>≥1 GHz、單次 ≥5～10 GSa/s、記憶深度 ≥10 Mpts</td><td>今天的波形是「一次性＋奈秒級」——頻寬、單次取樣率、記憶深度三關（Day 33 的三關卡今天全部用得上），缺一關就照 §9 降級</td></tr>
+<tr><td><strong>探棒</strong></td><td>10:1 被動探棒＋<strong>彈簧短地/接地絞線</strong>（μ-clip）</td><td>+高壓探棒 1 kV 級（100:1）或差動探棒</td><td>量 TVS 低壓側（5 V 級元件）一般 10:1 就夠；要量 kV 級事件必須高壓探棒，沒有就做「低壓版 TVS 曲線」（§9）</td></tr>
+<tr><td><strong>ESD 模擬槍</strong></td><td>IEC 61000-4-2 接觸/空氣放電、可設 2～4 kV、有同步輸出（sync）最佳</td><td>附電流靶（current target，2 Ω 同軸輸出）</td><td>通常 EMC 實驗室有——今天去借。完全沒有：事件捕捉改由 §6 小電容充放電替代（物理相同、幅度縮小），並在紀錄表註明</td></tr>
+<tr><td><strong>DC 電源供應器 ×2</strong></td><td>一臺可調 0～30/40 V＋電流限制可壓到 100 mA（描曲線用）；一臺供 DUT</td><td>三軌（曲線、DUT、充電迴路分開）</td><td>曲線電源是今天的「水壓機」；DUT 電源串感測電阻看電流</td></tr>
+<tr><td><strong>電阻散件</strong></td><td>1 kΩ、10 kΩ、100 kΩ（曲線串聯/充電限流）；1 MΩ 2 W（洩放）；1～10 Ω 功率電阻 2 顆（供電感測）</td><td>+50 Ω 同軸馈通/射頻分流器（coax shunt，事件電流量測的正規武器）</td><td>感測電阻口訣：<strong>低感抗優先</strong>——繞線電阻是今天的違禁品，厚膜/無感型或乾脆用同軸馈通</td></tr>
+<tr><td><strong>小電容（CDM 模擬）</strong></td><td>100 pF、1 nF 陶瓷／高壓瓷碟，額定 ≥100 V</td><td>+500 pF/1 kV 級</td><td>預設充 24～40 V 就夠看到全部物理（振鈴頻率跟電壓無關，見 §6）</td></tr>
+<tr><td><strong>DUT（被測對象）</strong></td><td>報廢 NB 主機板或自制測試治具（一段接地銅皮＋一根「受保護走線」＋可焊 TVS 的位址）；TVS 元件數顆（3.3 V/5 V 軌用單向/array 各一）</td><td>含鏡頭模組 FPC 治具（妳的主場）</td><td>治具做法 30 分鐘：銅箔膠帶＋洞洞板也行；要有「靠近連接器」與「離連接器 5 cm」兩種 TVS 焊位做對照</td></tr>
+<tr><td><strong>CVM 靜電電壓表</strong></td><td>非接觸式，±10 V～（離子平衡判定需要可讀 ±50 V 內）</td><td>附衰減時間計時功能</td><td>EPA 稽核用；沒有→§5 改為「目視盤點＋抄錄標示」，並在報告註明</td></tr>
+<tr><td><strong>離子風扇／離子棒</strong></td><td>任一，風速可調</td><td>附平衡與 decay 規格書</td><td>沒有→§5 離子器項取消，屏蔽袋項照做</td></tr>
+<tr><td><strong>屏蔽袋、粉紅泡棉、導電泡棉各一</strong></td><td>從料架拿新袋（順便是 Day 48 包裝四張帳的實物教材）</td><td>+待判定的「來路不明袋」做盲測</td><td>法拉第籠實驗用；粉紅泡棉是「對照組裡的偽裝者」</td></tr>
+<tr><td><strong>紀錄</strong></td><td>拍照/截圖存 U 盤＋本課 §8 紀錄表（印出或抄）</td><td>示波器自動存檔到網路槽</td><td>證據鏈＝截圖檔名＝紀錄表編號；面試的 story 就從這裡長出來</td></tr>
+</table>
+
+<h2>1. 實驗 A：用水壓機描出一顆 TVS 的個性——限流電源準靜態 V-I 曲線</h2>
+
+<h3>1.1 原理與電路（先想清楚再接線）</h3>
+<p><strong>核心思路：</strong>TVS 的規格書曲線是 8/20 µs 脈衝打的（Day 46），那需要幾十安培的設備——但 datasheet 曲線的「骨架」（崩潰電壓 V_BR、膝點斜率、低電流區形態）用 <strong>100 mA 的直流就描得出來</strong>。代價是什麼、不能替換什麼，量完妳會比我更清楚（練習 2 收帳）。電源電流限制（CC, constant current）壓在 100 mA 是今天的保命符：就算 TVS 完全導通、两端只剩幾伏特，最多也只有 100 mA、瓦級功率——燒手都難。</p>
+<div class="formula">
+曲線描繪的三行帳（每個資料點都這麼算）：<br>
+① 串聯電阻上的壓降 V_R ＝ V_source − V_TV（兩條探棒讀數相減，或 CH1−CH2 數學運算）<br>
+② 流經 TVS 的電流 I ＝ V_R ÷ R_series（串聯迴路只有一條路，各點電流相同）<br>
+③ 此刻 TVS 的動態電阻 Rdyn ≈ ΔV_TV ÷ ΔI（相鄰兩點的斜率倒數——「每多流 1 mA 要多壓幾伏」）<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：電源是慢慢加壓的水泵，串聯電阻是節流閥兼計量器——從節流閥兩端的壓差算出流量，從 TVS 兩端的電壓讀出「水壓」。一格一格轉上去，就把安全閥的開啓個性描成了曲線。<strong>為什麼訊號產生器不能代替電源做這件事（上一課預告的題目）？</strong>因為 50 Ω 輸出的產生器短路電流只有 V/50Ω～數十 mA、且設計用來驅動 50 Ω 而不是被 30 V 反向灌入——它給得出「形狀」給不出「功率」；今天描曲線要的恰恰是功率（小功率但要聽話的直流工作點）。</span>
+</div>
+<p><strong>接線（單點接地拓撲，照圖 1 左半）：</strong>電源＋→串聯電阻 R_series（低壓 TVS 用 1 kΩ；想探更細的洩漏區用 10 kΩ）→TVS 陰極（banded 端，箭頭指向的那端——單向 TVS 打反就是看一般二極體，先確認妳在測反向！）→電源−；電源−與示波器探棒地<strong>同點相接</strong>。CH1 跨 TVS、CH2 跨 R_series（或用數學通道直接看 I）。<strong>先做校零：</strong>TVS 未焊上時量電源開路電壓與迴路洩漏（應≈0），再焊上 DUT。</p>
+<ol>
+  <li><strong>洩漏區（0～0.8×V_RWM）：</strong>每 +1 V 記一組 V/I。3.3 V TVS 在 2 V 時洩漏常是 µA 級——用三用電表 µA 檔串進去比示波器準（示波器在 mV 級雜訊底吃不下 µA×1 kΩ＝1 mV 的信號）。記錄：洩漏隨電壓的增長是不是「近似線性＋隨溫度漂」。</li>
+  <li><strong>膝點（V_BR 附近）：</strong>進入崩潰前幾百 mV 開始，每 +50～100 mV 記一組。曲線在這裡「轉肩」——把轉肩點標出來，和 datasheet 的 V_BR（spec 測試電流通常是 µA 級，如 1 mA）對帳。</li>
+  <li><strong>導通區（限流 100 mA 內）：</strong>把電源推到 CC（輸出被壓住、顯示恒流），記 10/30/60/100 mA 各點的 V_TV。算出這一段的 Rdyn（典型應是「每安培幾伏」＝歐姆級）。<strong>每讀一個點把旋鈕回零再進下一點</strong>——這是散熱紀律（功率帳見練習 2）。</li>
+  <li><strong>兩張曲線疊圖：</strong>同一電源、同一設定，把 TVS 換成「不焊」（開路）與「焊上」各描一遍——開路那條是妳的量測系統洩漏底帳，差值才是 TVS 的。</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：實驗 A 的電路與曲線——限流電源是「水壓機」，串聯電阻是「計量器」</text>
+
+  <!-- Left: circuit -->
+  <rect x="30" y="44" width="430" height="250" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="245" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#166534">準靜態曲線量測迴路（單點接地！）</text>
+  <!-- PSU -->
+  <rect x="60" y="110" width="92" height="56" rx="6" fill="#0e7490"/>
+  <text x="106" y="132" text-anchor="middle" font-size="10.5" fill="white">DC 電源</text>
+  <text x="106" y="146" text-anchor="middle" font-size="9.5" fill="#cffafe">CC 限制 100 mA</text>
+  <text x="106" y="184" text-anchor="middle" font-size="9.5" fill="#166534">0～30/40 V 慢慢轉</text>
+  <!-- series R -->
+  <line x1="152" y1="126" x2="200" y2="126" stroke="#334155" stroke-width="2.4"/>
+  <rect x="200" y="118" width="54" height="16" fill="none" stroke="#166534" stroke-width="2.4"/>
+  <text x="227" y="110" text-anchor="middle" font-size="10.5" fill="#166534">R_series 1 kΩ（10 kΩ 看洩漏）</text>
+  <line x1="254" y1="126" x2="330" y2="126" stroke="#334155" stroke-width="2.4"/>
+  <!-- TVS symbol -->
+  <line x1="330" y1="112" x2="330" y2="140" stroke="#dc2626" stroke-width="3"/>
+  <path d="M330,126 L356,110 M330,126 L356,142" stroke="#dc2626" stroke-width="2.6" fill="none"/>
+  <path d="M340,106 L356,110 L352,120 M340,146 L356,142 L352,132" stroke="#dc2626" stroke-width="2.2" fill="none"/>
+  <text x="392" y="120" font-size="10.5" fill="#991b1b" font-weight="bold">TVS（陰極朝上＝反向偏壓，</text>
+  <text x="392" y="134" font-size="10.5" fill="#991b1b">打反就只是在測二極體！）</text>
+  <!-- bottom rail -->
+  <line x1="356" y1="126" x2="392" y2="126" stroke="#334155" stroke-width="2.4" opacity="0"/>
+  <path d="M356,126 L390,126 L390,196 L106,196 L106,166" fill="none" stroke="#334155" stroke-width="2.4"/>
+  <text x="240" y="212" text-anchor="middle" font-size="9.5" fill="#334155">回路回到電源負端＝探棒地與電源負同點相接</text>
+  <!-- probes -->
+  <rect x="270" y="228" width="120" height="40" rx="6" fill="#7c3aed"/>
+  <text x="330" y="245" text-anchor="middle" font-size="10" fill="white">示波器 CH1 跨 TVS</text>
+  <text x="330" y="259" text-anchor="middle" font-size="9.5" fill="#ede9fe">CH2 跨 R（數學＝I）</text>
+  <line x1="316" y1="228" x2="286" y2="140" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <line x1="352" y1="228" x2="360" y2="130" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <text x="70" y="240" font-size="10" fill="#b91c1c">保命三保險：</text>
+  <text x="70" y="254" font-size="10" fill="#b91c1c">①CC≤100 mA ②V≤40 V</text>
+  <text x="70" y="268" font-size="10" fill="#b91c1c">③每點讀完回零散熱</text>
+
+  <!-- Right: curve -->
+  <rect x="474" y="44" width="416" height="250" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="682" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">妳要描出來的曲線（反向象限，示意）</text>
+  <line x1="520" y1="260" x2="866" y2="260" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="520" y1="260" x2="520" y2="88" stroke="#64748b" stroke-width="1.5"/>
+  <text x="700" y="280" text-anchor="middle" font-size="10.5" fill="#374151">反向電壓 V_TV →</text>
+  <text x="500" y="175" text-anchor="middle" font-size="10.5" fill="#374151" transform="rotate(-90 500 175)">漏電流 I ↑（對數感）</text>
+  <!-- curve -->
+  <path d="M520,252 L690,250 Q728,249 742,242 Q760,230 772,196 Q784,150 800,116" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <!-- annotations -->
+  <line x1="620" y1="260" x2="620" y2="238" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="612" y="232" font-size="9.5" fill="#475569">①洩漏區：µA 級、近線性、隨溫漂</text>
+  <line x1="742" y1="260" x2="742" y2="240" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="690" y="196" font-size="9.5" fill="#9a3412">②膝點：對帳 datasheet V_BR</text>
+  <path d="M772,196 L772,196" stroke="#0e7490" stroke-width="4"/>
+  <text x="756" y="140" font-size="9.5" fill="#0e7490" font-weight="bold">③導通區：算 Rdyn＝ΔV/ΔI</text>
+  <path d="M812,96 L846,150" stroke="#7c3aed" stroke-width="2.4" stroke-dasharray="5 4"/>
+  <text x="540" y="104" font-size="10" fill="#5b21b6" font-weight="bold">虛紫線＝8/20 µs 脈衝的「真・鉗位曲線」所在——</text>
+  <text x="540" y="118" font-size="10" fill="#5b21b6">本實驗只到 0.1 A，datasheet 鉗位在十幾～幾十 A，</text>
+  <text x="540" y="132" font-size="10" fill="#5b21b6">中間那段「只能查規格、或去 EMC 間打槍」</text>
+
+  <!-- Bottom band: what DC can and cannot do -->
+  <rect x="30" y="308" width="860" height="128" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="50" y="332" font-size="12.5" font-weight="bold" fill="#9a3412">DC 曲線能做／不能做（量完這段，§7 練習 2 收帳）：</text>
+  <text x="50" y="354" font-size="10.8" fill="#92400e">✔ 能做：驗證來料（崩潰點對不對、有沒有被打過被打穿的「舊傷」）、驗證妳焊反沒有、看膝點锐度、比同批/不同批的洩漏分佈（來料稽核的實驗室武器）。</text>
+  <text x="50" y="374" font-size="10.8" fill="#92400e">✔ 能做：體會 Rdyn 的存在——「電流越大、鉗得越高」不是形容词，是曲線右半段的斜率。</text>
+  <text x="50" y="394" font-size="10.8" fill="#92400e">✘ 不能做：得出 Ipp 鉗位電壓（需要 4/8～20 A 的脈衝能量）、看出啟動延遲（ps～ns 級）、看 snapback（TVS 的大電流崩塌區）。這些是 §3 打槍與 EMC 間的帳。</text>
+  <text x="50" y="414" font-size="10.8" fill="#0f4c5c" font-weight="bold">口訣：DC 曲線驗人格，脈衝曲線驗臨場——兩張都要有，才有選型的完整身分調查。</text>
+</svg>
+<figcaption>圖 1：左＝準靜態曲線迴路（電源 CC 100 mA→串聯電阻→反向偏壓的 TVS；探棒地與電源負同點相接；三項保命保險標在左下角）。右上＝三段式曲線與三個記帳區（洩漏/膝點/導通），虛線標示 DC 到不了的「脈衝領地」。右下＝DC 曲線能做與不能做的界線——寫進報告時照這個口徑宣稱。</figcaption>
+</figure>
+
+<h3>1.2 加碼（10 分鐘）：TVS 的「舊傷」偵測</h3>
+<p>拿一顆「傳說中被打過」的 TVS（或故意讓 §6 充電實驗處刑過的那顆）重新描曲線：洩漏區電流比新件大一個量級、膝點變軟（轉肩變緩）＝內層矽裂的指紋。<strong>產線判退的「疑似 ESD 死」元件，實驗室第一鑑識就是這條曲線</strong>——比 datasheet 洩漏規格大、且重焊新件後故障跟著元件走，證據鏈就閉環了。這招在鏡頭模組 FA 上直接可用：模組裡的 ESD array 有沒有被產線 CDM 打傷，描曲線比換模組快。</p>
+
+<h2>2. 實驗 B：先鑑識「鑑識工具」——量測鏈 RSS 與接地線之恥</h2>
+<p>在抓 ESD 事件之前，先確認妳的相機（示波器＋探棒）拍得動子彈。這一節把 Perfect Timing II Ch.11 的核心示範在妳自己的桌上重演——這是全天 CP 值最高的 20 分鐘，因為它決定了今天（以及妳過去五年）每一張高速波形的可信度。</p>
+<div class="card intuition">
+  <span class="label">書中經典算帳（Perfect Timing II Ch.11，原文數據）</span>
+  <p>書中例：一顆時脈緩衝器輸出的 100 MHz 訊號、邊沿 <strong>1 ns</strong>；用 400 MHz 示波器＋400 MHz 探棒去量——直覺「400 MHz 量 100 MHz，還早嘛」。書的算法：<strong>顯示上升時間是各環節上升時間的平方和開根號</strong>（t² 合成）：探棒與示波器各自的等效上升時間＝0.338/頻寬＝各 0.84 ns，於是顯示值＝√(1²＋0.84²＋0.84²)＝<strong>1.5 ns</strong>——邊沿已經胖了 50%。再掛上那條人人都掛的 <strong>3 吋接地線</strong>（書中算出迴路電感約 150 nH，配 5 pF 探棒電容）：t_GROUND＝3.4×√(150 nH×5 pF)≈<strong>2.9 ns</strong>——顯示值變成 <strong>3.3 ns</strong>。「板上 1 ns、螢幕 3.3 ns」——<strong>頻寬夠，不等於量測鏈夠；殺死頻寬的不是示波器，是那條像尾巴一樣蕩著的接地線。</strong>書中結論：選輸入電容最小的探棒、接地要「最短最寬」，高速時用扁平刀片接地，一般彈簧細線「可以用但不是最優」。</p>
+</div>
+<p><strong>實作步驟（快速邊沿源怎麼來）：</strong>訊號產生器方波輸出（沒有方波產生器就用 DUT 板上任何一顆快緩衝器的輸出，或示波器自己的校正端——但校正端邊沿較慢，效果打折）。四態對照，示波器頻寬全開、單通道 10:1 探棒：</p>
+<ol>
+  <li><strong>態 0（基準）：</strong>探棒直接經 50 Ω 馈通／短接地彈簧片貼板取訊號——這接近妳量測鏈的上限。</li>
+  <li><strong>態 1：</strong>掛上標準 4 吋鱷魚夾接地線，鱷魚夾夾在訊號點旁 5 cm 的地。讀 10-90% 上升時間。</li>
+  <li><strong>態 2：</strong>把鱷魚夾改夾到<strong>貼著探棒針腳</strong>的地（迴路面積最小）。再讀一次。</li>
+  <li><strong>態 3：</strong>探棒 ×10 改 ×1 再讀一次（探棒電容 100 pF 級的災難現場——Day 32/36 的帳）。</li>
+</ol>
+<p><strong>記帳：</strong>把四個讀值與「用 Ch.11 公式對照源頭真實邊沿」的失真率寫進紀錄表，並拍四張圖。<strong>預期：</strong>態 1 的 t_r 可能是態 0 的 2～5 倍，還帶著振鈴——那是 150 nH 級接地迴路與探棒電容的 LC 共振在唱歌（書中的 2.9 ns 與妳的實測是同一首歌）。<strong>今天的領悟要寫成一句話：</strong>待會兒抓 ESD 事件時，我的量測鏈本身就是一個 1～3 ns 的濾波器——所有「事件看起來如何」的結論，都要先扣掉量測鏈的帳。</p>
+<p><em>現代視角備註（引用 Ch.11 必附）：書中用 0.338 做頻寬-上升時間常數，各儀器廠今日多用 0.35～0.45（依響應曲線形狀而定）；2002 年「&lt;1 pF」是昂貴主動探棒的規格，今日被動探棒 1～4 pF、主動/光隔離都已普及；「10 GSa/s」今天已是入門機規格（以現代標準需上修）。但「平方和開根號」「接地線是最大殺手」兩條物理定律完全沒有過期。</em></p>
+
+<h2>3. 實驗 C：開槍——IEC 事件的單次觸發捕捉與「系統鉗位 vs 規格鉗位」之謎</h2>
+<p>（本節需 ESD 模擬槍，受訓授權後操作；無槍者跟讀本節＋§6 替代實驗，並在紀錄表註明「案發現場未經本人復原」。）</p>
+<h3>3.1 佈局：把治具變成「有對照組的案發現場」</h3>
+<p>測試治具：一段接地銅皮（連接器殼的替身）＋一根「受保護走線」（連到端接電阻的訊號線），TVS 可焊在<strong>兩個位址</strong>：①緊貼連接器（正解）②離連接器 5 cm（錯誤示範）。量測三件：</p>
+<ol>
+  <li><strong>事件本身（觸發源）：</strong>槍的 sync 輸出接 CH4（若無 sync，用探棒隔空 1～2 cm「收訊」當觸發——非接觸拾取，只當準星、不作證據）；有電流靶就把槍打靶，靶輸出（典型 2 Ω 同軸）直接進示波器——這是最乾淨的「事件本身」。</li>
+  <li><strong>受保護節點電壓：</strong>10:1 探棒（或高壓探棒，視鉗位電壓高度）以<strong>彈簧短地</strong>接在 TVS 焊位旁的測試點——注意：接地點必須就在針腳旁（Kelvin 式），否則量到的是「節點電壓＋接地迴路自己感應的電壓」。</li>
+  <li><strong>DUT 供電電流（預留給實驗 D）：</strong>感測電阻兩端進 CH2（見 §4）。</li>
+</ol>
+<div class="card pitfall">
+  <span class="label">單次觸發的五條紀律（抓不到波形 95% 是破在這五條）</span>
+  <p>①<strong>Single Sequence／Single 模式</strong>，不是 Auto、不是 Normal 連拍——事件只有一次，取證機會只有一次；②觸發源用事件自己的訊號（sync/電流靶），準位設在雜訊底的 5～10 倍高，斜率選「上升沿」；③<strong>先乾槍三次</strong>：不接槍、只讓環境跑——示波器若會觸發，準位不夠深，打回重設（否則妳會以為「今天槍壞了」）；④時基：主窗口抓事件後 10～20 ns 看波形頭部，再展開一個長窗口（100 µs 級）看尾巴——一台示波器一個設定只能活一個窗口，分兩次抓；⑤<strong>抓到先存檔再重新武裝</strong>（Save before re-arm）——檔案命名＝紀錄表編號（例：D49-C-4kV-TVS近-03）。</p>
+</div>
+<h3>3.2 開槍矩陣（每個格子一張圖）</h3>
+<table>
+<tr><th>組態</th><th>槍</th><th>TVS</th><th>觀察重點</th></tr>
+<tr><td>C1</td><td>空氣放電 ±2 kV</td><td>焊在位址①</td><td>事件頭部：上升時間（標準波前名目約 1 ns 量級、規格窗約 0.7～1.1 ns——IEC 61000-4-2 接觸模 150 pF/330 Ω）、振鈴頻率、受保護節點殘餘電壓</td></tr>
+<tr><td>C2</td><td>接觸放電 ±4 kV</td><td>焊在位址①</td><td>第一峰值電流（名目值：4 kV→約 15 A 級，規格書標稱±公差）；受保護節點被鉗在哪裡、鉗位「 plateau 」高度</td></tr>
+<tr><td>C3</td><td>同 C2</td><td><strong>不焊</strong></td><td>裸節點的狂歡：殘壓可能冲到百 V 級＋高頻振鈴——這是「沒有保險絲的房子」長相（報廢板！）</td></tr>
+<tr><td>C4</td><td>同 C2</td><td>焊在位址②（離連接器 5 cm）</td><td>「TVS 有但放錯位」的現場：連接器端殘壓明顯高於 C2——引path 電感讓鉗位「遲到」，解開 §3.3 的帳</td></tr>
+</table>
+<h3>3.3 算帳：為什麼系統鉗位比 datasheet 高出一截？</h3>
+<p>妳會看到：C2 的受保護節點殘壓，比 TVS datasheet 同一電流檔位的鉗位電壓高出十幾甚至數十伏特。<strong>凶手不是 TVS 騙人，是「TVS 到節點之間那段銅」在開槍：</strong></p>
+<div class="formula">
+V_節點 ＝ V_clamp(TVS) ＋ L_迴路 × di/dt<br>
+IEC 4 kV 接觸放電：第一峰名目 ~15 A、上升 ~1 ns → di/dt ≈ 10～20 A/ns（量級）<br>
+例：L＝1.5 nH（一條 via＋幾 mm 銅）× 15 A/ns ＝ <strong>22.5 V</strong>——「多出來的鉗位」就是這段銅的開價<br>
+<span style="font-size:.9em;color:#6b7280">白話翻譯：TVS 是個盡職的保險絲，但它和受保護晶片之間的那段導線是「有慣性的水管」——電流一秒內要衝幾十安培，水管自己的慣性先炸出一段電壓。線越長越細（nH 越大）、事件越快（di/dt 越大），保險絲盡力了、節點還是被潑到。所以 Day 47 的佈局鐵律「TVS 要緊貼侵入點、以最短最寬的路徑入地」不是抄規則，是 V＝L·di/dt 的物理強制令。C4（TVS 退後 5 cm）就是妳親手做的對質實驗。</span>
+</div>
+<p><strong>把帳收進紀錄表：</strong>C2 vs C4 的殘壓差 ÷ 估計 di/dt ＝ 那 5 cm 銅皮的等效電感（量級應在 1～5 nH，约值）——這一格數字面試時講出來，就是「我把佈局守則還原成物理公式」的資深訊號。</p>
+
+<h2>4. 實驗 D：逮住 latch-up 的台階指紋——感測電阻＋單次觸發＋Power Cycle 對質</h2>
+<p>Day 48 教了判準 C 的簽名：「事件後電流跳上一個台階、soft reset 無效、power cycle 才退」。今天的任務是把這個簽名<strong>簽在自己拍的圖上</strong>。</p>
+<ol>
+  <li><strong>佈局：</strong>報廢板（或有一颗「可閂鎖」舊 IC 的測試板）某供電軌的<strong>負端或正端</strong>串入感測電阻 R_sense（1～10 Ω、厚膜/無感；串負端則地迴路完整、共模較乾淨）。R_sense 兩端用<strong>短地彈簧探棒</strong>接 CH1——注意兩支探棒的接地點要同在同一點（兩地迴路自己會製造假台階）。電源設限流為正常供電的 2～3 倍（讓台階「站得起來」但不燒板——這是實驗室的慈悲，也是妳需要記錄的「若無電流限制的後果實驗」的替代說明）。</li>
+  <li><strong>長窗口單次觸發：</strong>時基設 20～50 µs/div、總窗口 200 µs～1 ms 級；觸發源＝槍 sync（或感測電阻電壓「上衝」當觸發）。抓「事件前 10%＋事件後全部」——台階是「事後狀態」，窗口要往後留足。</li>
+  <li><strong>開槍／放針：</strong>對板邊連接器訊腳打空氣放電 ±2～4 kV（或 §6 的充電小電容經 1 kΩ 打訊號腳——CDM 風格的針）。重複直到命中（latch-up 不是每次都觸發——機率事件，紀錄「幾槍幾中」就是命中率資料）。</li>
+  <li><strong>對質三問（每問都要拍圖）：</strong>①事件後電流有沒有跳上台階、不退？（台階高度對照電源限流）②按板的 reset 鍵/重撥軟體——台階退不退？（預期：不退——斷電才退是閂鎖的身分證）③Power cycle——台階消失、板子復活？（復活＝閂鎖無永久損傷；不復活＝已經把它燒了，記檔退役）。<strong>三張圖排成一排，就是判準 C 的完整身分證相簿。</strong></li>
+  <li><strong>對照組（有時間必做）：</strong>同一軌把串聯保護電阻由 0 改 100 Ω（模擬 Day 48「餵不起來」支柱），同樣槍數重打——命中率與台階高度的變化就是那根電阻的功勞簿。</li>
+</ol>
+<div class="card pitfall">
+  <span class="label">台階鑑別陷阱：別把「板子重開機的重新開始」當成台階</span>
+  <p>事件後電流曲線有好幾種「壞樣子」，台階只是其中之一：①閂鎖台階＝垂直跳上、完全平坦、斷電才退；②當機＝電流小幅漂移＋狀態亂、reset 會退；③充電尾＝指數下降、不是平的——看到「斜的」別急著定讞；④儀器的假台階＝探棒地迴路在事件瞬間感應的 mV 級毛刺——用兩支探棒交換 CH 做交叉驗證（真的台階跟著電流走，假的跟著地線走）。這個鑑別診斷表（Day 48 五嫌疑犯）今天有了對應的波形指紋，面试時兩套語言（狀態語言＋波形語言）都要會講。</p>
+</div>
+
+<figure>
+<svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：實驗 C/D 的單次觸發取證佈局＋「三種曲線指紋」判讀卡</text>
+
+  <!-- Layout -->
+  <rect x="30" y="44" width="530" height="250" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="295" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">案發現場佈局（單點接地、Kelvin 量測）</text>
+  <!-- gun -->
+  <rect x="52" y="96" width="80" height="46" rx="8" fill="#dc2626"/>
+  <text x="92" y="116" text-anchor="middle" font-size="10" fill="white">ESD 槍</text>
+  <text x="92" y="130" text-anchor="middle" font-size="9" fill="#fecaca">IEC 61000-4-2</text>
+  <line x1="132" y1="119" x2="205" y2="119" stroke="#dc2626" stroke-width="3" stroke-dasharray="7 4"/>
+  <text x="168" y="110" text-anchor="middle" font-size="9" fill="#dc2626">kV 事件</text>
+  <!-- coupon -->
+  <rect x="205" y="92" width="180" height="120" rx="6" fill="#e0f2fe" stroke="#0e7490" stroke-width="2"/>
+  <text x="295" y="108" text-anchor="middle" font-size="10" fill="#0e7490">報廢板/測試治具</text>
+  <rect x="212" y="120" width="10" height="60" fill="#94a3b8"/>
+  <text x="240" y="136" font-size="9.5" fill="#334155">連接器（侵入點）</text>
+  <path d="M222,150 L268,150 L268,178 L310,178" stroke="#0e7490" stroke-width="2.6" fill="none"/>
+  <text x="252" y="166" font-size="9" fill="#0e7490">受保護走線</text>
+  <path d="M310,170 L310,186 M302,178 L318,178" stroke="#dc2626" stroke-width="2.2"/>
+  <text x="330" y="196" font-size="9.5" fill="#991b1b">TVS（位址①/②）</text>
+  <!-- probe -->
+  <line x1="268" y1="150" x2="268" y2="232" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <text x="292" y="236" font-size="9.5" fill="#7c3aed">短地探棒：節點殘壓（CH3）</text>
+  <!-- sense R + supply -->
+  <rect x="404" y="96" width="76" height="40" rx="6" fill="#0e7490"/>
+  <text x="442" y="112" text-anchor="middle" font-size="9.5" fill="white">DUT 電源</text>
+  <text x="442" y="126" text-anchor="middle" font-size="9" fill="#cffafe">限流 2~3×</text>
+  <line x1="442" y1="136" x2="442" y2="176" stroke="#334155" stroke-width="2.4"/>
+  <rect x="434" y="176" width="16" height="36" fill="none" stroke="#166534" stroke-width="2.4"/>
+  <text x="498" y="196" font-size="9.5" fill="#166534">R_sense 1~10 Ω</text>
+  <text x="498" y="208" font-size="9" fill="#166534">（無感/厚膜）</text>
+  <line x1="442" y1="212" x2="442" y2="236" stroke="#334155" stroke-width="2.4"/>
+  <path d="M442,236 L385,236" stroke="#334155" stroke-width="2.4"/>
+  <text x="295" y="282" text-anchor="middle" font-size="9.5" fill="#b91c1c">所有接地（電源−、探棒地、治具銅皮）同一參考點——單點接地拓撲</text>
+  <!-- sync -->
+  <line x1="92" y1="142" x2="92" y2="260" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 4"/>
+  <text x="96" y="248" font-size="9.5" fill="#b45309">sync → CH4（準星／觸發源）</text>
+
+  <!-- Right: fingerprints -->
+  <rect x="574" y="44" width="316" height="250" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="732" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#9a3412">感測電阻上的三種曲線指紋</text>
+  <!-- axes -->
+  <line x1="606" y1="252" x2="866" y2="252" stroke="#64748b" stroke-width="1.4"/>
+  <line x1="606" y1="252" x2="606" y2="92" stroke="#64748b" stroke-width="1.4"/>
+  <text x="740" y="270" text-anchor="middle" font-size="9.5" fill="#475569">時間（窗口往後留 200 µs+）</text>
+  <text x="592" y="170" text-anchor="middle" font-size="9.5" fill="#475569" transform="rotate(-90 592 170)">供電電流 I</text>
+  <!-- spike at event -->
+  <line x1="680" y1="252" x2="680" y2="86" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="680" y="80" text-anchor="middle" font-size="9" fill="#dc2626">事件</text>
+  <!-- latch: step -->
+  <path d="M606,230 L678,230 L682,128 L866,128" fill="none" stroke="#dc2626" stroke-width="3"/>
+  <text x="770" y="120" font-size="10" fill="#dc2626" font-weight="bold">台階＝完全平坦、斷電才退 → 閂鎖</text>
+  <!-- crash: wobble -->
+  <path d="M606,240 L678,240 L682,214 Q712,204 742,222 Q776,236 812,224 L866,232" fill="none" stroke="#f59e0b" stroke-width="2.6"/>
+  <text x="742" y="200" font-size="9.5" fill="#b45309">漂移＋亂跳、reset 會退 → 當機/SEU</text>
+  <!-- charging tail -->
+  <path d="M606,244 L678,244 L682,196 Q740,232 810,242 L866,246" fill="none" stroke="#0e7490" stroke-width="2.4" stroke-dasharray="6 4"/>
+  <text x="742" y="182" font-size="9.5" fill="#0e7490">指數decay、不是平的 → 充電尾/洗白</text>
+
+  <!-- bottom: scope settings -->
+  <rect x="30" y="308" width="860" height="142" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="50" y="330" font-size="12" font-weight="bold" fill="#166534">單次觸發設定單（照抄進示波器）：</text>
+  <text x="50" y="352" font-size="10.8" fill="#166534">① Acquisition＝Single Sequence（單次序列）；②觸發源＝sync/電流靶，上升沿，準位＝雜訊底×5～10；③窗口短版：5 ns/div × 10（事件頭部）＝抓波形長相；長版：50 µs/div × 10（事件尾巴）＝抓台階。</text>
+  <text x="50" y="372" font-size="10.8" fill="#166534">④乾槍三次驗證「不會自己觸發」；⑤抓到→存檔（檔名＝紀錄編號）→重新武裝；⑥每張截圖角落註記：頻寬設定、探棒比、時基、準位——沒有設定的截圖在法庭上是偽證。</text>
+  <text x="50" y="396" font-size="10.8" fill="#0f4c5c"><tspan font-weight="bold">Ch.16 的記憶深度帳（原文算式搬來）：</tspan>20 GSa/s→50 ps/點→抓 1 µs＝50K 點；今天 5 GSa/s 抓 200 µs 台階＝1 Mpts（現代入門機輕鬆）——但 5 GSa/s 抓事件頭部 2 ns 只有 10 個點，</text>
+  <text x="50" y="414" font-size="10.8" fill="#0f4c5c">要「更取樣率要縮窗口」的兩段式抓法（Ch.11：取樣率/頻寬至少 4:1，8～16:1 才漂亮）。一台機器的頻寬、取樣率、記憶深度是三角預算——先想要哪一段，再配設定。</text>
+</svg>
+<figcaption>圖 2：左＝事件捕捉佈局（槍→治具；sync 當準星進 CH4；節點殘壓用短地探棒；供電串感測電阻）；右上＝事件後供電電流的三種指紋——平坦台階（閂鎖）、漂移亂跳（當機）、指數尾（充電）；下＝單次觸發設定單與 Ch.16 式記憶深度算帳。今天的四張「身分證相簿」：台階圖、reset 不退圖、power cycle 復活圖、串 100 Ω 對照圖。</figcaption>
+</figure>
+
+<h2>5. 實驗 E：EPA 稽核——離子風扇的 Decay 與屏蔽袋的法拉第籠（若有儀器，每項 10 分鐘）</h2>
+<h3>5.1 離子風扇：衰減時間與平衡電壓（CVM 量）</h3>
+<ol>
+  <li><strong>充電：</strong>撕一段膠帶（或壓克力板/PET 片）在絕緣面上快速撕離——典型的摩擦起電，用 CVM 隔 25 mm 量，常見到 ±1～±5 kV 不稀奇。<strong>把它放在離子風扇下，開始計時。</strong></li>
+  <li><strong>讀 decay：</strong>記錄從起始值掉到「100 V 以下」需要的秒數。工作站的常見規格語言是「數秒內從 ±1 kV 衰到 ±100 V」（量級；精確判準以 ANSI/ESD STM7.1 與儀器作業程序為準）。<strong>衰得慢＝風量/距離/污染問題三選一。</strong></li>
+  <li><strong>讀 balance（離子器的誠實測驗）：</strong>CVM 量「被中和後靜置一會兒」的板面殘留極性電壓。離子器失準（發射針髒、高壓模組漂移）會把板子充上<strong>單一極性</strong>的電——判讀語言：平衡應在 ±50 V 量級內（以現代標準與機台規格為準）；實測 −180 V＝這臺離子器不是警察，是充電器（Day 48 練習 4 的案情今天由妳辦）。</li>
+  <li><strong>交叉驗證：</strong>風扇開/關兩態各測一次——開了反而更靜電的，發射針汚染實錘，掛牌報修。</li>
+</ol>
+<h3>5.2 屏蔽袋：袋外打電、袋內驗籠（10 分鐘）</h3>
+<ol>
+  <li>拿屏蔽袋，袋內平放一小片金屬箔（鋁箔紙剪片，模擬裝在袋內的板子），箔片<strong>不能碰袋壁</strong>、以絕緣物墊起並留一小段「引線」伸出袋口外（用紙夾固定，不破口）。</li>
+  <li>對<strong>袋外表面</strong>摩擦起電或（若有槍）空氣放電充電到千伏級，CVM 讀袋外；然後隔空讀袋內箔片引線端的感應電壓。<strong>合格法拉第籠：袋外 kV、袋內百 V 以下（量級；來料判定依 ANSI/ESD S11.31 作業程序）。</strong></li>
+  <li><strong>對照組一：</strong>粉紅泡棉包一片箔，同樣袋外充電、同樣讀Inside——粉紅泡棉不導電、不成籠，裡面跟著喊（它只是防撞的，Day 48 包裝四張帳的實測版）。<strong>對照組二：</strong>把屏蔽袋口打開再測一次——口開著的籠子，屏蔽效能塌一角：「袋要封口才算袋」。</li>
+  <li><strong>稽核收尾動作：</strong>拿這套兩分鐘流程，巡一圈自己單位的離子器（有無校正標示、日期）與包裝材料架（袋上有無「ESD Sensitive/Shielding」標示與供應商），填 §8 的稽核單。<strong>Day 48 說稽核是四步：證書、表面電阻、巡線、良率日譜——今天妳新增了兩樣隨身武器：CVM 和「開/關對照法」。</strong></li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 920 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="460" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：EPA 兩張稽核單——離子器「decay+balance」與屏蔽袋「袋外打電、袋內驗籠」</text>
+
+  <!-- Ionizer -->
+  <rect x="30" y="44" width="420" height="240" rx="10" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="240" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#166534">稽核單①：離子風扇</text>
+  <rect x="70" y="86" width="80" height="56" rx="8" fill="#0e7490"/>
+  <text x="110" y="110" text-anchor="middle" font-size="10" fill="white">離子風扇</text>
+  <text x="110" y="126" text-anchor="middle" font-size="9" fill="#cffafe">開/關對照</text>
+  <path d="M150,114 q40,-8 88,0 M150,122 q40,10 88,2" stroke="#67e8f9" stroke-width="2.2" fill="none"/>
+  <text x="196" y="102" text-anchor="middle" font-size="9" fill="#0e7490">±離子流</text>
+  <rect x="240" y="130" width="120" height="12" rx="3" fill="#eab308"/>
+  <text x="300" y="124" text-anchor="middle" font-size="9.5" fill="#854d0e">撕膠帶起電（起始值記錄）</text>
+  <!-- decay curve -->
+  <line x1="70" y1="270" x2="410" y2="270" stroke="#64748b" stroke-width="1.3"/>
+  <line x1="70" y1="270" x2="70" y2="168" stroke="#64748b" stroke-width="1.3"/>
+  <path d="M74,178 Q120,214 160,232 Q230,254 320,262 L400,264" fill="none" stroke="#dc2626" stroke-width="2.8"/>
+  <line x1="70" y1="258" x2="410" y2="258" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <text x="352" y="252" font-size="9" fill="#16a34a">±100 V 線</text>
+  <text x="120" y="196" font-size="9.5" fill="#dc2626">起始 kV 級</text>
+  <text x="238" y="300" text-anchor="middle" font-size="9.5" fill="#166534">decay 時間（起點→跨過 ±100 V）：合格＝數秒內（量級）</text>
+  <text x="240" y="150" font-size="9.5" fill="#b91c1c">balance：中和後殘留單一極性 &gt;±50 V 量級＝發射針髒/失準＝「充電器」，掛牌</text>
+
+  <!-- Bag -->
+  <rect x="470" y="44" width="420" height="240" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="680" y="66" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#334155">稽核單②：屏蔽袋（法拉第籠實測）</text>
+  <!-- gun to outside -->
+  <rect x="492" y="96" width="64" height="34" rx="6" fill="#dc2626"/>
+  <text x="524" y="117" text-anchor="middle" font-size="9.5" fill="white">充電/摩擦</text>
+  <line x1="556" y1="112" x2="596" y2="112" stroke="#dc2626" stroke-width="2.6" stroke-dasharray="5 3"/>
+  <!-- bag -->
+  <rect x="596" y="86" width="150" height="130" rx="10" fill="#334155" opacity=".85"/>
+  <text x="671" y="80" text-anchor="middle" font-size="9.5" fill="#334155">屏蔽袋（封口！）</text>
+  <text x="671" y="156" text-anchor="middle" font-size="9.5" fill="#e2e8f0">袋外：kV 級</text>
+  <rect x="626" y="170" width="90" height="10" fill="#eab308"/>
+  <line x1="716" y1="175" x2="742" y2="175" stroke="#eab308" stroke-width="2.4"/>
+  <text x="640" y="205" font-size="9" fill="#fde68a">內置箔片（不碰袋壁）＋引線出袋口</text>
+  <!-- CVM -->
+  <rect x="770" y="140" width="76" height="46" rx="8" fill="#7c3aed"/>
+  <text x="808" y="160" text-anchor="middle" font-size="9.5" fill="white">CVM</text>
+  <text x="808" y="174" text-anchor="middle" font-size="8.5" fill="#ede9fe">隔空讀引線</text>
+  <path d="M770,164 L744,174" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="4 3"/>
+  <!-- verdict table -->
+  <text x="496" y="242" font-size="10" fill="#334155" font-weight="bold">判定：袋外 kV → 袋內 &lt;百 V 量級＝籠合格</text>
+  <text x="496" y="260" font-size="10" fill="#334155">袋內 kV 級跟著喊＝那是一個漂亮的塑膠袋（或口沒封）</text>
+  <text x="496" y="278" font-size="10" fill="#9a3412">對照組：粉紅泡棉包箔→內側跟著喊（不導電不成籠，防撞而已）</text>
+</svg>
+<figcaption>圖 3：離子器兩讀（decay 時間＋中和後殘留極性——balance 超標的離子器是充電器不是警察）；屏蔽袋一打一驗（袋外充電、隔空讀內置箔片——真正的籠子把場關在外面；口開著的籠子效能塌角）。兩張單巡一圈工作區只要 20 分鐘，是 S20.20「持續合規」最便宜的日常武器。</figcaption>
+</figure>
+
+<h2>6. 實驗 F（進階選做）：自家版 CDM——小電容充放電與迴路電感的指紋</h2>
+<p><strong>安全再念一次：</strong>只用 ≤1 nF、額定電壓 ≥ 充電電壓 2 倍的小電容，預設充電 24～40 V（能量 0.5×C×V²＝nJ～µJ 級）。全程经 1 MΩ 充電/洩放，碰線前用三用表確認歸零。<strong>禁止擴大充電電壓或改用大電容</strong>——想放大到 kV 級請改用 ESD 槍的 CDM 模式（若機台有），那是受訓儀器的專長，不是土製器材的。</p>
+<ol>
+  <li><strong>充電：</strong>電源（40 V）經 1 MΩ 給 100 pF/高壓瓷碟充電 5 秒（τ＝RC＝0.1 s，5τ＝0.5 s 充滿）。</li>
+  <li><strong>放針：</strong>經一個手制「放電間隙」（兩根粗銅線、間隙 1～3 mm，串在容性元件與地銅之間）或小型繼電器（額定要夠，或乾脆用鱷魚夾快速碰觸——手感即開關）。示波器電流視角：地迴路裡串 10 Ω 無感電阻、探棒跨它讀電壓（10 Ω 上 1 Vpp＝100 mA）。</li>
+  <li><strong>看振鈴：</strong>RLC 串聯放電的振鈴頻率 f≈1/(2π√(LC))——把實測週期反推迴路電感：C＝100 pF、實測 f＝160 MHz → L＝1/((2πf)²C)≈10 nH（練習 5 完整算）。<strong>妳的鱷魚夾引線、探棒地、間隙銅線，每一段都是 nH——這臺土炮其實是一臺「迴路電感量測儀」。</strong></li>
+  <li><strong>縮短迴路重測：</strong>把放電迴路改短（同軸化、地絞線化），振鈴頻率應該<strong>上升</strong>（L 變小）——「頻率是迴路尺寸的指紋」；這和 Day 9 TDR 的「距離是時間的指紋」是同一種思維：從頻率/時間反推幾何。</li>
+  <li><strong>接回鏡頭模組情境：</strong>模組 FPC 在料管裡被摩擦/感應充上幾百伏特（CDM 的產生），經吸嘴放電到接地托盤——能量比今天的土炮大、迴路更小（pF＋nH→GHz 級振鈴）。今天 40 V 版看到的是同一道物理題的練習卷；真實 kV 版在組裝線稽核（§5 的巡線＋離子器＋托盤）裡防。</li>
+</ol>
+
+<h2>7. 課前/課後算術（先手算，再展開詳解）</h2>
+
+<details>
+<summary><strong>練習 1：量測鏈 RSS（Ch.11 公式的實戰版）</strong>——要量 IEC 事件（t_r≈1 ns）。手邊：500 MHz 示波器＋500 MHz 探棒（用書中常數 0.338）＋一條 3 吋接地線（書中例：150 nH 迴路、探棒 5 pF）。(a) 各環節等效上升時間各是多少？(b) 顯示值 t_DISPLAY≈？(c) 誤差的幾成來自接地線？(d) 換 1 GHz 示波器＋1 GHz 探棒＋接地改良到 0.5 nH×2 pF 後顯示值≈？結論：錢該先花在誰身上？</summary>
+<div class="answer">
+<p>(a) 示波器＝探棒＝0.338/500 MHz＝<strong>676 ps</strong>；接地項＝3.4×√(150×0.005)（L 用 nH、C 用 nF）＝3.4×√0.75≈<strong>2.9 ns</strong>。</p>
+<p>(b) t_DISPLAY＝√(1²＋0.676²＋0.676²＋2.9²)＝√(1＋0.457＋0.457＋8.41)＝√10.32≈<strong>3.2 ns</strong>——1 ns 的事件被拍成 3.2 ns，和書中「1 ns→3.3 ns」同版本。</p>
+<p>(c) 接地線的方差佔 8.41/10.32≈<strong>82%</strong>——八成二的失真來自這條不收錢的線。</p>
+<p>(d) 新環節：1 GHz 級各環節＝338 ps；接地項＝3.4×√(0.5×0.002)＝3.4×0.0316≈107 ps；總值＝√(1²＋0.338²×2＋0.107²)＝√(1＋0.228＋0.011)≈<strong>1.06 ns</strong>——鏈路失真只剩約 6%。<strong>結論：先買接地彈簧片/刀片地與練習手藝（幾百元），再想升級示波器（幾十萬元）——Ch.11 的現代翻譯是「接地品質的性價比永遠第一」。</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 2：準靜態曲線的功率帳與 DC/脈衝之辨</strong>——某單向 TVS：V_RWM＝5 V、V_BR（@1 mA）＝6 V 級、datasheet 8/20 µs 鉗位 V_C（@Ipp 十幾 A）＝約 20 V 級。(a) §1 實驗中電源限流 100 mA、TVS 導通後兩端約 12 V（假設值、量級）：瞬間功率多少？若 100% duty 長期掛著，對元件和電源各是什麼要求？(b) 為什麼妳描的 0.1 A 曲線推不出 20 V 的 8/20 鉗位？(c) 為什麼「訊號產生器打脈衝」可以驗證 TVS 啟動（小能量）卻不能驗證鉗位能力？</summary>
+<div class="answer">
+<p>(a) P＝12 V×0.1 A＝<strong>1.2 W</strong>——小封裝（0402/0603）持續吃 1 W 會過溫（它們的額定多是 0.1～0.25 W 量級，大功率 TVS 封裝才有 W～kW 級帳）；所以實驗要「讀一個點、回一次零」，把 duty 壓低靠間歇讀。電源端：1.2 W 在 100 mA 限流機上完全輕鬆（它設定了天花板）——這就是限流源的慈悲。</p>
+<p>(b) 兩個原因：<strong>①電流尺度差兩個量級以上</strong>——鉗位規格打在山坡的中段（10～數十 A），妳只走到山坡腳（0.1 A）；曲線各段的斜率（微分電阻）不同，外推會錯得離譜。<strong>②時間結構不同</strong>——8/20 µs 是能量脈衝，元件內部瞬態溫度分佈、二次崩潰行為與直流完全不同；dc 曲線是「常溫恆態」的照片，脈衝曲線是「閃光燈下的抓拍」，兩張照片裡的人確實不太一樣（動態電阻、snapback、啟動延遲都只在後者現身）。</p>
+<p>(c) 產生器的功率天花板（mW～百 mW 級、短路電流數十 mA）決定了它能「叫門」（驗證 TVS 能在事件到來時開啟、驗證殘壓波形形狀）但打不到鉗位所在的電流區——鉗位是「力氣活」，產生器是「體操動作」。結論同 §1 口訣：DC 曲線驗人格，脈衝曲線驗臨場，產生器兩者都不是、只是「按門鈴」。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 3：系統鉗位的 L·di/dt 解謎（§3.3 的正式帳）</strong>——實測：TVS 焊在連接器端、4 kV 接觸放電下受保護節點殘壓 plateau 約 45 V；同規 TVS datasheet 在同電流檔鉗位約 23 V。(a) 差值 22 V 來自哪裡？用 di/dt≈15 A/ns 反推這段「TVS 到節點」迴路的等效電感。(b) 這條迴路包含哪幾段「嫌疑銅」？各約幾 nH（量級）？(c) 三條改進手段，按每 nH 價值排序。(d) 鏡頭模組情境：FPC 上 TVS 到晶片 pin 的走線拉長 15 mm（FPC 線對地迴路約 1 nH/10 mm 量級），残壓多付多少？</summary>
+<div class="answer">
+<p>(a) V＝L×di/dt → L＝22 V÷15 A/ns≈<strong>1.5 nH</strong>。「多出來的 22 伏特」只是 1.5 nH 銅在開價——比一條 via（~0.5 nH 級）加幾毫米走線（~0.3～1 nH 級）還便宜。<strong>記住這個帳的規模：幾 nH 就能吃掉十幾伏特。</strong></p>
+<p>(b) 嫌疑名單（量級）：via 下地 0.3～1 nH；TVS 焊盤到走線的收窄 0.1～0.3 nH；走線本身 0.3～1 nH/cm；TVS 內部引線（若有）0.3～0.7 nH；接地面迴路（地孔到主地）0.3～1 nH。<strong>注意：探棒接地線貢獻的是「量測的債」不是「板的債」——先確認 §2 的手藝，再定罪銅。</strong></p>
+<p>(c) ①TVS 移到連接器與走線之間、以「穿牆式」入地（把事件電流在進門時就短路到地，不讓它經過受保護走線旁）——每 nH 效果最大；②加寬縮短 TVS 接地路徑＋多 via 並聯（nH/2 級）；③選無引線封裝（array/DFN）TVS——省掉內部引線那 0.3～0.7 nH。這順序就是 Day 47 佈局鐵律的物理排序。</p>
+<p>(d) 15 mm FPC≈1.5 nH×15＝約 0.5～1.5 nH（依 FPC 疊構，量級）→ 多付 0.5×15～1.5×15＝<strong>約 8～20 V</strong>。所以鏡頭模組的 ESD array 一定要在 FPC 進 connector 後第一站、且地層連續——「TVS 排在排線中間」等於讓事件電流拉著受保護走線陪跑。</p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 4：兩段式抓法的記憶深度帳（Ch.16 算式移植）</strong>——事件頭部 t_r≈1 ns，想看 5 ns 事件全程＋3 倍取樣；尾巴要看事件後 200 µs 找 latch-up 台階。(a) 頭部視窗需要多少取樣點（Ch.11 建議取樣率/頻寬至少 4:1、8～16:1 更佳，這裡用「每 ns 幾個點」口算）？(b) 若一台機器的單次記憶是 10 Mpts：用 5 GSa/s 抓 200 µs 需要多少點、裝不裝得下？(c) 若用同一個設定「5 GSa/s＋10 Mpts」抓頭部再想兼 200 µs，會發生什麼（取樣率被稀釋成多少）？(d) 正確的操作方案？</summary>
+<div class="answer">
+<p>(a) 看 1 ns 上升：至少每 ns 4 點（5 GSa/s 剛過線）、漂亮是 8～16 點/ns（書：取樣/頻寬 4:1 起、8～16:1 優秀）。5 ns 全程→20～80 點就夠畫出頭部。</p>
+<p>(b) 5 GSa/s×200 µs＝1×10⁹ 點／s×2×10⁻⁴ s＝<strong>1 Mpts</strong>——10 Mpts 裝得下（Ch.16 的帳搬來：它 20 GSa/s 抓 1 µs 就要 50 Kpts、jitter 級抓 100 K 週期要 20 MB——今天的入門機記憶深度對「台階」這種慢故事線線有餘）。</p>
+<p>(c) 同一設定兼 200 µs＝把 10 Mpts 攤到 200 µs→實際取樣率只有 50 MSa/s（20 ns/點）——事件頭部只有 0.05 個點，<strong>事件在截圖上只是無意義的一格毛刺</strong>：「記憶深度÷時間窗＝真實取樣率」這道除法不會騙人。</p>
+<p>(d) 兩段式：設定一「短窗口高速」（5 GSa/s、窗口 ~20 ns）抓事件頭部與殘壓波形；設定二「長窗口低速」（1～10 MSa/s、窗口 200 µs＋）抓台階——兩次單次觸發、兩張截圖、各自標定設定。<strong>面試加分句：「事件頭部和事件後遺症是兩張不同解析度的照片——一台相機兩次曝光。」</strong></p>
+</div>
+</details>
+
+<details>
+<summary><strong>練習 5：土炮 CDM 的反推題（§6 的正式帳）</strong>——100 pF 充電 40 V 放電，示波器在 10 Ω 感測電阻上看到阻尼振鈴，週期約 6.3 ns（f≈160 MHz）。(a) 反推迴路總電感（L＝1/((2πf)²C)）。(b) 起始能量多少？和 IEC 61000-4-2 的 8 kV（150 pF）比是幾分之一？(c) 理想無損峰值電流 V√(C/L) 多少？為什麼實際上只有它的幾分之一？(d) 把放電迴路縮短一半，振鈴頻率和峰值各怎麼動？</summary>
+<div class="answer">
+<p>(a) (2πf)²＝(2π×1.6×10⁸)²≈1.01×10¹⁸；L＝1/(1.01×10¹⁸×100×10⁻¹²)≈<strong>10 nH</strong>（約值）——鱷魚夾引線 2 段＋間隙＋探棒地，湊出 10 nH 完全合理（導線約 1 nH/cm 量級）。</p>
+<p>(b) E＝0.5×100 pF×40²＝<strong>80 nJ</strong>。IEC 8 kV/150 pF：E＝0.5×150 pF×(8000)²＝<strong>4.8 mJ</strong>——相差 <strong>6 萬倍</strong>。這就是「練習卷」和「真槍」的距離（也是為什麼土炮安全、真槍要受訓——以及 CDM 的針為何打在 pF 級小迴路上功率密度驚人：CDM 的 kV 打在幾十 pF，能量 mJ 以下、但集中在 sub-ns，峰值功率 kW 級——Day 48 的帳）。</p>
+<p>(c) V√(C/L)＝40×√(100p/10n)＝40×0.1＝<strong>4 A（理想無損上限）</strong>；實際迴路有 R（10 Ω 感測＋引線＋間隙電阻）＋電容 ESR，振鈴被阻尼，峰值往往只有理想的 1/3～1/10。所以「用振鈴頻率反推 L」比「用峰值反推能量」可靠——頻率幾乎只看 L、C，峰值看全部損耗。</p>
+<p>(d) L 減半→f 升 √2 倍（→~225 MHz）；峰值電流上限 V√(C/L) 升 √2 倍、能量不變（都從同一個 0.5CV² 來）——<strong>縮短迴路不減少總能量，只是把同樣的能量在更短時間內、以更高頻率澆下去</strong>：這正是「TVS 接地要短」的另一面——短接地保護了後段電路，不是讓事件變溫柔，而是把事件關進籠子。實驗裡「頻率上升」就是迴路尺寸縮小的指紋（和 TDR 同樣的幾何反推哲學）。</p>
+</div>
+</details>
+
+<h2>8. 資料紀錄表與一頁辦案報告（今天最重要的產出）</h2>
+<table>
+<tr><th>編號</th><th>實驗</th><th>設定</th><th>讀值</th><th>判定／算法</th><th>截圖檔名</th></tr>
+<tr><td>T1</td><td>TVS 準靜態曲線</td><td>R_series＝　kΩ；限流　mA</td><td>V_BR 轉肩＝　V；I@12V＝　mA</td><td>對帳 datasheet：□合 □舊傷 □焊反</td><td></td></tr>
+<tr><td>T2</td><td>量測鏈四態</td><td>源邊沿＝　ns；探棒　:1</td><td>態0＝　ns；態1＝　ns；態2＝　ns；態3＝　ns</td><td>接地線失真倍數＝態1/態0＝　×</td><td></td></tr>
+<tr><td>T3</td><td>事件捕捉 C1–C4</td><td>槍　kV；接觸/空氣</td><td>t_r 顯示＝　ns；殘壓 plateau＝　V；振鈴＝　MHz</td><td>C2 vs C4 差÷di/dt＝迴路 L≈　nH</td><td></td></tr>
+<tr><td>T4</td><td>latch-up 台階</td><td>R_sense＝　Ω；限流　mA；命中率　/　槍</td><td>台階＝　mA；reset 退？□Y□N；cycle 退？□Y□N</td><td>三張身分證齊？□□□</td><td></td></tr>
+<tr><td>T5</td><td>離子器稽核</td><td>起始　V；風速/距離</td><td>decay→100V＝　s；balance＝　V</td><td>□合格 □髒 □失準（±50 V 量級判定）</td><td></td></tr>
+<tr><td>T6</td><td>屏蔽袋稽核</td><td>袋外充電　V</td><td>袋內引線＝　V；開口態＝　V</td><td>□真籠 □塑膠袋 □封口關鍵</td><td></td></tr>
+<tr><td>T7</td><td>（選做）土炮 CDM</td><td>C＝　pF；V＝　V</td><td>振鈴 f＝　MHz；週期＝　ns</td><td>反推 L＝　nH；縮迴路後 f↑√2？</td><td></td></tr>
+</table>
+<p><strong>一頁報告模板（四格，面試就照這個講）：</strong>①<strong>人格檢查</strong>：TVS 準靜態曲線與規格對帳結果、舊傷偵測有無；②<strong>量測可信度</strong>：量測鏈 RSS 自檢（接地線前後對照）、單次觸發五紀律執行情形——先自報家門再講證據；③<strong>臨場抓拍</strong>：事件波形＋系統鉗位 L·di/dt 解謎（C2 vs C4）＋閂鎖台階三張圖；④<strong>防線稽核</strong>：離子器/屏蔽袋兩張單＋「明天起我會做什麼」一條（例：把decay量測列進班前檢查）。 closing line：「我不只會選 TVS——我能驗它、拍它、證明它放在對的地方，並證明我的儀器配得上講這番話。」</p>
+
+<h2>9. 常見卡點與降級方案</h2>
+<ul>
+  <li><strong>沒有 ESD 槍？</strong>事件捕捉（§3）改兩條腿：①§6 土炮充放電（物理同框、幅度縮小、振鈴與 L 反推全部可做）；②跟 EMC 間借槍約時段，把 §3 矩陣當成「下週的預約單」。紀錄表註明「事件臨場未復原，練習卷版」——誠實標注和數據一樣重要。</li>
+  <li><strong>沒有高壓探棒？</strong>TVS 曲線全部改用 3.3/5 V 軌用低壓 TVS（V_BR 不到 10 V，10:1 探棒直量）；事件殘壓若超過探棒額定（300 V 級 CAT），改在受保護節點側量（TVS 鉗住後通常只剩幾十 V）或做「有 TVS 版」就好，C3 裸打態跳過。</li>
+  <li><strong>打槍永遠抓不到觸發？</strong>四查：①乾槍測試證伪環境觸發（§3 紀律③）；②觸發源接錯（sync 極性/準位）；③示波器處在 Auto 連拍卻以為在 Single（按了 Run 沒有？Single 燈號有沒有亮）；④存檔路徑沒設——Save 按了檔沒落地，等於沒抓。</li>
+  <li><strong>閂鎖打了十幾槍都不中？</strong>正常——現代 IC 很多已有 latch-up 免疫設計（JESD78 級防線，Day 48 表）。改三招：①挑老器件/類比 IC（保護結構舊）；②把供電電壓拉到 abs max 邊緣（datasheet 允許的實驗上限，不超過！）；③打「保護真空區」：未接 TVS 的輔助腳。全部不中也是一份合格報告：「本板在 IEC ±4 kV、N 發下未復現閂鎖——這是防線有效的證據，命中率 0/N 記檔」。</li>
+  <li><strong>CVM 讀數飄忽？</strong>距離與角度決定一切（標定距離照說明書，常見 25 mm）、手和身體就是大感應體——量的人站定、讀 3 次取中位。CVM 量的是「表面對地電位的場」，不是電荷總量：同一張板不同極性分佈會互相遮蓋——這正是它「快速巡檢有餘、定讞不足」的個性。</li>
+  <li><strong>感測電阻上的事件瞬間飽和爆表？</strong>事件 di/dt 在 R_sense 寄生電感上也會生壓（V＝L×di/dt——今天第三次遇到它）：換更低感抗的同軸馈通、或接受「事件瞬間不可信、只看事件後台階」——台階是直流級信號，R_sense 完全可信。誠實標注「t＝0 附近量測無效」是專業不是缺陷。</li>
+</ul>
+
+<h2>10. 面試怎麼考（lab 版——考的是量測誠實與物理還原力）</h2>
+
+<div class="card intuition">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Question 1: "How would you verify that a TVS diode on a camera module flex actually protects the image sensor in the real system? Compare what the datasheet says with what you measure on the bench, and explain every difference you expect."</strong><br><br>
+  <strong>Reference answer:</strong> Three layers, three instruments, three honest caveats. Layer one, DC characterization: a current-limited bench supply — compliance set to about 100 mA — with a series resistor, probing voltage across the TVS and across the resistor to derive current. That gives me leakage, the breakdown knee to cross-check against the datasheet's V_BR test condition, and a visible dynamic resistance. I would also run this on units returned from the line: elevated leakage or a softened knee is the fingerprint of a previously damaged clamp — it turns "suspected ESD death" into evidence. What this curve honestly cannot give me: the clamping voltage at 8/20 µs peak currents, which live one to two orders of magnitude above 0.1 A, and snapback behavior — DC is the portrait, the pulse curve is the action shot. Layer two, transient capture: an IEC 61000-4-2 gun on a sacrificial test coupon with the TVS placed two ways — right at the connector, and 5 cm away. Single-sequence acquisition, triggered off the gun's sync, everything saved before re-arm. The protected node's residual voltage will sit higher than the datasheet clamp, and the reason is arithmetic, not fraud: V_node = V_clamp + L_loop × di/dt. At 4 kV contact discharge the first peak is nominally 15-ish amps within about a nanosecond — 15 amps per nanosecond times 1.5 nanohenries of via and trace is 20-plus volts. The 5-cm TVS variant makes the loop's toll visible and quantifies it. Layer three, measurement-chain honesty, straight from Perfect Timing II chapter 11: my probe and scope each convolve their rise times in quadrature — the book's example shows a 1-nanosecond edge displayed as 1.5 ns through 400 MHz instruments, and as 3.3 ns once a 3-inch ground lead adds a 2.9-ns ground-loop term. So before I show anyone a transient, I show the A/B of my ground technique — spring clip versus alligator tail — and I quote only what my chain supports. That last sentence is the actual senior-EE signal: knowing the difference between the waveform on the board and the waveform on the screen.</p>
+  <p style="margin-top: 1.5em;"><strong>Question 2: "A field return says the camera preview goes black intermittently after the user touches the connector; a soft reset sometimes revives it. Design the lab reproduction and tell me exactly what you would measure and what results would convict or clear latch-up."</strong><br><br>
+  <strong>Reference answer:</strong> First separate the two candidate signatures before touching a gun: soft-reset-recoverable points toward logic/SEU/bus lock, while true latch-up needs a power cycle — so I'd instrument the supply rail feeding the suspect IC with a low-inductance sense resistor, one to ten ohms, and set the rail current limit to two or three times normal so a holding current can establish without cooking the board. Long-window single-shot capture: hundreds of microseconds post-event, synchronized to the discharge. Then reproduce: IEC gun, air discharge two to four kilovolts, at the connector signal pins, and also a charged-small-capacitor strike on the pin to emulate CDM-style injection, logging hits and misses — latch-up is statistical, so the hit rate at N shots is itself data. The conviction criteria are waveform fingerprints: a hard vertical step in supply current to a dead-flat plateau that survives soft reset and disappears only on power cycle is latch-up — the parasitic SCR found its holding current. If the current instead wanders and resets clear it, that's a crash, not a latch; if it decays exponentially, it's just a charging tail and I keep hunting; and if the step only appears on one probe configuration, it's my ground loop applauding itself, so I swap channels and re-verify. Once convicted, I measure the holding current off the plateau and check it against the board's ability to starve it — Day-48 math: is there series resistance or eFuse foldback that keeps the supply below I_H — and I A/B the cure the same way I proved the crime: add series resistance at the pin, re-run the shot matrix, compare hit rate and plateau height. Cleared but field symptoms persist? Then I widen: CDM audit of the module line, and I re-examine what "soft reset recovers it" really meant in field logs — because an IC that latches at low current and brown-outs its neighbor can look exactly like that from the user's side. Interviewers hear the structure: instrument first, statistical reproduction, fingerprint-based conviction, cure verified by the same camera that caught the crime.</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本日提煉）</span>
+  <p>「DC 曲線驗人格、脈衝曲線驗臨場——我只在儀器撐得起的頻段宣稱結論」；「系統鉗位比規格高出來的十幾伏，是 L·di/dt 開的價單——我把佈局守則還原成算術」；「抓一次性事件＝單次觸發五紀律：Single Sequence、事件自己當準星、乾槍三次、抓到先存檔、每張圖標設定」；「台階、亂跳、指數尾是三種指紋——判準 C 的身分證要三張合照（台階、reset 不退、cycle 退）」；「我的量測鏈先過安檢：Ch.11 那條 3 吋接地線，是我所有高速波形的自我審查起點」。五句配今天的七張紀錄表，就是「會做 ESD 鑑識的板端 EE」的完整人設。</p>
+</div>
+
+<h2>11. 睡前閱讀欄：Perfect Timing II Ch.11 全章重點卡（量測紀律聖經，全文六頁）＋Ch.16 帳單一則</h2>
+<p>今天課堂引用最重的一章，睡前把整章收齊（皆為原文觀點；標註處為現代備註）：</p>
+<ul>
+  <li><strong>全章開場白（原文要旨）：</strong>工程師探高速時脈常看到「和預期差很多的波形」，直覺以為設計壞了——<strong>多數情況是儀器頻寬被超出</strong>。全章兩大主題：示波器頻寬、探棒與連接。</li>
+  <li><strong>頻寬定義與兩個頻寬：</strong>頻寬＝正弦幅度衰到 −3 dB 的頻率；機身有頻寬、每個通道/插卡各有各的頻寬——「通道規格不同時要查自己那條通道」。</li>
+  <li><strong>重複訊號 3 倍律：</strong>看重複波形，頻寬至少是被測最高頻率的 3 倍才不失真。<strong>單次脈衝才是關注重點</strong>：它決定邊沿能不能被忠實拍下來。</li>
+  <li><strong>換算常數：</strong>t＝0.338/F_3dB（RMS 頻寬版 0.361）；書例：1 GHz 示波器最好也只能看 340 ps 邊沿。<em>現代備註：各廠用 0.35～0.45 視響應曲線——用廠方常數。</em></li>
+  <li><strong>取樣率紀律：</strong>取樣率/頻寬至少 4:1，8～16:1 波形才漂亮（取樣>10 倍後插值需求很小）；取樣後需要記憶深度存「點」——儲存不足，可看時間就縮短。<em>Ch.16 的帳：20 GSa/s→50 ps/點→100 MHz 的 1 µs 週期帳要 50K 點；cycle-to-cycle jitter 的新規格要 ≥10 GSa/s＋擷取 ≥100K 週期（10 ns 週期→至少 20 MB）——「規格越嚴、帳越大」是 2002 年到今天的通膨史（以現代標準需上修）。</em></li>
+  <li><strong>探棒本體：</strong>探棒有自己的頻寬、要用同樣方式折進帳本；輸入阻抗從 &lt;20 kΩ 到 &gt;10 MΩ、輸入電容從 15 pF 到 &lt;1 pF——<strong>選輸入電容最小的可行探棒</strong>。<em>現代備註：今日被動探棒 1～4 pF、主動/光隔離探棒已常見——但「負載效應」這門課一代都沒停過（Day 32/36）。</em></li>
+  <li><strong>接地線之恥（全章心脏）：</strong>4 吋鱷魚夾接地線被「幾乎所有人」隨便用——書中用矩形迴路電感公式算出 3 吋×0.5 吋迴路≈150 nH，配 5 pF 探棒：t_GROUND＝3.4√(LC)≈2.9 ns；加入平方和帳本後「板上 1 ns＝螢幕 3.3 ns」。<strong>對策原文：接地要最短最寬（縮小迴路面積）、高速用扁平刀片地；彈簧細線「通常可用但非最優」；測試連接器要貼著訊號點、且不要替走線增加 stub。</strong>——今天的實驗 B 就是這條的桌面重演。</li>
+  <li><strong>結論原文：</strong>「工程師常把示波器上的波形當成正確——但他們很容易被誤導。」準確的畫面需要正確的頻寬＋低感抗接地，兩者同等重要。<strong>今天妳的單次觸發設定單與接地對照實驗，就是把這句話從「讀過」變成「辦過」。</strong></li>
+  <li><strong>Ch.16 帳單一則（明天收官課的引信）：</strong>「在判定任何讀值違規之前，必須先量參考源確保參考本身合規」——先查尺、再判案。今天的對應版：先校量測鏈（實驗 B）、再判 TVS；先確認槍的校準有效期，再談事件數據。</li>
+</ul>
+
+<h2>12. 今日 Anki 卡片（實作日版：流程卡＋昨日卡片滾動複習）</h2>
+
+<div class="anki">
+  <p class="q">Q1：怎麼用限流電源描 TVS 的準靜態 V-I 曲線？它能驗證什麼、不能驗證什麼？為什麼訊號產生器不行？</p>
+  <p class="a">A1：電路：電源 CC 限制 ≤100 mA→串聯電阻（1 kΩ；洩漏區 10 kΩ）→反向偏壓 TVS；I＝(V_源−V_TV)/R_series，單點接地。三段記帳：洩漏區（µA、隨溫漂）、膝點（對帳 V_BR）、導通區（Rdyn＝ΔV/ΔI）；每讀一點回零散熱（P＝V×I，小封裝吃不下瓦級）。能做：來料驗證、舊傷偵測（洩漏大一個量級/膝點變軟）、防焊反。不能做：8/20 µs 鉗位（電流差 2 個量級以上）、啟動延遲、snapback——「DC 驗人格、脈衝驗臨場」。產生器只有 mW 級功率、給得出形狀給不出工作點——只能按門鈴不能做力量測試。</p>
+</div>
+<div class="anki">
+  <p class="q">Q2：量測鏈 RSS 公式與 Perfect Timing II Ch.11 的三個經典數字？殺手是誰？</p>
+  <p class="a">A2：t_DISPLAY＝√(t_sig²＋t_probe²＋t_scope²＋t_ground²)；各環節＝0.338/頻寬（廠方常數 0.35～0.45 為準）；t_ground＝3.4√(L[nH]×C[nF])。書例三連發：1 ns 訊號＋400 MHz 機＋400 MHz 棒→1.5 ns；3 吋地線（150 nH）配 5 pF→t_ground 2.9 ns；總帳 3.3 ns——地線佔方差八成。對策：最小電容探棒＋接地最短最寬（刀片地優於彈簧細線）＋貼點測試連接器不添 stub。先買接地彈簧片、再想升級示波器。</p>
+</div>
+<div class="anki">
+  <p class="q">Q3：為什麼「系統鉗位」比 datasheet 鉗位高十幾伏？給出公式、IEC 數字與三條解法。</p>
+  <p class="a">A3：V_節點＝V_clamp＋L_迴路×di/dt。IEC 4 kV 接觸放電第一峰名目 ~15 A、rise ~1 ns→di/dt≈10～20 A/ns；1.5 nH（一條 via＋幾 mm 銅）就加價 22 V。嫌疑銅：via 0.3~1 nH、走線 0.3~1 nH/cm、TVS 引線 0.3~0.7 nH、地孔迴路 0.3~1 nH。解法排序：TVS 移到侵入點與走線之間並就近「穿牆」入地＞加寬縮短接地＋多 via＞無引線封裝（DFN/array）。本質＝Day 47 佈局鐵律的物理還原。</p>
+</div>
+<div class="anki">
+  <p class="q">Q4：單次觸發抓一次性事件的五條紀律＋記憶深度兩段式？</p>
+  <p class="a">A4：①Single Sequence（不是 Auto/Normal）；②觸發源＝事件自己（槍 sync/電流靶），準位＝雜訊底 5~10 倍；③乾槍三次證明環境不會自己觸發；④窗口設計：頭部（5 ns/div 級）看波形、長窗口（50 µs/div 級）看台階——一台機器一次曝光；⑤Save before re-arm＋檔名＝紀錄編號＋圖上標設定。帳：真實取樣率＝記憶深度÷時間窗（10 Mpts 攤 200 µs＝只剩 50 MSa/s，頭部全糊）；Ch.11：取樣/頻寬 4:1 起、8~16:1 優；Ch.16：20 GSa/s→50 ps/點→1 µs＝50K 點。</p>
+</div>
+<div class="anki">
+  <p class="q">Q5：latch-up 台階的三張身分證＋四種假台階排除法？EPA 兩張稽核單的判讀？</p>
+  <p class="a">A5：身分證三連拍：①事件後電流垂直跳上、完全平坦的台階；②soft reset 不退；③power cycle 才退（復活＝無永久損傷）。假台階排除：斜的＝充電尾；漂移＋reset 退＝當機/SEU；只在一支探棒上出現＝地迴路假信（交換 CH 交叉驗證）；事件瞬間爆表＝R_sense 寄生電感 V＝L·di/dt（標注「t≈0 不可信」、台階是直流級仍可信）。命中率 0/N 也是合格報告。EPA：離子器 decay（起始 kV→±100 V 數秒內，量級）＋balance（殘留單一極性 &gt;±50 V 量級＝發射針髒＝充電器；開/關對照法）；屏蔽袋：袋外充電 kV、內置箔片引線 &lt;百 V 量級＝真籠，開口袋效能塌角，粉紅泡棉對照組不成籠。</p>
+</div>
+
+<h2>13. 總結與明日預告</h2>
+
+<p><strong>今天的三句話總結：</strong>①TVS 的規格書是「別臺機器在別的尺度拍的照」——今天妳有了自己的相機（DC 曲線＋脈衝抓拍），也有了「儀器和板子的帳要分開算」的習慣（L·di/dt＋量測鏈 RSS）；②一次性事件的證據＝單次觸發五紀律＋兩段式曝光——「抓到先存檔、每張圖標設定」是實驗室裡的法庭程序；③閂鎖不是玄學是台階、屏蔽不是顏色是籠子、中和不是有風是 balance——今天起，Day 46–48 的每一句口號在妳手邊都有一張對應的照片。</p>
+
+<p><strong>Day 50（週五）：</strong>第 10 週收官課——「ESD 單頁決策書」：把四天的模型帳（HBM/CDM/IEC）、TVS 選型三連問、佈局鐵律、閂鎖三支柱、產線 S20.20 全部壓成一頁可帶走的決策流程（純閱讀＋整理，不需儀器）。<strong>提醒：今天的實驗沒做完的全都安排在明天（週五）補做——平日才有儀器；實驗指引本體（§0 安全紅線先讀）帶到公司再動槍。</strong>週日（Day 51）＝第 10 週 20 題自我測驗（會問到今天妳自己量過的數字）。另外，距離第 12 週（約 Day 57）的履歷投遞節點還有一週——履歷素材庫存檔夾「ESD-lab」的截圖正好可以進 STAR 故事庫。</p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>

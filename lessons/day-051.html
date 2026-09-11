@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Day 51｜相機信號鏈與上電架構總覽——從光子到像素的全地圖＋上電順序 DAG（Phase 3 揭幕）</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="lesson">
+  <div class="kicker">EE 深造計畫｜Phase 3：相機子系統深化｜第 11 週・第 51 天（週六新觀念課・Phase 3 揭幕）</div>
+  <h1>Day 51：相機信號鏈與上電架構總覽——從光子到像素的全地圖，加上「哪條軌先來、哪條軌後到」的上電順序 DAG（Phase 3 揭幕）</h1>
+  <div class="meta">2026-09-12（六）｜預估學習時間：90 分鐘（純閱讀＋腦中的地圖課——今天不學新物理，學的是「版圖」：接下來六週（感測器物理→MIPI→鏡頭模組→ISP）每一課都將落在這張地圖的某一格裡）｜難度：★★★☆☆（單點都不難，難的是第一次把資料、控制、時脈、電源四種「線」畫在同一張圖上，並且回答那個所有 camera bring-up 問題之母：「為什麼電源不能一起開？」——Day 48 三大支柱的最後一根「順序不亂」，今天從配角升為主角。Perfect Timing II 鉤子：Ch.5「電源是訊號的地基」與 300 mV 注入掃頻實驗、Ch.12 可程式元件的 power-up 預設狀態、Ch.16「先量參考、再談違例」）</div>
+</header>
+
+<div class="card goal">
+  <span class="label">今日目標</span>
+  <p>Phase 3 開週不衝深度，先立地圖。今天下課時，腦中要有一張<strong>「光子到像素」的六格資料鏈</strong>（微透鏡→光電二極體→類比前端→數位化→CSI-2 打包→SoC/ISP）和一張<strong>上電順序 DAG</strong>（PMIC→DOVDD→AVDD→DVDD→MCLK→CCI→開機流出流），而且能用因果鏈解釋「順序違反的下場」。具體驗收標準——合上課檔，你能做到：</p>
+  <ol>
+    <li><strong>畫出全鏈路地圖：</strong>六格資料鏈每格一句話＋標出控制面（CCI 匯流排、EEPROM、VCM 驅動）、時脈面（MCLK）、電源面（DOVDD/AVDD/DVDD/MIPI PHY 軌）各自掛在哪一格——並說出每一格對應未來哪一週的課。</li>
+    <li><strong>分清 CSI-2 與 CCI：</strong>一個是單向高速公路（打包的影像資料），一個是賬房櫃檯（暫存器讀寫）；能做出 13 MP@30 fps@10 bit 的頻寬量級帳，算出每條 lane 至少要多快。</li>
+    <li><strong>講清楚上電 DAG 的因果：</strong>為什麼典型順序是 IO 軌先行、類比軌其次、核心軌壓軸？順序亂了會遇到哪四種下場——倒灌鬼供電、閂鎖、ADC 開機吃垃圾（白条/綠條）、非單調電軌？每種都要能講出電子實際走的fiz路徑，不是背口號。</li>
+    <li><strong>帶走三個可算的式子：</strong>t<sub>ramp</sub>≈C·ΔV/I（電軌爬升時間）、E＝½CV²（充一次電的能量）、總線需求＝像素×影速率×位元÷lane 數÷效率——以及 PT2 Ch.5 的實驗哲學：「把已知大小的雜訊打進電源，量化它造成多少傷害」，這個方法今天用在 PLL，換到 camera 就是量 AVDD 紋波對畫面的 PSRR。</li>
+  </ol>
+  <p>今天的定位：Day 1～50 你練的是「任何一种線/軌/事件」的通用兵器；從今天起，這些兵器全部裝上 camera 彈頭。地圖立好了，之後六週每學一格，你的面試履歷就長出一根能深挖的刺。</p>
+</div>
+
+<div class="card intuition">
+  <span class="label">白話版：機場航廈＋工廠復電</span>
+  <p><strong>資料鏈＝機場流程。</strong>一位旅客（光子）從落地到出關，固定經過六站：空橋（微透鏡集光）→登機門（光電二極體吸收）→身份查驗（電荷轉電壓、放大、數位化）→行李打包（打包成封包）→航廈高速路（MIPI CSI-2 lane）→海關大廳（SoC/ISP 解析處理）。任何一站塞車，你看到的都是同一種症狀：「沒畫面」——所以工程師修 camera 的第一步永遠不是拆機器，而是先問：<strong>旅客卡在哪一站？那一站的護照（暫存器）、輸送帶（lane）、水電（電源軌）、班表（時脈）個別好不好？</strong>今天的地圖，就是讓你之後所有 debug 都有「站」可以指。</p>
+  <p><strong>上電順序＝工廠復電。</strong>台風過後全廠恢復供電，電機士的順序永遠是：先開<strong>辦公室和对讲機</strong>（IO 軌——控制系統要能說話），再開<strong>自來水和氣壓</strong>（類比軌——工艺環境先 stabilize），再開<strong>主機台</strong>（核心軌——運算本體），最後才下<strong>「量產開始」指令</strong>（開機流）。為什麼不能總開關一推全上？因為沒復電的機台不是「關機」，而是「半死」：辦公室已通電、機台未通電時，對講機線上的 24 V 會從訊號線<strong>倒灌</strong>進沒電的機台，把控制面板推到低於臨界的「鬼電」狀態——機台不運作，但處在最脆弱的半醒狀態，隨時可能燒保險絲（對應晶片版本：電流沿 ESD 二極體倒灌、觸發寄生 SCR 閂鎖）。工廠用「復電程序單」防這件事，晶片用 datasheet 裡的<strong>上電順序規格</strong>防這件事——今天的重點就是教你讀那張程序單、並自己畫一張。</p>
+  <p>所有公式今天都可以先跳過，結論只有一句：<strong>camera 是一颗「先開控制、再開類比、再開核心、最後才通話」的零件，而且它的資料只走一條單向高速路、控制只走一條小賬房——四個介面（資料/控制/時脈/電源）誰先誰後、誰掛在哪，就是今天全部内容。</strong></p>
+</div>
+
+<h2>0. 前情提要——Phase 2 的四箱兵器，今天開始上貨</h2>
+<ul>
+  <li><strong>Day 48（latch-up 日）：</strong>你已經知道「順序不亂」是板端防閂鎖三大支柱之一——今天它從配角升為主角：上電順序是 latch-up 的第一道設計防線，而且會多出一種新壞法：<strong>倒灌鬼供電（back-powering）</strong>。</li>
+  <li><strong>Day 50（決策書日）：</strong>七站動線的第③站有一條「latch-up 連動檢查：電源埠保護要連同 sequencing 一併看」——當時是預告，今天把那個黑盒子拆開。</li>
+  <li><strong>Phase 2 全程（PI/SI）：</strong>PT2 Ch.5 的教訓「電源品質變差，訊號品質就變差」你已經用在 PDN 和時脈上；今天換受害者——<strong>感光二極體與類比數位轉換器</strong>，電源雜訊的帳照算，只是帳單上的單位從 jitter 變成畫面上的橫紋。</li>
+  <li><strong>你的本行：</strong>NB 主機板上你早就摸過 PMIC、LDO enable、PG（power good）——今天把這套電源樹語言接到一顆 camera sensor 上，你就擁有「主機板 × 鏡頭模組」的雙語能力，這正是 camera HW EE 職缺要的人。</li>
+</ul>
+
+<h2>1. 大地圖：四種線、六格站（先認路，再認理）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>把鏡頭模組想成一間「外幣兌換所」：光子從窓口進來，兌換所把外幣（光）先驗鈔（轉成電荷）、計數（轉成電壓）、記賬數位化，再用<strong>一條單向的高速送鈔通道</strong>把鈔包送到央行（SoC）；央行跟兌換所之間另有一條<strong>對講機線</strong>（CCI）負責發指令：「今天開幾點、匯率多少、開始營業」；兌換所自己的<strong>水電</strong>分三路：櫃檯照明（IO 軌）、驗鈔機（類比軌）、電腦主機（核心軌）——三路不能同時送，原因下節講。圖上把這四種線（資料／控制／時脈／電源）全部標出來，之後六週的課就在這張圖上「指哪學哪」。</p>
+</div>
+
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="480" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 1：從光子到像素——六格資料鏈＋控制／時脈／電源三面（未來六週的地圖底圖）</text>
+
+  <!-- main data chain row -->
+  <rect x="18" y="70" width="130" height="92" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="83" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">① 微透鏡＋濾色陣列</text>
+  <text x="83" y="110" text-anchor="middle" font-size="10.5" fill="#374151">集光／分色（R G B）</text>
+  <text x="83" y="125" font-size="10" text-anchor="middle" fill="#64748b">光學層——非 EE 主場</text>
+  <text x="83" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 11～12 物理</text>
+
+  <rect x="172" y="70" width="130" height="92" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="237" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">② 光電二極體</text>
+  <text x="237" y="110" text-anchor="middle" font-size="10.5" fill="#374151">光子→電荷</text>
+  <text x="237" y="125" font-size="10.5" fill="#374151">full well／QE</text>
+  <text x="237" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 11 主场</text>
+
+  <rect x="326" y="70" width="130" height="92" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="391" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#854d0e">③ 類比前端</text>
+  <text x="391" y="110" text-anchor="middle" font-size="10.5" fill="#374151">PGA 放大＋CDS</text>
+  <text x="391" y="125" text-anchor="middle" font-size="10.5" fill="#374151">轉換增益 CG</text>
+  <text x="391" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 12 雜訊主場</text>
+
+  <rect x="480" y="70" width="130" height="92" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="545" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#854d0e">④ 類比轉數位</text>
+  <text x="545" y="110" text-anchor="middle" font-size="10.5" fill="#374151">每欄 ADC（列并行）</text>
+  <text x="545" y="125" text-anchor="middle" font-size="10.5" fill="#374151">10/12/14 bit</text>
+  <text x="545" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 12／18 ADC</text>
+
+  <rect x="634" y="70" width="130" height="92" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="699" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">⑤ 序列器＋PHY</text>
+  <text x="699" y="110" text-anchor="middle" font-size="10.5" fill="#374151">打包成 CSI-2 封包</text>
+  <text x="699" y="125" text-anchor="middle" font-size="10.5" fill="#374151">D-PHY：1 clk＋N data</text>
+  <text x="699" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 13～14 主場</text>
+
+  <rect x="788" y="70" width="152" height="92" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="864" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#3730a3">⑥ SoC CSI-RX＋ISP</text>
+  <text x="864" y="110" text-anchor="middle" font-size="10.5" fill="#374151">解包→3A／demosaic</text>
+  <text x="864" y="125" text-anchor="middle" font-size="10.5" fill="#374151">降噪／tone map→YUV</text>
+  <text x="864" y="140" font-size="10" text-anchor="middle" fill="#0e7490">週 16 主場</text>
+
+  <!-- arrows between -->
+  <line x1="148" y1="116" x2="170" y2="116" stroke="#64748b" stroke-width="2.5" marker-end="url(#d1)"/>
+  <line x1="302" y1="116" x2="324" y2="116" stroke="#64748b" stroke-width="2.5" marker-end="url(#d1)"/>
+  <line x1="456" y1="116" x2="478" y2="116" stroke="#64748b" stroke-width="2.5" marker-end="url(#d1)"/>
+  <line x1="610" y1="116" x2="632" y2="116" stroke="#64748b" stroke-width="2.5" marker-end="url(#d1)"/>
+  <line x1="764" y1="116" x2="786" y2="116" stroke="#64748b" stroke-width="2.5" marker-end="url(#d1)"/>
+
+  <text x="480" y="192" text-anchor="middle" font-size="11" fill="#374151">資料面（單向、越往右越快）：光子 → 電荷 → 電壓 → 位元 → 封包 → 影像</text>
+
+  <!-- control plane -->
+  <rect x="18" y="240" width="420" height="110" rx="10" fill="#fdf2f8" stroke="#db2777" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="228" y="262" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#9d174d">控制面（雙向、慢但決定一切）</text>
+  <text x="228" y="282" text-anchor="middle" font-size="10.8" fill="#374151">CCI（I2C／I3C）：SoC ↔ sensor 暫存器——曝光／增益／模式／開機</text>
+  <text x="228" y="299" text-anchor="middle" font-size="10.8" fill="#374151">EEPROM（模組校正資料：模組 ID、幾何與色度補正）同掛匯流排</text>
+  <text x="228" y="316" text-anchor="middle" font-size="10.8" fill="#374151">VCM AF／OIS 驅動 IC（AFE）也在同一條線上——週 15 主場</text>
+  <text x="228" y="336" text-anchor="middle" font-size="10" fill="#0e7490">I2C 400 kHz～1 MHz 量級；MIPI I3C 可到 10 MHz 級（標準定義）</text>
+
+  <!-- clock plane -->
+  <rect x="462" y="240" width="222" height="110" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="573" y="262" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#9a3412">時脈面</text>
+  <text x="573" y="282" text-anchor="middle" font-size="10.8" fill="#374151">MCLK：SoC／時脈緩衝器餵給 sensor</text>
+  <text x="573" y="299" text-anchor="middle" font-size="10.8" fill="#374151">典型 24 MHz 級（約，依規格）</text>
+  <text x="573" y="316" text-anchor="middle" font-size="10.8" fill="#374151">sensor 內部 PLL 倍頻出 lane 速率</text>
+  <text x="573" y="336" text-anchor="middle" font-size="10" fill="#0e7490">時脈樹＝PT2 Ch.12/16 的舊地盤</text>
+
+  <!-- power plane -->
+  <rect x="708" y="240" width="232" height="110" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="824" y="262" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#115e59">電源面（今天的壓軸）</text>
+  <text x="824" y="282" text-anchor="middle" font-size="10.8" fill="#374151">DOVDD 1.8 V 級｜AVDD 2.8～3.0 V 級</text>
+  <text x="824" y="299" text-anchor="middle" font-size="10.8" fill="#374151">DVDD 1.1～1.2 V 級｜MIPI PHY 軌（共／獨立）</text>
+  <text x="824" y="316" text-anchor="middle" font-size="10.8" fill="#374151">PMIC 依 DAG 依序 enable</text>
+  <text x="824" y="336" text-anchor="middle" font-size="10" fill="#0e7490">「順序」與「品質」兩本帳——今日先順序</text>
+
+  <!-- connection lines (dashed up) -->
+  <line x1="391" y1="240" x2="391" y2="164" stroke="#db2777" stroke-width="1.8" stroke-dasharray="4 4"/>
+  <line x1="573" y1="240" x2="699" y2="164" stroke="#ea580c" stroke-width="1.8" stroke-dasharray="4 4"/>
+  <line x1="824" y1="240" x2="824" y2="164" stroke="#0d9488" stroke-width="1.8" stroke-dasharray="4 4"/>
+  <line x1="120" y1="240" x2="237" y2="164" stroke="#db2777" stroke-width="1.8" stroke-dasharray="4 4"/>
+  <line x1="760" y1="240" x2="545" y2="164" stroke="#0d9488" stroke-width="1.8" stroke-dasharray="4 4"/>
+
+  <!-- bottom caption -->
+  <text x="480" y="400" text-anchor="middle" font-size="11.5" fill="#475569">讀圖口訣：資料只往右（單向高速）、控制兩邊走（低速但決定模式）、時脈餵內臟（PLL 沒快不起来）、電源分四路（先後面、先類比後核心）。</text>
+  <text x="480" y="424" text-anchor="middle" font-size="11.5" fill="#475569">debug 四分法：沒畫面先問——封包有嗎？（資料）暫存器讀到嗎？（控制）PLL 鎖住了嗎？（時脈）四軌都對嗎？（電源）</text>
+
+  <defs>
+    <marker id="d1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#64748b"/></marker>
+  </defs>
+</svg>
+
+<h3>1.1 六格站各一句話（以及它們對應未來哪一週）</h3>
+<table>
+<tr><th style="width:18%">站</th><th style="width:47%">一句話（今天夠用的深度）</th><th style="width:35%">之後哪週深挖</th></tr>
+<tr><td><strong>① 微透鏡＋濾色陣列</strong></td><td>每顆像素上方一顆微型透鏡把光收進感光區；彩色滤鏡陣列（常見 Bayer R/Gr/Gb/B）讓每顆像素只看一種顏色——「顏色是猜出來的」這句話的源頭</td><td>週 11（光學與 QE）、週 16（demosaic 把猜的還原）</td></tr>
+<tr><td><strong>② 光電二極體</strong></td><td>光子打出電子、存在小井裡（full well）：井多大決定能收多少光（飽和＝過曝），井壁漏多少決定暗電流——感測器的「本體」</td><td>週 11（pinned photodiode、QE、full well）</td></tr>
+<tr><td><strong>③ 類比前端</strong></td><td>把極小的電荷訊號轉成電壓並放大（PGA＋相關雙取樣 CDS 消掉重置雜訊）；轉換增益 CG 是週 12 雜訊帳的核心硬幣</td><td>週 12（雜訊全家福）；你的類比本行（週 18 運放）在此重逢</td></tr>
+<tr><td><strong>④ 類比轉數位</strong></td><td>現代理想晶片多數每欄（column）一颗 ADC 並行轉換——像素陣列像體育場逐列離場，一列一列讀出</td><td>週 12（ADC 噪聲）、週 18（ADC 規格判讀）</td></tr>
+<tr><td><strong>⑤ 序列器＋MIPI PHY</strong></td><td>把數位像素依協定打包（frame start／line／image data／checksum），再由 D-PHY 的高速差動 lane 送出——SI 兵器庫的正面戰場</td><td>週 13（D-PHY 電氣層）、週 14（CSI-2 封包層）</td></tr>
+<tr><td><strong>⑥ SoC CSI-RX＋ISP</strong></td><td>主機板端接收：解包→黑準位／增益→demosaic→降噪→白平衡→tone mapping→輸出 YUV/RGB——你板上的 MIPI 走線與電源設計全為這一段服務</td><td>週 16（ISP pipeline 與影像指標）</td></tr>
+</table>
+
+<h2>2. 資料面速覽：CSI-2 是高速公路，CCI 是賬房櫃檯（別讓兩者互相冒充）</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>CSI-2 是<strong>單向送貨的高速公路</strong>：只有出口、沒有迴轉道，貨（影像封包）一車接一車往央行送；公路有「時鐘車道」（clock lane）領先帶路，資料車道（data lane）跟著跑。CCI 是<strong>一旁的賬房電話</strong>：慢、雙向、講的是「明天幾點開門、貨車開多快、今天走哪條路」這種指令。面試與實務都最容易在這裡出错：把「讀不到 chip ID」（賬房問題）當成「lane 速度不夠」（公路問題）辦，或反之——所以先把兩條線的职責切乾淨。</p>
+</div>
+
+<p><strong>公路（CSI-2／D-PHY）今天的三個鈐記：</strong></p>
+<ol>
+  <li><strong>拓撲：</strong>1 條差動 clock lane ＋ 1～4 條差動 data lane（高階可更多）；資料只在 HS（高速）模式跑，lane 之間不用共同時脈，靠 8b/10b 式嵌入時脈自行提取（D-PHY 細節與 LP/HS 狀態機＝週 13 主場，今天只要記住：clock lane 先動、data lane 後動的「車隊紀律」）。</li>
+  <li><strong>單向：</strong>sensor→SoC。控制指令一律走 CCI，不要在高速線上找「回程訊號」——找不到是正常的。</li>
+  <li><strong>速度等級：</strong>D-PHY v1.2 規格單 lane 上限定義到 2.5 Gbps/s 級（規範值）；實務手機/NB 鏡頭常見落在數百 Mbps 到 1.x Gbps/lane 區間（依器件，量級）——你的 SI 兵器（阻抗、損耗、眼圖）週 13 全面開戰。</li>
+</ol>
+
+<p><strong>賬房（CCI）今天的三個鈐記：</strong></p>
+<ol>
+  <li><strong>實體層：</strong>傳統為 I2C（400 kHz 快速模式、1 MHz FM＋級），新平台走向 MIPI I3C（SDR 可到 10 MHz 級，標準定義）——都是「兩線、開汲、上拉」家族，你的 NB 主機板經驗直接沿用。</li>
+  <li><strong>內容：</strong>讀出「晶圓身份」（chip ID）是開機第一問；其後寫的是解析度、影速率、曝光/增益（3A 的執行端）、CSI lane 數與速率、 standby/streaming 切換。同一條線上還掛模組 EEPROM（校正資料，週 15）與對焦/OIS 驅動（週 15）。</li>
+  <li><strong>上拉軌的教訓（先預告）：</strong>CCI 上拉接到哪條軌、那條軌何時存在，直接關乎今天的鬼供電主題——§4.3 會收到帳。</li>
+</ol>
+
+<div class="formula">
+<strong>頻寬量級帳（高速公路需要幾車道）：</strong><br>
+payload 需求 ＝ 像素數 × 影速率 × 位元深度<br>
+13 MP × 30 fps × 10 bit ＝ <strong>3.9 Gb/s</strong>（純資料，不含封包開銷）<br>
+實際線路需求 ≈ payload ÷ 效率；CSI-2 有封包頭尾、行框、embedded data、LP↔HS 切換等開銷，粗估抓 <strong>七八成效率（量級，精算看 mode table）</strong>→ 約 4.9～5 Gb/s<br>
+分給 4 條 data lane：每 lane ≥ 約 1.2～1.3 Gb/s → 選料時每 lane 規格再留一成以上餘裕（約）<br>
+<em>白話翻譯：先算一小時要搬多少貨（像素×影速率×每箱重量），除以公路打折後的真實運量，再除以車道數，就知道每條車道至少要跑多快——選 sensor 模式和選 lane 速度是同一道除法，面試白板題高頻。</em>
+</div>
+
+<h2>3. 電源面：四條軌的四種性格</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>一顆 sensor 的電源不是「一顆電池」，而是一個四口之家：<strong>DOVDD（IO 軌，1.8 V 級）</strong>是「門面」——決定它對外說話（CCI、GPIO）的音量，也最早被外部世界期待在場；<strong>AVDD（類比軌，2.8～3.0 V 級）</strong>是「廚房」——供電給光電二極體偏壓、放大器、ADC 的類比部分，對紋波最挑剔（廚房水質不好，菜就有怪味＝畫面有紋）；<strong>DVDD（核心軌，1.1～1.2 V 級）</strong>是「大腦」——時序邏輯與 DSP，電流最小但最怕靜電與過壓；<strong>MIPI PHY 軌</strong>是「送貨司機」——高速輸出級的供電，有的設計與 IO 軌共用、有的獨立。四口的飯點不同、食量不同、脾氣不同；<strong>先餵誰、後餵誰，datasheet 說了算——但「為什麼」，今天教你自己推。</strong></p>
+</div>
+
+<table>
+<tr><th style="width:17%">軌</th><th style="width:20%">典型量級（約，以 datasheet 為準）</th><th style="width:33%">養誰</th><th style="width:30%">性格／你熟悉的 PI 語言</th></tr>
+<tr><td><strong>DOVDD</strong>（IO/數位 IO）</td><td>1.8 V 級（部分器件 2.8 V 級或可選）</td><td>CCI/GPIO 輸出級、輸入緩衝器、部分器件的 eFuse/控制邏輯</td><td>門面軌：決定所有對外電平；存在與否直接影響「倒灌帳」（§4.3）</td></tr>
+<tr><td><strong>AVDD</strong>（類比）</td><td>2.8～3.0 V 級（口數可能不止一條）</td><td>感光二極體偏壓、PGA、ADC 類比段、基準電壓源</td><td>最乾淨的軌：PT2 Ch.5 哲學的直接受益者——紋波換到畫面上是橫紋/行雜訊（§5.3）</td></tr>
+<tr><td><strong>DVDD</strong>（核心）</td><td>1.1～1.2 V 級</td><td>像素陣列時序邏輯、內部 DSP、PLL 數位段</td><td>最低壓最敏感：ESD 耐量最低（CDM 主場，Day 46 帳本）；上電常居最後</td></tr>
+<tr><td><strong>MIPI PHY 軌</strong></td><td>與 DOVDD 共軌或獨立 1.1～1.8 V（依器件）</td><td>D-PHY 高速發射端</td><td>開機瞬間突發電流（lane 起速）＝AVDD 之外的第二個瞬態源，PDN 帳（週 7～8）在此重逢</td></tr>
+</table>
+
+<p><strong>模組層級再加兩筆帳（鏡頭模組視角，週 15 展開）：</strong>EEPROM 通常吃 DOVDD 級或獨立 1.8 V；VCM AF/OIS 驅動 IC（AFE）自帶一～兩條馬達軌（常見 2.8～3.2 V 級，約），由 SoC/GPU 端以 H-bridge 電流控制——它與 sensor 軌的「誰先誰後」也要進 DAG。一顆高階 NB 後視鏡頭模組工作電流以 <strong>百 mA 量級起跳</strong>（解析度、是否 HDR、馬達動作狀態差異很大——量級，勿引用為規格），20～25 cm 長 FPC 在折疊機上的 IR drop（Day 40 舊帳）要從 AVDD 的餘裕裡扣。</p>
+
+<h2>4. 上電順序 DAG：為什麼不能總開關一推全上</h2>
+
+<div class="card intuition">
+  <span class="label">白話版</span>
+  <p>「順序」的本質是一句話：<strong>任何時刻，晶片裡的每一顆電晶體都必須能回答「我的地盤電壓是多少」；兩塊地盤的電位差超出設計預期，電流就會從沒人想要它走的路徑流過。</strong>總開關全上看似省事，實際上四條軌的物理上升時間不同（大電容的軌慢、小電容的軌快），等於「隨機排序」上電——等於把晶片的生死交給 RC 常數抽籤。datasheet 的順序規格就是把抽籤改成排班表：谁先、誰後、兩條軌之間最多差多少伏、各軌上升要多快，全部寫死。下面三張「下場」會告訴你排班表每一行背後各死過什麼人。</p>
+</div>
+
+<h3>4.1 典型 DAG 與時序圖（畫法範例——順序與間隔以具體 sensor datasheet 為準）</h3>
+
+<svg viewBox="0 0 960 590" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="480" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 2：上電順序 DAG（上）與電軌上升示意（下）——箭頭＝依賴，先修好地基再蓋樓</text>
+
+  <!-- DAG -->
+  <rect x="20" y="60" width="150" height="56" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="95" y="83" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#334155">PMIC 輸入（VBAT/SYS）</text>
+  <text x="95" y="100" text-anchor="middle" font-size="10" fill="#64748b">LDO／SMPS 本體就緒</text>
+
+  <rect x="210" y="60" width="150" height="56" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2"/>
+  <text x="285" y="83" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#115e59">① DOVDD 起</text>
+  <text x="285" y="100" text-anchor="middle" font-size="10" fill="#64748b">IO 電平樹立、CCI 可聽</text>
+
+  <rect x="400" y="60" width="150" height="56" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="475" y="83" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#854d0e">② AVDD 起</text>
+  <text x="475" y="100" text-anchor="middle" font-size="10" fill="#64748b">類比環境 stabilise</text>
+
+  <rect x="590" y="60" width="150" height="56" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="665" y="83" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#1e40af">③ DVDD 起</text>
+  <text x="665" y="100" text-anchor="middle" font-size="10" fill="#64748b">核心邏輯甦醒（最後）</text>
+
+  <rect x="790" y="60" width="150" height="56" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="865" y="83" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#9a3412">④ MCLK 就緒</text>
+  <text x="865" y="100" text-anchor="middle" font-size="10" fill="#64748b">頻率選定、PLL 有飯吃</text>
+
+  <path d="M170 88 L208 88" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+  <path d="M360 88 L398 88" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+  <path d="M550 88 L588 88" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+  <path d="M740 88 L788 88" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+
+  <rect x="790" y="160" width="150" height="56" rx="10" fill="#fdf2f8" stroke="#db2777" stroke-width="2"/>
+  <text x="865" y="183" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#9d174d">⑤ CCI 握手</text>
+  <text x="865" y="200" text-anchor="middle" font-size="10" fill="#64748b">讀 chip ID→寫模式</text>
+
+  <rect x="590" y="160" width="150" height="56" rx="10" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="665" y="183" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#3730a3">⑥ 開機流 streaming</text>
+  <text x="665" y="200" text-anchor="middle" font-size="10" fill="#64748b">clk lane 先動→data lane 起速</text>
+
+  <path d="M865 116 L865 158" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+  <path d="M788 188 L742 188" stroke="#64748b" stroke-width="2.5" marker-end="url(#g2)"/>
+
+  <!-- constraint callouts -->
+  <text x="470" y="256" text-anchor="middle" font-size="11.5" fill="#475569">DAG 上每一條邊都是一個「必須成立的因果」；典型約束（依 datasheet）：兩軌間最大電位差 ΔV、DVDD 需在 AVDD 穩定後 t 內跟上、各軌上升須單調且 tRAMP 有上限、掉電順序大致相反。</text>
+  <text x="470" y="276" text-anchor="middle" font-size="11.5" fill="#b91c1c">注意：不同 sensor 的順序可能不同（有的要求 AVDD 先於 DOVDD）——順序本身查 datasheet；「為什麼需要順序」的物理今天學通，才讀得懂任何一張表。</text>
+
+  <!-- timing waveforms -->
+  <line x1="80" y1="540" x2="900" y2="540" stroke="#334155" stroke-width="1.5"/>
+  <text x="910" y="544" font-size="10.5" fill="#334155">t</text>
+  <line x1="80" y1="300" x2="80" y2="540" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- DOVDD -->
+  <path d="M140 540 L140 470 Q150 452 165 452 L300 452" fill="none" stroke="#0d9488" stroke-width="2.5"/>
+  <text x="150" y="440" font-size="11" fill="#115e59" font-weight="bold">DOVDD（1.8 V 級）</text>
+  <!-- AVDD -->
+  <path d="M300 540 L300 392 Q312 372 330 372 L500 372" fill="none" stroke="#ca8a04" stroke-width="2.5"/>
+  <text x="312" y="360" font-size="11" fill="#854d0e" font-weight="bold">AVDD（2.8～3.0 V 級）</text>
+  <!-- DVDD -->
+  <path d="M520 540 L520 336 Q530 318 545 318 L700 318" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="532" y="308" font-size="11" fill="#1e40af" font-weight="bold">DVDD（1.1～1.2 V 級）</text>
+  <!-- MCLK -->
+  <path d="M720 540 L720 500 M720 500 l8 0 l0 -14 l8 0 l0 14 l8 0 l0 -14 l8 0 l0 14 l8 0 l0 -14 l8 0 l0 14 l8 0 l0 -14 l8 0 l0 14 l8 0" fill="none" stroke="#ea580c" stroke-width="2"/>
+  <text x="726" y="478" font-size="11" fill="#9a3412" font-weight="bold">MCLK 24 MHz 級（約）</text>
+  <!-- streaming -->
+  <path d="M820 520 l6 -10 l0 10 M836 520 l6 -10 l0 10 M852 520 l6 -10 l0 10" fill="none" stroke="#4f46e5" stroke-width="2"/>
+  <text x="812" y="498" font-size="11" fill="#3730a3" font-weight="bold">CSI-2 開機流</text>
+
+  <!-- tRAMP marker -->
+  <path d="M300 560 L300 548 M330 560 L330 548" stroke="#ca8a04" stroke-width="1.2"/>
+  <line x1="300" y1="556" x2="330" y2="556" stroke="#ca8a04" stroke-width="1.2"/>
+  <text x="300" y="580" font-size="10.5" fill="#854d0e">tRAMP≈C·ΔV/I（§5.1 要算它）</text>
+  <!-- dV window -->
+  <path d="M500 372 L500 318" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#g2r)" marker-start="url(#g2r2)"/>
+  <text x="430" y="345" font-size="10.5" fill="#dc2626" font-weight="bold">ΔV 窗口：相鄰軌電位差上限（約，查表）</text>
+  <!-- monotonic note -->
+  <text x="150" y="580" font-size="10.5" fill="#b91c1c">每條軌上升須單調（不回跌）；掉電順序大致相反、避免 IO 軌最後走又最晚回</text>
+
+  <defs>
+    <marker id="g2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#64748b"/></marker>
+    <marker id="g2r" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+    <marker id="g2r2" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto-start-reverse"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+  </defs>
+</svg>
+
+<h3>4.2 順序背後的四種下場（每種都講到電子走哪條路）</h3>
+
+<p><strong>下場一：倒灌鬼供電（back-powering）——今天的新壞法。</strong>IO 軌（1.8 V）已經存在、核心軌（1.2 V）還沒起來時，相鄰 IO 單元對核心域輸出「高」，或板上相連器件（例如 EEPROM、AFE 掛在已上電的 1.8 V，sensor 本身沒電）驅動連線——電流會沿著晶片引腳內部的 <strong>ESD 上鉗位二極體</strong>（引腳→電源軌的保護二極體，Day 46 見過它的靜態面）<strong>倒灌進未上電的軌</strong>：那條軌被「供」出一個不高不低、PMIC 認不得的鬼電壓（suspect supply）。後果三層：（a）晶片進入規格外的半醒狀態，暫存器被亂置位；（b）倒灌路徑不是設計給連續電流用的，局部過熱與遷移風險；（c）PMIC 的 PG 判斷被污染，主控以為「已上電」而提前放行後續步驟——整個 DAG 從第一步就說謊。</p>
+
+<svg viewBox="0 0 960 330" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <text x="480" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f4c5c">圖 3：倒灌鬼供電——電流沿 ESD 二極體「從有電的鄰居餵沒電的自己人」</text>
+
+  <!-- Driver chip -->
+  <rect x="60" y="80" width="240" height="150" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="180" y="105" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e40af">鄰居：已上電的器件／IO 域</text>
+  <text x="180" y="126" text-anchor="middle" font-size="11" fill="#374151">自己的 DOVDD＝1.8 V 已存在</text>
+  <rect x="92" y="142" width="90" height="52" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="137" y="163" text-anchor="middle" font-size="10.5" fill="#1e40af">輸出級</text>
+  <text x="137" y="180" text-anchor="middle" font-size="10.5" fill="#1e40af">驅動「高」</text>
+  <text x="180" y="212" text-anchor="middle" font-size="10.5" fill="#64748b">（或 10 kΩ 上拉在 1.8 V 軌）</text>
+
+  <!-- trace -->
+  <line x1="300" y1="168" x2="452" y2="168" stroke="#334155" stroke-width="2.5"/>
+  <text x="376" y="158" text-anchor="middle" font-size="11" fill="#334155">連線（CCI／GPIO）</text>
+
+  <!-- Victim chip -->
+  <rect x="455" y="60" width="330" height="210" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="620" y="85" text-anchor="middle" font-size="13" font-weight="bold" fill="#9a3412">受害者：未上電的 sensor（軌壓＝0 V）</text>
+
+  <!-- pin -->
+  <circle cx="480" cy="168" r="7" fill="#ea580c"/>
+  <text x="480" y="145" text-anchor="middle" font-size="10.5" fill="#9a3412">引腳</text>
+  <!-- ESD diode -->
+  <path d="M520 168 L520 128" stroke="#dc2626" stroke-width="2.5"/>
+  <path d="M508 140 L520 118 L532 140 Z" fill="#dc2626"/>
+  <line x1="506" y1="118" x2="534" y2="118" stroke="#dc2626" stroke-width="2.5"/>
+  <path d="M520 118 L520 96" stroke="#dc2626" stroke-width="2.5"/>
+  <text x="592" y="118" font-size="11" fill="#dc2626">ESD 上鉗位二極體（正向導通！）</text>
+  <!-- rail bar -->
+  <rect x="520" y="90" width="240" height="10" rx="4" fill="#dc2626" opacity="0.25"/>
+  <text x="700" y="82" font-size="11" fill="#dc2626" font-weight="bold">「0 V」軌被餵出鬼電壓（suspect supply）</text>
+
+  <!-- current arrow -->
+  <path d="M487 168 C500 168 505 150 515 135" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#p3)"/>
+  <text x="392" y="215" text-anchor="middle" font-size="11.5" fill="#dc2626" font-weight="bold">電流不走 PMIC、走二極體——路徑無人設計、無人保護</text>
+
+  <!-- consequences -->
+  <rect x="60" y="255" width="840" height="52" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="480" y="277" text-anchor="middle" font-size="11.5" fill="#7f1d1d" font-weight="bold">後果三連：半醒狀態（暫存器亂置位、狀態機卡死）→ PG 騙局（主控誤判已就緒，DAG 後續步驟全部建立在謊言上）→ 若鬼電壓恰好把 PNPN 結構推進觸發區＝Day 48 閂鎖劇本重演</text>
+  <text x="480" y="297" text-anchor="middle" font-size="11.5" fill="#7f1d1d">防治：按 DAG 供電＋相連器件同域供電（或加序列器/eFuse 斷鏈）＋未上電引腳勿接永遠有電的軌（上拉改接「受控軌」）</text>
+
+  <defs>
+    <marker id="p3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#dc2626"/></marker>
+  </defs>
+</svg>
+
+  <p><strong>下場二：閂鎖（latch-up）——Day 48 劇本的序列版。</strong>晶片相鄰電路域（例如 IO 域與核心域）共用或緊鄰substrate／well 結構，兩域的電源軌電位差超出設計窗（例如核心已 1.2 V、IO 仍在 0 V，核心驅動 IO 時電流竄入反向偏置的井接面）——寄生 PNPN 的基極─射極接面被不正當地正向偏置，只要到達觸發條件就 snapback，電源變成自己的維持電流來源。這就是 Day 48「順序不亂」支柱的機制造成：<strong>sequencing 不是禮貌，是把每一對相鄰域的反向偏置保持在設計窗內的物理要求。</strong>JESD78（latch-up 標準，Day 48）測的正是「軌電壓在允許組合內（含邊界）被扰動時會不會閂」——你的系統順序若把晶片推到規格外的軌組合，測試再漂亮也不算數。</p>
+
+  <p><strong>下場三：ADC 開機吃垃圾——畫面版的「開機白条」。</strong>類比基準、偏壓、PLL 都需要時間穩定（§5.2）。若核心軌／輸出軌先於類比軌就緒，sensor 在「環境還髒」時開始數位化並送出資料，ADC 把未稳定的基準當成訊號——SoC 收到一串串合法的垃圾封包：典型症狀是開機頭幾幀全白、全綠或大面積橫紋，之後自我收敢——很多人把這種現象當成「軟體初始化時機問題」繞過去，但資深 EE 看得懂：<strong>那不是軟體的問題，是 DAG 把「開始拍照」的指令派在了「廚房還沒備好料」之前。</strong>解法在上電端（先類比後核心、留穩定期）與韌體端（第一幀丟棄）雙軌並行，但設計上你應該選前者。</p>
+
+  <p><strong>下場四：非單調電軌——「爬一半滑下來」的軌是時序炸彈。</strong>某軌上升途中被大負載（例如 PHY 起速的突發電流）拉回跌（dip）後再爬升＝非單調。數位電路在穿越邏輯臨界的每一次往返都重新經歷一次「半醒狀態」，可能在滑落的瞬間讓狀態機採到亞穩態、讓 PLL 失鎖重捕。防治語言就是你 PI 兵器庫的東西：軌的負載步態、PMIC 的限流值與 tRAMP 上限、大軌（AVDD 大電容）別經小軌充電——今天先立名詞，公式在 §5.1。</p>
+
+<h3>4.3 為什麼很多平台用「硬件序列」而不是「軟體開關」——PT2 Ch.12 的先例</h3>
+<p>軟體控制順序有個雞生蛋問題：如果 sensor 電源由「SoC 透過 I2C 寫 PMIC 暫存器」決定，那 PMIC 自己、I2C 上拉軌、SoC 軟體棧都得先於 sensor 就緒——鏈條越長，boot 依賴越多、開機越慢、失效模式越隱晦。PT2 Ch.12 講可程式時脈產生器時有個同構的教訓：OTP 元件的<strong>上電預設組態是固定的</strong>（"the power-up default is set to an initial configuration... and is fixed"），而 FLASH-based 元件讓使用者可以把「開機就正確的配置」存成預設值——兩者的共通智慧是：<strong>「開機瞬間必須是對的狀態」不能寄望於軟體及時趕到，要把它固化在硬件的預設裡。</strong>對應到 camera：PMIC 用 GPIO/EN 腳的硬接線順序、eFuse 的斜率控制（slew-limited）、或「通電即按內部 DAG 爬軌」的 sequencer IC，把關鍵順序固化；軟體（BIOS/驅動）只負責「準不準備好了」的高層握手機，不負責軌的微觀時序。<strong>面試問「power sequence 你怎麼設計」，硬件固化＋軟體握手雙層架構就是資深答法的骨架。</strong></p>
+
+<h2>5. 數學時間——三個式子，各管一本帳</h2>
+
+<h3>5.1 爬升帳：t<sub>ramp</sub> ≈ C·ΔV／I，能量 E＝½CV²</h3>
+<div class="formula">
+<strong>電容充電的基本帳（Day 40 老朋友，今天換用途）：</strong>I＝C·dV/dt → 定流充電下 <strong>t<sub>ramp</sub> ≈ C<sub>total</sub>×ΔV／I<sub>limit</sub></strong><br>
+例：AVDD 軌上總電容（LDO 輸出電容＋去耦陣列＋模組 FPC 分布電容）≈ 12 µF（量級），LDO 限流 120 mA，從 0 爬到 2.9 V：<br>
+t<sub>ramp</sub> ≈ 12 µF × 2.9 V ÷ 0.12 A ≈ <strong>0.29 ms（約 290 µs）</strong><br>
+能量：E＝½CV²＝0.5 × 12 µF × (2.9 V)² ≈ <strong>50 µJ</strong>（充一次；開關頻繁的 standby 循環會反覆交這筆錢）<br>
+<em>白話翻譯：軌的電容是水塔，LDO 是進水管；塔越大、要求水位越高、水管越細，填滿越久。PMIC datasheet 的「tRAMP 上限／負載電容上限」就是在告訴你水管口徑——超了，軌爬不完，DAG 的「穩定後再下一步」永遠不成立。</em>
+</div>
+<p>兩個實務推論：（1）折疊機 20～25 cm 長 FPC 的分布電容（量級上每十幾 pF/cm 級＋模組端本體電容——約，精算看疊層與治具量測）會加進 C<sub>total</sub>，把 tRAMP 拉長——<strong>改機構長度也要重新結算電源帳</strong>，這是 Day 40「改佈局要重算 PDN」的結構版。（2）tRAMP 太短（不限流的硬上）＝大 inrush：電源軌瞬間抽載會把相鄰軌也拉出一個 dip——兩個「同時上電」的軌在 PI 的眼裡互相踩腳，這是「不能全上」的第二個、也是與 latch-up 無關的理由：</p>
+
+<h3>5.2 穩定帳：類比需要「靜置時間」，單位是時間常數的倍數</h3>
+<p>基準電壓源、偏壓電路、PLL 的鎖定都受 RC／控制迴路帶寬制約——「上電完成」與「性能上線」之間隔著幾十個時間常數（量級：從 µs 級到 ms 級，依電路——約）。PT2 Ch.5 的測試哲學在此最好用：書中不是猜「電源雜訊對 PLL 有多少影響」，而是<strong>主動把 300 mV 的正弦雜訊注入供電、從 10 kHz 掃到 5 MHz，量每頻段的 jitter 貢獻</strong>（書中原述的實驗架構）。換到 camera 就是 AVDD 的 PSRR 量測：訊號產生器注入已知紋波→看測試圖卡的雜訊能量／行紋落在哪條影列——「注入已知，量其傷害」是 Ch.5 留給所有敏感軌的通用方法論。<em>註：300 mV 是 2002 年測試條件，對當時 3.3 V 的時脈軌是約一成；放到今天 1.1～1.8 V 的軌上属極端條件，以現代標準需上修為毫伏級掃描曲線。</em></p>
+
+<h3>5.3 頻寬帳：§2 的除法複習——今天只要記住分子分母各是誰</h3>
+<p>像素×影速率×位元＝分子（需求）；lane 數×每 lane 淨速＝分母（供給）；效率（封包開銷＋LP/HS 切換）＝匯率。三者的關係今天算例是 13MP@30（見 §2 formula 框與練習 4）；週 14 把「效率」這一項拆開算細帳（長封包效率高、短封包與多 virtual channel 折損）。今天的目標只有一個：面試問「這顆 sensor 這個 mode 要幾條 lane、多快」，你的手比腦先動——先寫除法。</p>
+
+<div class="card pitfall">
+  <span class="label">踩雷區——開週課就講的四個經典錯</span>
+  <ul>
+    <li><strong>「四軌一起 enable，實測也正常，所以順序不重要」：</strong>一起開＝用 RC 抽籤決定順序，今天正常是因為你的板子恰好抽到好簽。溫度、電容誤差（去耦 MLCC 直流偏壓效應——週 8 老朋友）、量產件差異都會重洗簽；而且「正常」只涵蓋功能面，不涵蓋可靠性帳（倒灌的累積傷害不會在功能測試裡出現）。這是面試標準送命句，也是_lab 最常見的「僥倖通過」。</li>
+    <li><strong>CCI 上拉接到「常電」軌：</strong>上拉電阻掛在系統常供的 1.8 V（例如和別的東西共用），sensor 沒電時每一次主機「空閒拉高」都在幫 sensor 的時序邏輯點鬼燈。上拉軌應跟隨「受控軌」（跟 sensor 同一個 enable 域），或在 DAG 裡保證上拉軌晚於／等於 sensor 域。</li>
+    <li><strong>「chip ID 讀到＝sensor 沒問題」：</strong>讀到 ID 只證明 IO 軌、CCI、位址三個小奇蹟；AVDD 有沒有穩定、lane 速率有沒有配置、時脈源有沒有選對，全都不在這一讀的覆蓋範圍裡。debug 語言要升級成：「ID 讀到了——資料面的帳還一分未付。」</li>
+    <li><strong>掉電時亂拔：</strong>開機有 DAG，關機同樣有順序（大致相反、但請查 datasheet）；直接切總電等於讓四軌按放電常數抽籤下台，IO 軌帶著残余電荷被訊號線反灌的劇本和開機版一模一樣。NB 的飛行模式／相機鏡頭保護切換、休眠喚醒，都是被反覆執行的開關機序列——量產後才浮現的「偶發黑畫面」，有不少就是關機順序的債。</li>
+  </ul>
+</div>
+
+<h2>6. 實務案例連結</h2>
+
+<h3>6.1 NB 主機板（你的本行——雙語能力從今天開始練）</h3>
+<ul>
+  <li><strong>你早就在做的 sequencing，只是沒有「sensor 視角」：</strong>NB 平台上 camera 電源通常由 PCH/SoC 的 GPIO 控制 PMIC/LDO，MCLK 來自平台時脈緩衝器（你熟得不能再熟的 PT2 Ch.12/16 地盘）。今晚回座位把你自己板子的 camera 電源拓撲畫成今天的 DAG：四條軌各由誰 enable、GPIO 順序在哪個 firmware 階段執行、上拉軌掛哪裡——畫得出來，你就是市場上稀缺的「懂主機板上電架構的 camera EE」。</li>
+  <li><strong>休眠/喚醒（S0ix/Modern Standby）：</strong>NB 一天開關 camera 軌成百上千次（鏡頭保護、隱私模式、休眠循環）。開關循環次數×每次的順序品質＝可靠性帳——你的 tRAMP／單調性檢查在 reliability spec 裡是有數字的欄位（量級：十萬次循環級是常見訴求，約）。</li>
+  <li><strong>MCLK 的 SI 帳：</strong>MCLK 到模組的走線（或 FPC）是「低速但必須乾淨」的典型：24 MHz 級但被內部 PLL 倍頻放大——PLL 對輸入時脈的抖動和單調性都有帳（Ch.16 的驗證紀律直接適用：先量已知好板的 MCLK 參考波形，再談你的板子有沒有問題）。</li>
+</ul>
+
+<h3>6.2 鏡頭模組（camera 語言——面試主場）</h3>
+<ul>
+  <li><strong>開機白条/綠條工單：</strong>§4.2 下場三的实战——先分「頭幾幀髒、之後乾淨」（類比未定的 DAG 病）vs「全程髒」（供電品質或類比軌故障）。前者修順序/穩定期/丟幀策略，後者查 AVDD 紋波（Ch.5 注入法）。面試講出一條「 symptom→假設→注入實驗→數據結案」的鏈，就是 FA 潛力的證明。</li>
+  <li><strong>EEPROM/VCM 與 sensor 的同域問題：</strong>三者常掛同一條 CCI——電源域如果分屬不同 enable 域（EEPROM 吃常電、sensor 吃受控軌），鬼供電劇本在模組内部就能上演。模組規格書的電源表要逐腳寫順序，這是你（模組端 EE）交付給客戶 DAG 的一頁。</li>
+  <li><strong>折疊機個案（Day 50 決策書的姊妹案）：</strong>25 cm FPC 讓 AVDD 的 C<sub>total</sub>、IR drop、和 tRAMP 三本帳同時變動——「上電架構」和「ESD 路徑」共用同一張結構圖：你 Day 50 畫的主幹道，今天多了一層時間軸（先誰後誰）。</li>
+</ul>
+
+<h2>7. 動手練習（先自己做再展開）</h2>
+
+<details>
+<summary><strong>練習 1（順序判斷）：</strong>假設（本題自訂前提，非任何真實器件規格）某 sensor datasheet 規定：上電順序 DOVDD→AVDD→DVDD，且 DVDD 需在 AVDD 達標後 1 ms 內起爬；各軌上升單調、tRAMP≤1 ms；掉電順序相反。四個工程師的 boot 腳本：(a) 三軌 GPIO 同時 enable；(b) DOVDD→等 0.5 ms→AVDD→等 0.3 ms→DVDD；(c) AVDD→DOVDD→DVDD（因「類比最重要」）；(d) DOVDD→AVDD→2.5 ms 後 DVDD（因排程器空檔）。哪個合規？哪個最可能出什么事？</summary>
+<p><strong>參考解：</strong>(b) 合規（順序對、間隔在 1 ms 窗口內、假設各軌上升單調）。(a) 違規——同時 enable 實際順序由各自 RC 決定（電容大的軌慢），等於抽籤；若 DVDD 抽在 AVDD 前爬升＝軌間電位差出窗，風險是 §4.2 的下場二（域間接面偏離設計窗）與下場三（ADC 吃垃圾）。(c) 違規——順序本身反了；別用直覺（「類比最重要」）覆寫 datasheet，它的順序背後是這顆晶片的域結構與測試驗證範圍（用「為什麼」讀表，但不能「改表」）。(d) 違規在時間窗——DVDD 晚 2.5 ms 超過「1 ms 內跟上」；有些器件這個窗口是因為兩軌間的偏置結構只被驗證在窗口內（超出＝規格外，JESD78 不保）。加分答法：四個腳本都要補一句——「還要查掉電順序與各軌單調性 spec，本題只結了開機帳的一半。」</p>
+</details>
+
+<details>
+<summary><strong>練習 2（鬼供電估算）：</strong>sensor 全沒電（四軌 0 V），但主機板 EEPROM 那側的 CCI 上拉電阻掛在常電 1.8 V，SCL/SDA 兩條線各一顆 10 kΩ 上拉。(1) 推估從 SCL/SDA 倒灌進 sensor「未上電軌」的最大電流路徑與量級（ESD 二極體正向壓降視 0.6～0.7 V，約）。(2) 這股電會造成什麼？(3) 兩個防治法。</summary>
+<p><strong>參考解：</strong>(1) 路徑：1.8 V 軌→上拉電阻 10 kΩ→引腳→引腳內部 ESD 上鉗位二極體（正向）→sensor 的 IO 軌電容→在該軌上積出電壓。穩態上限為「經二極體後軌壓不能再升」：軌壓會浮到約 1.8−0.65≈1.1 V 附近（之後二極體壓差不足，電流趨緩）；瞬態最大電流約（1.8−0.65）/10 kΩ ≈ <strong>115 µA/條</strong>，兩條線 ≲ 0.25 mA（量級）。(2) 0.25 mA 餵著一顆 sensor 的全部 IO 電容＋靜態漏電：軌停在 1 V 級的「半醒」鬼電壓——不是燒毀級，但 PMIC 判 0 V 不成立、暫存器/狀態機進入未定義態；若該軌下掛的域恰好被推進閂鎖條件（Day 48），就不是半醒而是昏迷。更陰險的是：鬼電壓讓 boot 時 PG 邏輯誤判、順序錯亂。(3) 防治：①CCI 上拉改接「受控軌」（與 sensor 同一 enable 域，要沒電一起沒電）；②在相連器件間加序列/eFuse 或電平轉換器（斷掉直通的路徑），或在規格書要求「主機側上拉軌必須與 sensor IO 軌同域」。口訣：<strong>「永遠有電的轨，不要直接牽沒電的孩子。」</strong></p>
+</details>
+
+<details>
+<summary><strong>練習 3（爬升帳）：</strong>某 platform 規格要求 AVDD 的 tRAMP（10%→90%）≤ 500 µs。你的設計：LDO 限流 150 mA（定流段近似），軌上電容 12 µF，目標 2.9 V。(1) 估 tRAMP 是否合規。(2) 機構把 FPC 加長到折疊機的 25 cm，分布電容多估 5 µF，重算。(3) 若不合規，給你手上兵器庫（Day 39～40）裡的三個解法。</summary>
+<p><strong>參考解：</strong>(1) t ≈ 12 µF×(2.9×0.8 V)/0.15 A——從 10% 到 90% 的有效擺幅≈0.8×2.9 V≈2.3 V → t≈12 µ×2.3/0.15 ≈ <strong>184 µs</strong>，合規且餘裕大。(2) C→17 µF：t≈17 µ×2.3/0.15 ≈ <strong>260 µs</strong>，仍合規——但注意這題的「餘裕」來自 LDO 限流遠低於軌實際需求？別把餘裕當常數：若限流改成 60 mA（省電選型），同帳變成 ≈650 µs，超標——<strong>規格符合性是「電容×限流」的乘積帳，選型改任何一邊都要重算</strong>。(3) 解法：①提高限流／改更大電流的 LDO（加水管）；②削減軌上電容但用 ESR/ESL 更優的多顆小容並聯維持 PDN 目標阻抗（削水塔不削衛生，要過 Day 39 的 target Z 帳）；③PMIC 端選有 slew-rate 控制與「充電完成旗標」的軌控制器，把 tRAMP 變成受控規格而非副產品。加分句：改 FPC 長度要同時重算 tRAMP、IR drop（Day 40）、和 ESD nH 帳（Day 50）——同一根銅，三本帳。</p>
+</details>
+
+<details>
+<summary><strong>練習 4（頻寬除法）：</strong>一顆 13 MP sensor 要跑 30 fps，位元深度 10 bit。(1) payload 總需求？(2) 抓 80% 線路效率（量級），4 條 data lane 各需要多快？對照 D-PHY 常见器件速率區間（數百 Mbps～2.5 Gb/s/lane，規格上限）判斷可不可行。(3) 同 sensor 改 12 bit、60 fps（假設支持），4 lane 夠嗎？</summary>
+<p><strong>參考解：</strong>(1) 13×10⁶ × 30 × 10 ≈ <strong>3.9 Gb/s</strong>。(2) 3.9÷0.8 ≈ 4.9 Gb/s ÷ 4 ≈ <strong>1.2 Gb/s/lane</strong>——落在常見器件區間內，可行（選料時要查該 mode 規格書的每 lane 最小速率與實際 overhead，本題為估算）。(3) 12 bit×60 fps：13×10⁶×60×12 ≈ 9.36 Gb/s；÷0.8 ≈ 11.7 Gb/s ÷4 ≈ <strong>2.9 Gb/s/lane</strong>——超過 D-PHY v1.2 單 lane 2.5 Gb/s 的規格上限（約），<strong>4 lane 不夠</strong>：要 5 lane（罕見）或改用更高位深壓縮/縮解析度、或上 C-PHY／更多 lane 的器件（週 13 比較）。面試重點在「手比腦先動」：先把分子分母寫出來再說話。</p>
+</details>
+
+<details>
+<summary><strong>練習 5（bring-up 二分隔離）：</strong>新板 camera 無畫面。你量到：AVDD 2.9 V 正常、DOVDD 1.8 V 正常，DVDD 只有 0.3 V；CCI 讀 chip ID 讀不到（回讀全 F 或全 0 不定）。依今天的 DAG 與四分法，寫出你的前三步動作與各自要排除的假設（提示：PT2 Ch.16 精神——先量參考）。</summary>
+<p><strong>參考解：</strong>第 0 步（貫穿）：先在一塊<strong>已知好板</strong>用同探棒設定量四軌、MCLK、CCI 波形的「參考帳」，違例才有比較基準（Ch.16）。第一步：<strong>DVDD 為什麼只有 0.3 V？</strong>——查 enable 順序是否執行（示波器多通道同框抓 boot 瞬間的 DAG 全家福：四軌＋GPIO EN＋MCLK，一次抓齊）；0.3 V 很像「被 enable 但被限流/短路拖住」或「根本沒 enable、是倒灌鬼電」——判別法：斷負載量軌（空載正常→負載端短路/過載；仍 0.3 V→控制端問題或鬼電）。第二步：<strong>CCI 讀不到 ID 是 DVDD 的下游還是平行問題？</strong>——查 sensor 是否需核心軌就緒才回應 CCI（多數如此）：DVDD 修好再讀；若 DVDD 好後仍讀不到，才輪到查位址、上拉軌歸屬（練習 2！）、時脈延展（clock stretching）與 firmware 寫序。第三步：<strong>確認 MCLK 存在且頻率正確</strong>（24 MHz 級——約，查規格：有些器件選 pin 選頻）。結案順序體現 DAG 因果：<strong>電源（地基）→控制（對講機）→時脈（班表）→資料（高速公路）</strong>，一次只排除一個變因。面試講這題時把「先量參考」放最前面——這是把實驗室紀律當設計流程的訊號，面試官最愛。</p>
+</details>
+
+<h2>8. 面試怎麼考（英文題＋參考答案——Phase 3 起全面改用 camera 行業語）</h2>
+
+<div class="card pitfall" style="border-left-color:#0e7490">
+  <span class="label">英文題目＋參考答案</span>
+  <p><strong>Q1: "Walk me through the power-up sequence of a camera module. Why can't you just switch all the rails on at once?"</strong>（預期考法：看你答「背順序」還是答「因果」——順序依器件而異，因果才是通用能力）</p>
+  <p><em>Reference answer (90-second version):</em> "The exact order is datasheet law — every sensor is different — but the physics is universal. A typical sequence is IO rail first, so the interface has defined levels; then the analog rail, giving references, pixel bias and the front end time to settle; then the digital core, and only then clock and CCI configuration before streaming starts. Turning everything on at once means the order is decided by whichever RC happens to be fastest, and three failure modes follow. First, back-powering: an already-live neighbor drives current into a dead rail through its ESD clamp diode, leaving a suspect supply — the chip is half-alive, registers undefined, and the power-good signal is lying to the host. Second, latch-up: inter-domain junctions see bias combinations outside their specified window — I treat sequencing as the first line of defense against the parasitic SCR, ahead of any board-level fix. Third, timing garbage: if the ADC and output start before the analog world settles, you ship legal-looking packets of nonsense — the classic first-frames green or banded image. Beyond ordering, I watch monotonicity and ramp time, because rails share current-limited sources: t ramp is roughly C times delta V over current limit, so a longer flex cable that adds capacitance can silently break a spec. And I harden the critical order in hardware — sequencer ICs, eFuse slew control, EN pin wiring — and let software own only the handshake, not the microscopic timing."（順序是法律、因果是物理——三個下場＋一個式子＋硬软分層收尾）</p>
+  <p><strong>Q2: "You bring up a new camera board: AVDD and DOVDD are good, but DVDD reads 0.3 V and the chip ID can't be read over I2C. How do you debug it?"</strong>（預期考法：debug 是否有「順序感」和「參考優先」紀律，而不是亂槍換零件）</p>
+  <p><em>Reference answer:</em> "First, I measure the reference: probe the same points on a known-good board with the same probe setup, so I argue against data, not against memory — the Cypress guide's 'measure the reference before discussing violations' discipline. Then I follow causality bottom-up. The DVDD rail at 0.3 V is the prime suspect and I need to know whether it is being enabled at all: multi-channel capture at the boot instant — all rails, the enable GPIOs, and MCLK in one shot — because 0.3 V smells like either current-limited-into-a-short, or no enable at all, possibly a back-fed ghost supply from a neighbor rail. The discriminator: disconnect the load and re-measure the rail. Open-circuit reading normal means the fault is downstream in the load domain; still 0.3 V means it never came up — control pin, enable sequence, or ghost power from the always-live I2C pull-ups, which is a real topology bug I've seen: pull-ups should live on a controlled rail, not a battery-adjacent one. I2C not responding is expected while the core domain is asleep — so I fix the rail first, then re-attempt the ID read, and only after that escalate to address, clock stretching, and firmware write order. One variable per experiment, and every experiment gets written down with its scope settings — that's how a bench note becomes evidence."（參考優先→電源→控制→逐變因→記錄成證——四拍打完）</p>
+</div>
+
+<div class="card takeaway">
+  <span class="label">面試加分句（本課提煉）</span>
+  <ul>
+    <li>"The sequence order is datasheet law, but the reasons are physics — I read tables with the failure mode in mind."（讀表先讀因）</li>
+    <li>"A rail that is up but not settled is a liar — 'power present' and 'analog ready' are two different specs."（達標≠上線）</li>
+    <li>"Pull-ups on an always-live rail will ghost-power a dead sensor — power-domain boundaries beat schematic convenience."（鬼供電的板級防法）</li>
+  </ul>
+</div>
+
+<h2>9. 今日 Anki 卡片（五張）</h2>
+
+<div class="anki">
+  <p class="q">卡 1｜Q：從光子到像素的六格資料鏈是什麼？四種線各自的角色？</p>
+  <p class="a">六格：①微透鏡＋濾色陣列（集光分色）→②光電二極體（光子→電荷，full well/QE）→③類比前端（PGA＋CDS，轉換增益 CG）→④ADC（每欄並行，10/12 bit 級）→⑤序列器＋D-PHY（打包 CSI-2 封包，1 clk lane＋N data lane，單向）→⑥SoC CSI-RX＋ISP（demosaic/3A/降噪）。四種線：資料（只往右）、控制（CCI 雙向慢速決定模式）、時脈（MCLK 餵內部 PLL）、電源（四軌分先後）。debug 四分法：封包有嗎／暫存器讀到嗎／PLL 鎖了嗎／四軌對嗎。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 2｜Q：sensor 四條電源軌的角色與典型量級？順序由誰定？</p>
+  <p class="a">DOVDD（IO，1.8 V 級）＝門面，對外電平＋CCI；AVDD（類比，2.8～3.0 V 級）＝廚房，二極體偏壓/PGA/ADC/基準，最忌紋波；DVDD（核心，1.1～1.2 V 級）＝大腦，最敏感最晚起；MIPI PHY 軌（共軌或獨立）＝送貨司機，開機突發電流第二來源。典型 DAG：DOVDD→AVDD→DVDD→MCLK→CCI→streaming——但順序本身查 datasheet（不同器件可能不同），物理因果才是通用能力。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 3｜Q：上電順序違反的四種下場（各講電子路徑）？</p>
+  <p class="a">①倒灌鬼供電：鄰居經引腳 ESD 上鉗位二極體把沒電的軌餵到 1 V 級半醒態——暫存器未定義＋PG 騙局＋可能進閂鎖窗；②閂鎖：域間軌壓差超出窗，寄生 PNPN 接面被不正當偏置（Day 48 支柱「順序不亂」的成因）；③ADC 吃垃圾：類比未穩定先數位化＝開機白條/綠條（那是 DAG 病不是軟體病）；④非單調軌：被突發電流拉回跌，狀態機採到亞穩態。另一條與 latch-up 無關的理由：同時上電＝共享限流源互踩（inrush dip）。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 4｜Q：camera 頻寬帳三要素＋13MP@30fps@10bit 算例？</p>
+  <p class="a">分子＝像素×影速率×位元；除數＝lane 數；匯率＝線路效率（封包開銷＋LP/HS 切換，粗抓七八成量級）。算例：13M×30×10≈3.9 Gb/s payload ÷0.8 ≈4.9 Gb/s ÷4 lane ≈1.2 Gb/s/lane（可行區間）；改 12bit@60fps≈11.7 Gb/s÷4≈2.9 Gb/s/lane 超 D-PHY v1.2 單 lane 2.5 Gb/s 規格上限→4 lane 不夠。手比腦先動：先寫除法。</p>
+</div>
+<div class="anki">
+  <p class="q">卡 5｜Q：PT2 三鉤子在本課的用法（Ch.5／Ch.12／Ch.16）？</p>
+  <p class="a">Ch.5：電源品質即訊號品質——書中 300 mV 正弦注入供電、10 kHz～5 MHz 掃頻量 jitter 貢獻；換到 AVDD 就是 PSRR 量測（注入已知、量其傷害；300 mV 為 2002 年條件，現代低壓軌需上修為 mV 級掃描）。Ch.12：可程式元件的 power-up 預設（OTP 固定／FLASH 可選）→「開機即正確要固化在硬件」＝硬件 sequencer vs 軟體開關的分層設計。Ch.16：先量參考談違例——bring-up 前先用同設定量好板。</p>
+</div>
+
+<h2>10. 明日預告</h2>
+<p><strong>Day 52（週日・複習日）：第 10 週 ESD 20 題自我測驗。</strong>範圍 Day 46～50：三模型帳（HBM/CDM/IEC 的數值與波形宇宙）、TVS 選型三連問與兩段式帳、nH 路徑帳與接地四紀律、判準 A～D 與五種時間指紋、S20.20 與標準族譜、你自己量過的 Day 49 數據判讀、以及 Day 50 決策書的七站流程題——合格線 16/20，錯題照題號回課。今晚睡前 Anki：五張新卡（六格鏈/四軌/四下場/頻寬除法/PT2 三鉤子）＋前四天 ESD 未清卡。</p>
+<p><strong>下週地圖（第 11 週續航）：</strong>Day 53～56 進入影像感測器物理——光子怎麼變成電荷、井多大會飽、漏多少是暗電流、QE 的帳怎麼算——六格鏈的第①②格拆開細拆。另外提醒：<strong>第 12 週（Day 57 前後，約 9/18）就是履歷投遞窗口</strong>——本週起 STAR 素材（Day 50 的七站掃描清單、今天的 DAG 拓撲圖）邊學邊存，到時才有東西可寫。</p>
+<p><em>給半年後的妳：Phase 1～2 你學會了任何線的脾氣；今天起，這些線有了名字、有了站、有了時間表。面試時那句話記得講：順序是 datasheet 的法律，但原因——原因是物理。</em></p>
+
+<footer class="lesson">
+  <p>© 2026 EE 深造計畫 | <a href="../index.html">回課程列表</a></p>
+</footer>
+
+</div><!-- wrap -->
+</body>
+</html>
